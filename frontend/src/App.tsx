@@ -217,6 +217,14 @@ function App() {
               { label: 'Your Brand Volume', value: sosResult.brandVolume.toLocaleString() },
               { label: 'Total Brand Volume', value: sosResult.totalBrandVolume.toLocaleString() }
             ] : undefined}
+            insight={sosResult ? {
+              summary: sosResult.shareOfSearch >= 30
+                ? `Strong brand awareness! ${brandName || 'Your brand'} captures a significant portion of branded searches.`
+                : sosResult.shareOfSearch >= 15
+                ? `Good brand presence. ${brandName || 'Your brand'} has moderate visibility among competitors.`
+                : `Room for growth. Consider brand marketing to increase awareness.`,
+              explanation: 'SOS measures how often people search for your brand compared to all brand searches in your industry.'
+            } : undefined}
           />
 
           <MetricCard
@@ -229,6 +237,14 @@ function App() {
               { label: 'Visible Volume', value: sovResult.visibleVolume.toLocaleString() },
               { label: 'Total Market Volume', value: sovResult.totalMarketVolume.toLocaleString() }
             ] : undefined}
+            insight={sovResult ? {
+              summary: sovResult.shareOfVoice >= 25
+                ? `Excellent visibility! Your site captures a large share of organic clicks.`
+                : sovResult.shareOfVoice >= 10
+                ? `Decent organic presence. There's potential to improve rankings.`
+                : `Low visibility. Focus on SEO to rank higher for valuable keywords.`,
+              explanation: 'SOV shows your actual visibility in search results, weighted by click probability based on position.'
+            } : undefined}
           />
 
           <MetricCard
@@ -238,129 +254,20 @@ function App() {
             borderColor={gapResult ? getGapColor(gapResult.gap) : 'blue'}
             tooltip="Gap = SOV - SOS. Positive gap indicates growth potential (visibility exceeds awareness). Negative gap suggests missing market opportunities."
             interpretation={gapResult ? getGapInterpretation(gapResult.interpretation) : undefined}
+            insight={gapResult ? {
+              summary: gapResult.gap > 2
+                ? `Growth Potential! Your visibility exceeds brand awareness - opportunity to convert searches into loyalty.`
+                : gapResult.gap < -2
+                ? `Missing Opportunities. Your brand awareness exceeds visibility - focus on SEO improvements.`
+                : `Balanced performance. Brand awareness and visibility are well-aligned.`,
+              explanation: gapResult.gap > 2
+                ? 'Invest in brand marketing to convert search visibility into lasting brand awareness.'
+                : gapResult.gap < -2
+                ? 'Prioritize SEO to ensure customers who know your brand can find you organically.'
+                : 'Maintain your balanced approach while looking for opportunities to grow both metrics.'
+            } : undefined}
           />
         </div>
-
-        {/* Insights Panel */}
-        {sosResult && sovResult && gapResult && (
-          <div className="mb-8 bg-white rounded-xl shadow-sm overflow-hidden">
-            <div className="px-6 py-4 border-b border-gray-200 bg-gradient-to-r from-blue-50 to-indigo-50">
-              <div className="flex items-center gap-2">
-                <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
-                </svg>
-                <h3 className="text-lg font-semibold text-gray-900">Analysis Insights</h3>
-                {analyzedDomain && (
-                  <span className="ml-2 px-2 py-1 bg-blue-100 text-blue-700 text-xs rounded-full">
-                    {analyzedDomain}
-                  </span>
-                )}
-              </div>
-            </div>
-
-            <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
-              {/* Share of Search Insight */}
-              <div className="p-4 bg-emerald-50 rounded-lg border border-emerald-200">
-                <h4 className="font-semibold text-emerald-800 mb-2 flex items-center gap-2">
-                  <span className="w-3 h-3 bg-emerald-500 rounded-full"></span>
-                  Share of Search: {sosResult.shareOfSearch}%
-                </h4>
-                <p className="text-sm text-emerald-700 mb-3">
-                  {sosResult.shareOfSearch >= 30
-                    ? `Strong brand awareness! ${brandName || 'Your brand'} captures a significant portion of branded searches in this market.`
-                    : sosResult.shareOfSearch >= 15
-                    ? `Good brand presence. ${brandName || 'Your brand'} has moderate visibility among competing brands.`
-                    : `Room for growth. ${brandName || 'Your brand'} has opportunities to increase brand awareness through marketing campaigns.`}
-                </p>
-                <div className="text-xs text-emerald-600 bg-emerald-100 p-2 rounded">
-                  <strong>What it means:</strong> SOS measures how often people search for your brand compared to all brand searches in your industry. A higher SOS indicates stronger brand awareness and recall.
-                </div>
-              </div>
-
-              {/* Share of Voice Insight */}
-              <div className="p-4 bg-orange-50 rounded-lg border border-orange-200">
-                <h4 className="font-semibold text-orange-800 mb-2 flex items-center gap-2">
-                  <span className="w-3 h-3 bg-orange-500 rounded-full"></span>
-                  Share of Voice: {sovResult.shareOfVoice}%
-                </h4>
-                <p className="text-sm text-orange-700 mb-3">
-                  {sovResult.shareOfVoice >= 25
-                    ? `Excellent visibility! Your site captures a large share of organic clicks for relevant keywords.`
-                    : sovResult.shareOfVoice >= 10
-                    ? `Decent organic presence. There's potential to improve rankings and capture more market share.`
-                    : `Low visibility. Focus on SEO improvements to rank higher for valuable keywords.`}
-                </p>
-                <div className="text-xs text-orange-600 bg-orange-100 p-2 rounded">
-                  <strong>What it means:</strong> SOV shows your actual visibility in search results, weighted by click probability. Higher rankings for high-volume keywords significantly boost SOV.
-                </div>
-              </div>
-
-              {/* Growth Gap Insight */}
-              <div className={`p-4 rounded-lg border md:col-span-2 ${
-                gapResult.gap > 2
-                  ? 'bg-emerald-50 border-emerald-200'
-                  : gapResult.gap < -2
-                  ? 'bg-red-50 border-red-200'
-                  : 'bg-blue-50 border-blue-200'
-              }`}>
-                <h4 className={`font-semibold mb-2 flex items-center gap-2 ${
-                  gapResult.gap > 2 ? 'text-emerald-800' : gapResult.gap < -2 ? 'text-red-800' : 'text-blue-800'
-                }`}>
-                  <span className={`w-3 h-3 rounded-full ${
-                    gapResult.gap > 2 ? 'bg-emerald-500' : gapResult.gap < -2 ? 'bg-red-500' : 'bg-blue-500'
-                  }`}></span>
-                  Growth Gap Analysis: {gapResult.gap > 0 ? '+' : ''}{gapResult.gap}pp
-                </h4>
-                <div className={`text-sm mb-3 ${
-                  gapResult.gap > 2 ? 'text-emerald-700' : gapResult.gap < -2 ? 'text-red-700' : 'text-blue-700'
-                }`}>
-                  {gapResult.gap > 2 ? (
-                    <>
-                      <p className="mb-2"><strong>Growth Potential Detected!</strong></p>
-                      <p>Your organic visibility (SOV) exceeds your brand awareness (SOS). This is a positive signal indicating:</p>
-                      <ul className="list-disc ml-5 mt-1">
-                        <li>Good SEO performance relative to brand recognition</li>
-                        <li>Your content reaches users who may not know your brand yet</li>
-                        <li>Opportunity to convert visibility into brand loyalty</li>
-                      </ul>
-                    </>
-                  ) : gapResult.gap < -2 ? (
-                    <>
-                      <p className="mb-2"><strong>Missing Opportunities Identified</strong></p>
-                      <p>Your brand awareness (SOS) exceeds your organic visibility (SOV). This suggests:</p>
-                      <ul className="list-disc ml-5 mt-1">
-                        <li>People know your brand but can't find you in search results</li>
-                        <li>SEO improvements needed to match brand strength</li>
-                        <li>Potential loss of traffic to competitors for non-branded searches</li>
-                      </ul>
-                    </>
-                  ) : (
-                    <>
-                      <p className="mb-2"><strong>Balanced Performance</strong></p>
-                      <p>Your brand awareness and organic visibility are well-aligned:</p>
-                      <ul className="list-disc ml-5 mt-1">
-                        <li>Consistent brand and SEO performance</li>
-                        <li>Focus on scaling both metrics together</li>
-                        <li>Monitor for shifts in either direction</li>
-                      </ul>
-                    </>
-                  )}
-                </div>
-                <div className={`text-xs p-2 rounded ${
-                  gapResult.gap > 2 ? 'bg-emerald-100 text-emerald-600' : gapResult.gap < -2 ? 'bg-red-100 text-red-600' : 'bg-blue-100 text-blue-600'
-                }`}>
-                  <strong>Recommendation:</strong> {
-                    gapResult.gap > 2
-                      ? 'Invest in brand marketing campaigns to convert your search visibility into lasting brand awareness.'
-                      : gapResult.gap < -2
-                      ? 'Prioritize SEO to ensure customers who know your brand can find you through organic search.'
-                      : 'Maintain your balanced approach while looking for opportunities to grow both metrics.'
-                  }
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
 
         {/* Trends Section */}
         {sosResult && sovResult && lastFetchConfig && (

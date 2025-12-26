@@ -200,7 +200,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       };
     });
 
-    // Calculate SOV for different periods
+    // Calculate SOV for different periods and track keyword impacts
+    interface KeywordImpact {
+      keyword: string;
+      position: number;
+      volumeNow: number;
+      volume12MonthsAgo: number;
+      visibleVolumeNow: number;
+      visibleVolume12MonthsAgo: number;
+      impactChange: number;
+    }
+
+    const keywordImpacts: KeywordImpact[] = [];
+
     const sovTrends = periods.map(period => {
       let visibleVolume = 0;
       let totalMarketVolume = 0;
@@ -212,9 +224,26 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
         const position = item.ranked_serp_element.serp_item.rank_group;
         const ctr = CTR_CURVE[position] || 0;
+        const visibleVol = volume * (ctr / 100);
 
-        visibleVolume += volume * (ctr / 100);
+        visibleVolume += visibleVol;
         totalMarketVolume += volume;
+
+        // Track keyword impact for comparison (only on first iteration)
+        if (period.monthsAgo === 0) {
+          const volume12MonthsAgo = getVolumeForPeriod(item.keyword_data.keyword_info.monthly_searches, 12);
+          const visibleVol12MonthsAgo = volume12MonthsAgo * (ctr / 100);
+
+          keywordImpacts.push({
+            keyword: item.keyword_data.keyword,
+            position,
+            volumeNow: volume,
+            volume12MonthsAgo,
+            visibleVolumeNow: visibleVol,
+            visibleVolume12MonthsAgo: visibleVol12MonthsAgo,
+            impactChange: visibleVol - visibleVol12MonthsAgo
+          });
+        }
       }
 
       const sov = totalMarketVolume > 0 ? Math.round((visibleVolume / totalMarketVolume) * 100 * 10) / 10 : 0;
@@ -227,6 +256,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         totalMarketVolume
       };
     });
+
+    // Sort impacts and get top gainers/losers
+    const sortedImpacts = [...keywordImpacts].sort((a, b) => b.impactChange - a.impactChange);
+    const topGainers = sortedImpacts.filter(k => k.impactChange > 0).slice(0, 5);
+    const topLosers = sortedImpacts.filter(k => k.impactChange < 0).slice(-5).reverse();
 
     // Calculate changes
     const sosChange6m = sosTrends[0].sos - sosTrends[1].sos;
@@ -247,6 +281,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           vs6MonthsAgo: Math.round(sovChange6m * 10) / 10,
           vs12MonthsAgo: Math.round(sovChange12m * 10) / 10
         }
+      },
+      keywordImpact: {
+        gainers: topGainers.map(k => ({
+          keyword: k.keyword,
+          position: k.position,
+          volumeChange: Math.round(k.volumeNow - k.volume12MonthsAgo),
+          impactChange: Math.round(k.impactChange)
+        })),
+        losers: topLosers.map(k => ({
+          keyword: k.keyword,
+          position: k.position,
+          volumeChange: Math.round(k.volumeNow - k.volume12MonthsAgo),
+          impactChange: Math.round(k.impactChange)
+        }))
       }
     });
   } catch (error) {

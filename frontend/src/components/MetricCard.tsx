@@ -11,6 +11,10 @@ interface MetricCardProps {
     type: 'growth_potential' | 'missing_opportunities' | 'balanced';
     message: string;
   };
+  insight?: {
+    summary: string;
+    explanation: string;
+  };
 }
 
 const borderColorMap = {
@@ -39,6 +43,20 @@ const interpretationIcons = {
   balanced: '✓'
 };
 
+const insightColorMap = {
+  emerald: 'bg-emerald-50 border-emerald-200 text-emerald-700',
+  orange: 'bg-orange-50 border-orange-200 text-orange-700',
+  red: 'bg-red-50 border-red-200 text-red-700',
+  blue: 'bg-blue-50 border-blue-200 text-blue-700'
+};
+
+const insightExplainColorMap = {
+  emerald: 'bg-emerald-100 text-emerald-600',
+  orange: 'bg-orange-100 text-orange-600',
+  red: 'bg-red-100 text-red-600',
+  blue: 'bg-blue-100 text-blue-600'
+};
+
 export const MetricCard: React.FC<MetricCardProps> = ({
   title,
   value,
@@ -46,7 +64,8 @@ export const MetricCard: React.FC<MetricCardProps> = ({
   borderColor,
   tooltip,
   details,
-  interpretation
+  interpretation,
+  insight
 }) => {
   const [showTooltip, setShowTooltip] = React.useState(false);
 
@@ -84,6 +103,15 @@ export const MetricCard: React.FC<MetricCardProps> = ({
         <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-sm font-medium ${interpretationColors[interpretation.type]}`}>
           <span>{interpretationIcons[interpretation.type]}</span>
           <span>{interpretation.message}</span>
+        </div>
+      )}
+
+      {insight && (
+        <div className={`mt-4 p-3 rounded-lg border ${insightColorMap[borderColor]}`}>
+          <p className="text-sm mb-2">{insight.summary}</p>
+          <div className={`text-xs p-2 rounded ${insightExplainColorMap[borderColor]}`}>
+            {insight.explanation}
+          </div>
         </div>
       )}
 

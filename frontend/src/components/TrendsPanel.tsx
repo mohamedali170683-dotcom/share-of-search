@@ -11,6 +11,13 @@ interface TrendPoint {
   totalMarketVolume?: number;
 }
 
+interface KeywordImpactItem {
+  keyword: string;
+  position: number;
+  volumeChange: number;
+  impactChange: number;
+}
+
 interface TrendsData {
   brandName: string;
   sosTrends: TrendPoint[];
@@ -25,6 +32,10 @@ interface TrendsData {
       vs12MonthsAgo: number;
     };
   };
+  keywordImpact?: {
+    gainers: KeywordImpactItem[];
+    losers: KeywordImpactItem[];
+  };
 }
 
 interface TrendsPanelProps {
@@ -38,7 +49,7 @@ const TrendArrow: React.FC<{ value: number; size?: 'sm' | 'lg' }> = ({ value, si
   const sizeClass = size === 'lg' ? 'w-5 h-5' : 'w-4 h-4';
 
   if (isNeutral) {
-    return <span className={`${sizeClass} text-gray-400`}>→</span>;
+    return <span className={`${sizeClass} text-gray-400`}>-</span>;
   }
 
   return (
@@ -75,27 +86,229 @@ const ChangeValue: React.FC<{ value: number; label: string }> = ({ value, label 
   );
 };
 
-const TrendBar: React.FC<{ values: number[]; labels: string[]; color: 'emerald' | 'orange' }> = ({
-  values,
-  labels,
-  color
-}) => {
-  const maxValue = Math.max(...values, 1);
+// SVG Line Chart Component
+const LineChart: React.FC<{
+  sosData: number[];
+  sovData: number[];
+  labels: string[];
+}> = ({ sosData, sovData, labels }) => {
+  const width = 400;
+  const height = 200;
+  const padding = { top: 20, right: 20, bottom: 40, left: 50 };
+  const chartWidth = width - padding.left - padding.right;
+  const chartHeight = height - padding.top - padding.bottom;
+
+  // Calculate scales
+  const allValues = [...sosData, ...sovData];
+  const maxValue = Math.max(...allValues, 1);
+  const minValue = Math.min(...allValues, 0);
+  const valueRange = maxValue - minValue || 1;
+
+  const getX = (index: number) =>
+    padding.left + (index / (labels.length - 1)) * chartWidth;
+
+  const getY = (value: number) =>
+    padding.top + chartHeight - ((value - minValue) / valueRange) * chartHeight;
+
+  // Generate path data
+  const generatePath = (data: number[]) => {
+    return data.map((value, index) => {
+      const x = getX(index);
+      const y = getY(value);
+      return index === 0 ? `M ${x} ${y}` : `L ${x} ${y}`;
+    }).join(' ');
+  };
+
+  const sosPath = generatePath(sosData);
+  const sovPath = generatePath(sovData);
+
+  // Grid lines
+  const gridLines = [];
+  const numGridLines = 5;
+  for (let i = 0; i <= numGridLines; i++) {
+    const y = padding.top + (i / numGridLines) * chartHeight;
+    const value = maxValue - (i / numGridLines) * valueRange;
+    gridLines.push({ y, value: Math.round(value) });
+  }
 
   return (
-    <div className="flex items-end gap-4 h-24">
-      {values.map((value, idx) => (
-        <div key={idx} className="flex-1 flex flex-col items-center gap-1">
-          <span className="text-xs font-medium text-gray-700">{value}%</span>
-          <div
-            className={`w-full rounded-t transition-all ${
-              color === 'emerald' ? 'bg-emerald-500' : 'bg-orange-500'
-            } ${idx === 0 ? 'opacity-100' : idx === 1 ? 'opacity-70' : 'opacity-40'}`}
-            style={{ height: `${(value / maxValue) * 100}%`, minHeight: '4px' }}
+    <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-auto">
+      {/* Grid lines */}
+      {gridLines.map((line, idx) => (
+        <g key={idx}>
+          <line
+            x1={padding.left}
+            y1={line.y}
+            x2={width - padding.right}
+            y2={line.y}
+            stroke="#e5e7eb"
+            strokeDasharray="4 4"
           />
-          <span className="text-xs text-gray-500 text-center">{labels[idx]}</span>
-        </div>
+          <text
+            x={padding.left - 8}
+            y={line.y + 4}
+            textAnchor="end"
+            fontSize="10"
+            fill="#6b7280"
+          >
+            {line.value}%
+          </text>
+        </g>
       ))}
+
+      {/* SOS Line */}
+      <path
+        d={sosPath}
+        fill="none"
+        stroke="#10b981"
+        strokeWidth="3"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+
+      {/* SOV Line */}
+      <path
+        d={sovPath}
+        fill="none"
+        stroke="#f97316"
+        strokeWidth="3"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+
+      {/* SOS Points */}
+      {sosData.map((value, index) => (
+        <g key={`sos-${index}`}>
+          <circle
+            cx={getX(index)}
+            cy={getY(value)}
+            r="6"
+            fill="#10b981"
+          />
+          <text
+            x={getX(index)}
+            y={getY(value) - 12}
+            textAnchor="middle"
+            fontSize="11"
+            fontWeight="600"
+            fill="#059669"
+          >
+            {value}%
+          </text>
+        </g>
+      ))}
+
+      {/* SOV Points */}
+      {sovData.map((value, index) => (
+        <g key={`sov-${index}`}>
+          <circle
+            cx={getX(index)}
+            cy={getY(value)}
+            r="6"
+            fill="#f97316"
+          />
+          <text
+            x={getX(index)}
+            y={getY(value) + 20}
+            textAnchor="middle"
+            fontSize="11"
+            fontWeight="600"
+            fill="#ea580c"
+          >
+            {value}%
+          </text>
+        </g>
+      ))}
+
+      {/* X-axis labels */}
+      {labels.map((label, index) => (
+        <text
+          key={index}
+          x={getX(index)}
+          y={height - 10}
+          textAnchor="middle"
+          fontSize="11"
+          fill="#6b7280"
+        >
+          {label}
+        </text>
+      ))}
+
+      {/* Legend */}
+      <g transform={`translate(${width - 120}, 10)`}>
+        <rect x="0" y="0" width="10" height="10" fill="#10b981" rx="2" />
+        <text x="14" y="9" fontSize="10" fill="#374151">SOS</text>
+        <rect x="50" y="0" width="10" height="10" fill="#f97316" rx="2" />
+        <text x="64" y="9" fontSize="10" fill="#374151">SOV</text>
+      </g>
+    </svg>
+  );
+};
+
+// Keyword Impact Table
+const KeywordImpactTable: React.FC<{
+  gainers: KeywordImpactItem[];
+  losers: KeywordImpactItem[];
+}> = ({ gainers, losers }) => {
+  if (gainers.length === 0 && losers.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-4">
+      {/* Gainers */}
+      <div className="bg-emerald-50 rounded-lg border border-emerald-200 p-4">
+        <h5 className="font-semibold text-emerald-800 mb-3 flex items-center gap-2">
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+          </svg>
+          Top Visibility Gainers
+        </h5>
+        {gainers.length > 0 ? (
+          <div className="space-y-2">
+            {gainers.map((item, idx) => (
+              <div key={idx} className="flex items-center justify-between text-sm bg-white rounded px-3 py-2">
+                <div className="flex items-center gap-2 flex-1 min-w-0">
+                  <span className="text-emerald-600 font-mono text-xs">#{item.position}</span>
+                  <span className="truncate text-gray-700">{item.keyword}</span>
+                </div>
+                <span className="text-emerald-600 font-medium ml-2">
+                  +{item.impactChange.toLocaleString()}
+                </span>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="text-sm text-emerald-600">No significant gainers detected</p>
+        )}
+      </div>
+
+      {/* Losers */}
+      <div className="bg-red-50 rounded-lg border border-red-200 p-4">
+        <h5 className="font-semibold text-red-800 mb-3 flex items-center gap-2">
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 17h8m0 0v-8m0 8l-8-8-4 4-6-6" />
+          </svg>
+          Top Visibility Losers
+        </h5>
+        {losers.length > 0 ? (
+          <div className="space-y-2">
+            {losers.map((item, idx) => (
+              <div key={idx} className="flex items-center justify-between text-sm bg-white rounded px-3 py-2">
+                <div className="flex items-center gap-2 flex-1 min-w-0">
+                  <span className="text-red-600 font-mono text-xs">#{item.position}</span>
+                  <span className="truncate text-gray-700">{item.keyword}</span>
+                </div>
+                <span className="text-red-600 font-medium ml-2">
+                  {item.impactChange.toLocaleString()}
+                </span>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="text-sm text-red-600">No significant losers detected</p>
+        )}
+      </div>
     </div>
   );
 };
@@ -124,9 +337,10 @@ export const TrendsPanel: React.FC<TrendsPanelProps> = ({ data, isLoading }) => 
     return null;
   }
 
-  const sosValues = data.sosTrends.map(t => t.sos || 0);
-  const sovValues = data.sovTrends.map(t => t.sov || 0);
-  const periodLabels = data.sosTrends.map(t => t.period);
+  // Reverse the data so it goes from oldest to newest (left to right)
+  const sosValues = [...data.sosTrends].reverse().map(t => t.sos || 0);
+  const sovValues = [...data.sovTrends].reverse().map(t => t.sov || 0);
+  const periodLabels = [...data.sosTrends].reverse().map(t => t.period);
 
   return (
     <div className="bg-white rounded-xl shadow-sm overflow-hidden mb-8">
@@ -144,91 +358,66 @@ export const TrendsPanel: React.FC<TrendsPanelProps> = ({ data, isLoading }) => 
       </div>
 
       <div className="p-6">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-          {/* SOS Trends */}
+        {/* Line Chart */}
+        <div className="mb-6">
+          <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+            <LineChart sosData={sosValues} sovData={sovValues} labels={periodLabels} />
+          </div>
+        </div>
+
+        {/* Change Summary */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
           <div className="p-4 bg-emerald-50 rounded-lg border border-emerald-200">
-            <div className="flex items-center justify-between mb-4">
-              <h4 className="font-semibold text-emerald-800">Share of Search Trend</h4>
-              <div className="flex flex-col items-end gap-1">
-                <ChangeValue value={data.changes.sos.vs6MonthsAgo} label="vs 6mo" />
-                <ChangeValue value={data.changes.sos.vs12MonthsAgo} label="vs 12mo" />
-              </div>
-            </div>
-
-            <TrendBar values={sosValues} labels={periodLabels} color="emerald" />
-
-            <div className="mt-4 p-3 bg-emerald-100 rounded text-xs text-emerald-700">
-              {data.changes.sos.vs12MonthsAgo > 2 ? (
-                <><strong>Strong growth!</strong> Your brand awareness has increased significantly over the past year.</>
-              ) : data.changes.sos.vs12MonthsAgo < -2 ? (
-                <><strong>Declining trend.</strong> Consider investing in brand marketing to reverse this trend.</>
-              ) : (
-                <><strong>Stable performance.</strong> Your brand awareness has remained consistent over time.</>
-              )}
+            <h4 className="font-semibold text-emerald-800 mb-2">Share of Search</h4>
+            <div className="space-y-1">
+              <ChangeValue value={data.changes.sos.vs6MonthsAgo} label="vs 6 months ago" />
+              <ChangeValue value={data.changes.sos.vs12MonthsAgo} label="vs 12 months ago" />
             </div>
           </div>
-
-          {/* SOV Trends */}
           <div className="p-4 bg-orange-50 rounded-lg border border-orange-200">
-            <div className="flex items-center justify-between mb-4">
-              <h4 className="font-semibold text-orange-800">Share of Voice Trend</h4>
-              <div className="flex flex-col items-end gap-1">
-                <ChangeValue value={data.changes.sov.vs6MonthsAgo} label="vs 6mo" />
-                <ChangeValue value={data.changes.sov.vs12MonthsAgo} label="vs 12mo" />
-              </div>
+            <h4 className="font-semibold text-orange-800 mb-2">Share of Voice</h4>
+            <div className="space-y-1">
+              <ChangeValue value={data.changes.sov.vs6MonthsAgo} label="vs 6 months ago" />
+              <ChangeValue value={data.changes.sov.vs12MonthsAgo} label="vs 12 months ago" />
             </div>
+          </div>
+        </div>
 
-            <TrendBar values={sovValues} labels={periodLabels} color="orange" />
+        {/* Keyword Impact Analysis */}
+        {data.keywordImpact && (
+          <KeywordImpactTable
+            gainers={data.keywordImpact.gainers}
+            losers={data.keywordImpact.losers}
+          />
+        )}
 
-            <div className="mt-4 p-3 bg-orange-100 rounded text-xs text-orange-700">
+        {/* Trend Insights - Now at the bottom */}
+        <div className="mt-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
+          <h5 className="font-medium text-gray-800 mb-3">Trend Insights</h5>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+            <div className={`p-3 rounded ${
+              data.changes.sos.vs12MonthsAgo > 2 ? 'bg-emerald-100 text-emerald-700' :
+              data.changes.sos.vs12MonthsAgo < -2 ? 'bg-red-100 text-red-700' : 'bg-blue-100 text-blue-700'
+            }`}>
+              {data.changes.sos.vs12MonthsAgo > 2 ? (
+                <><strong>Brand growth!</strong> Your brand awareness has increased significantly over the past year.</>
+              ) : data.changes.sos.vs12MonthsAgo < -2 ? (
+                <><strong>Brand declining.</strong> Consider investing in brand marketing to reverse this trend.</>
+              ) : (
+                <><strong>Stable brand.</strong> Your brand awareness has remained consistent over time.</>
+              )}
+            </div>
+            <div className={`p-3 rounded ${
+              data.changes.sov.vs12MonthsAgo > 2 ? 'bg-emerald-100 text-emerald-700' :
+              data.changes.sov.vs12MonthsAgo < -2 ? 'bg-red-100 text-red-700' : 'bg-blue-100 text-blue-700'
+            }`}>
               {data.changes.sov.vs12MonthsAgo > 2 ? (
                 <><strong>SEO momentum!</strong> Your organic visibility has improved significantly.</>
               ) : data.changes.sov.vs12MonthsAgo < -2 ? (
                 <><strong>Visibility declining.</strong> Review your SEO strategy and check for ranking losses.</>
               ) : (
-                <><strong>Consistent visibility.</strong> Your organic presence has remained stable.</>
+                <><strong>Stable visibility.</strong> Your organic presence has remained consistent.</>
               )}
-            </div>
-          </div>
-        </div>
-
-        {/* Trend Summary */}
-        <div className="mt-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
-          <h5 className="font-medium text-gray-800 mb-2">Trend Summary</h5>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-            <div className="flex items-center gap-2">
-              <div className={`w-3 h-3 rounded-full ${
-                data.changes.sos.vs12MonthsAgo > 0 ? 'bg-emerald-500' :
-                data.changes.sos.vs12MonthsAgo < 0 ? 'bg-red-500' : 'bg-gray-400'
-              }`} />
-              <span className="text-gray-600">
-                SOS is <strong>{
-                  data.changes.sos.vs12MonthsAgo > 0 ? 'growing' :
-                  data.changes.sos.vs12MonthsAgo < 0 ? 'declining' : 'stable'
-                }</strong> year-over-year
-              </span>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className={`w-3 h-3 rounded-full ${
-                data.changes.sov.vs12MonthsAgo > 0 ? 'bg-emerald-500' :
-                data.changes.sov.vs12MonthsAgo < 0 ? 'bg-red-500' : 'bg-gray-400'
-              }`} />
-              <span className="text-gray-600">
-                SOV is <strong>{
-                  data.changes.sov.vs12MonthsAgo > 0 ? 'growing' :
-                  data.changes.sov.vs12MonthsAgo < 0 ? 'declining' : 'stable'
-                }</strong> year-over-year
-              </span>
-            </div>
-            <div className="flex items-center gap-2">
-              <TrendArrow value={data.changes.sov.vs12MonthsAgo - data.changes.sos.vs12MonthsAgo} size="lg" />
-              <span className="text-gray-600">
-                {data.changes.sov.vs12MonthsAgo > data.changes.sos.vs12MonthsAgo
-                  ? 'SEO outpacing brand growth'
-                  : data.changes.sov.vs12MonthsAgo < data.changes.sos.vs12MonthsAgo
-                  ? 'Brand growth outpacing SEO'
-                  : 'Balanced growth trajectory'}
-              </span>
             </div>
           </div>
         </div>

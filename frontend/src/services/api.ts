@@ -102,6 +102,13 @@ export interface TrendPoint {
   totalMarketVolume?: number;
 }
 
+export interface KeywordImpactItem {
+  keyword: string;
+  position: number;
+  volumeChange: number;
+  impactChange: number;
+}
+
 export interface TrendsData {
   brandName: string;
   sosTrends: TrendPoint[];
@@ -115,6 +122,10 @@ export interface TrendsData {
       vs6MonthsAgo: number;
       vs12MonthsAgo: number;
     };
+  };
+  keywordImpact?: {
+    gainers: KeywordImpactItem[];
+    losers: KeywordImpactItem[];
   };
 }
 

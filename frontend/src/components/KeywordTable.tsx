@@ -83,7 +83,50 @@ const getCategory = (kw: RankedKeyword): string => {
 
 interface CategorizedKeyword extends RankedKeyword {
   category: string;
+  topic: string; // URL-based topic (similar to Ahrefs Parent Topic)
 }
+
+// Extract topic from URL (similar to Ahrefs Parent Topic)
+// Groups keywords by the page they rank for
+const extractTopicFromUrl = (url?: string): string => {
+  if (!url) return 'Unknown';
+
+  // Remove leading/trailing slashes and get path segments
+  const cleanUrl = url.replace(/^\/+|\/+$/g, '');
+  if (!cleanUrl) return 'Homepage';
+
+  // Get the main path segment (first meaningful part)
+  const segments = cleanUrl.split('/').filter(s => s && s.length > 0);
+  if (segments.length === 0) return 'Homepage';
+
+  // Use the first segment as the main topic, clean it up
+  let topic = segments[0]
+    .replace(/[-_]/g, ' ')  // Replace hyphens/underscores with spaces
+    .replace(/\.html?$/i, '') // Remove .html extension
+    .replace(/\.(php|aspx?|jsp)$/i, '') // Remove other extensions
+    .trim();
+
+  // Capitalize first letter of each word
+  topic = topic.split(' ')
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join(' ');
+
+  // If there's a second segment, add it for more specificity
+  if (segments.length > 1 && segments[1].length > 2) {
+    const subTopic = segments[1]
+      .replace(/[-_]/g, ' ')
+      .replace(/\.(html?|php|aspx?|jsp)$/i, '')
+      .trim();
+    if (subTopic && subTopic !== topic.toLowerCase()) {
+      const formattedSub = subTopic.split(' ')
+        .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+        .join(' ');
+      topic = `${topic} › ${formattedSub}`;
+    }
+  }
+
+  return topic || 'Other';
+};
 
 const getPositionBadgeClass = (position: number): string => {
   if (position <= 3) return 'bg-emerald-100 text-emerald-800';
@@ -114,10 +157,14 @@ const getCategoryBadgeClass = (category: string): string => {
 
 const ITEMS_PER_PAGE_OPTIONS = [25, 50, 100];
 
+type GroupingMode = 'category' | 'topic';
+
 export const KeywordTable: React.FC<KeywordTableProps> = (props) => {
   const [sortKey, setSortKey] = useState<SortKey>('searchVolume');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
   const [selectedCategories, setSelectedCategories] = useState<Set<string>>(new Set());
+  const [selectedTopics, setSelectedTopics] = useState<Set<string>>(new Set());
+  const [groupingMode, setGroupingMode] = useState<GroupingMode>('topic'); // Default to topic (URL-based, like Ahrefs)
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [itemsPerPage, setItemsPerPage] = useState<number>(25);
@@ -125,13 +172,14 @@ export const KeywordTable: React.FC<KeywordTableProps> = (props) => {
   const [selectedCompetitors, setSelectedCompetitors] = useState<Set<string>>(new Set());
   const [competitorsInitialized, setCompetitorsInitialized] = useState(false);
 
-  // Categorize all keywords
+  // Categorize all keywords and extract topics from URLs
   const categorizedKeywords = useMemo(() => {
     if (props.type !== 'sov') return [];
 
     return (props.keywords as RankedKeyword[]).map(kw => ({
       ...kw,
-      category: getCategory(kw)
+      category: getCategory(kw),
+      topic: extractTopicFromUrl(kw.url) // URL-based topic like Ahrefs Parent Topic
     })) as CategorizedKeyword[];
   }, [props.keywords, props.type]);
 
@@ -235,6 +283,35 @@ export const KeywordTable: React.FC<KeywordTableProps> = (props) => {
       .sort((a, b) => b.count - a.count);
   }, [categorizedKeywords, props.type]);
 
+  // Get unique topics (URL-based, like Ahrefs Parent Topic) with counts
+  const topicStats = useMemo(() => {
+    if (props.type !== 'sov') return [];
+
+    const counts = new Map<string, { count: number; volume: number; visibleVolume: number; urls: Set<string> }>();
+
+    for (const kw of categorizedKeywords) {
+      const existing = counts.get(kw.topic) || { count: 0, volume: 0, visibleVolume: 0, urls: new Set<string>() };
+      existing.urls.add(kw.url || '');
+      counts.set(kw.topic, {
+        count: existing.count + 1,
+        volume: existing.volume + kw.searchVolume,
+        visibleVolume: existing.visibleVolume + (kw.visibleVolume || 0),
+        urls: existing.urls
+      });
+    }
+
+    return Array.from(counts.entries())
+      .map(([topic, stats]) => ({
+        topic,
+        count: stats.count,
+        volume: stats.volume,
+        visibleVolume: stats.visibleVolume,
+        urlCount: stats.urls.size,
+        sov: stats.volume > 0 ? Math.round((stats.visibleVolume / stats.volume) * 100 * 10) / 10 : 0
+      }))
+      .sort((a, b) => b.volume - a.volume); // Sort by volume for topics
+  }, [categorizedKeywords, props.type]);
+
   // Toggle category selection
   const toggleCategory = (category: string) => {
     setSelectedCategories(prev => {
@@ -249,19 +326,43 @@ export const KeywordTable: React.FC<KeywordTableProps> = (props) => {
     setCurrentPage(1);
   };
 
+  // Toggle topic selection
+  const toggleTopic = (topic: string) => {
+    setSelectedTopics(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(topic)) {
+        newSet.delete(topic);
+      } else {
+        newSet.add(topic);
+      }
+      return newSet;
+    });
+    setCurrentPage(1);
+  };
+
   const clearCategories = () => {
     setSelectedCategories(new Set());
     setCurrentPage(1);
   };
 
-  // Filter keywords by category, search, and position
+  const clearTopics = () => {
+    setSelectedTopics(new Set());
+    setCurrentPage(1);
+  };
+
+  // Filter keywords by category/topic, search, and position
   const filteredKeywords = useMemo(() => {
     if (props.type === 'sov') {
       let keywords: CategorizedKeyword[] = categorizedKeywords;
 
-      // Apply category filter (multi-select)
-      if (selectedCategories.size > 0) {
+      // Apply category filter (when in category mode)
+      if (groupingMode === 'category' && selectedCategories.size > 0) {
         keywords = keywords.filter(kw => selectedCategories.has(kw.category));
+      }
+
+      // Apply topic filter (when in topic mode - like Ahrefs Parent Topic)
+      if (groupingMode === 'topic' && selectedTopics.size > 0) {
+        keywords = keywords.filter(kw => selectedTopics.has(kw.topic));
       }
 
       // Apply search filter
@@ -295,7 +396,7 @@ export const KeywordTable: React.FC<KeywordTableProps> = (props) => {
 
       return keywords;
     }
-  }, [categorizedKeywords, selectedCategories, searchQuery, positionFilter, props.keywords, props.type]);
+  }, [categorizedKeywords, selectedCategories, selectedTopics, groupingMode, searchQuery, positionFilter, props.keywords, props.type]);
 
   // Calculate filtered SOV stats
   const filteredSOVStats = useMemo(() => {
@@ -320,7 +421,7 @@ export const KeywordTable: React.FC<KeywordTableProps> = (props) => {
   useEffect(() => {
     if (props.type === 'sov' && filteredSOVStats && props.onFilteredSOVChange) {
       // Only notify when filters are active
-      const hasFilters = selectedCategories.size > 0 || searchQuery || positionFilter !== 'all';
+      const hasFilters = selectedCategories.size > 0 || selectedTopics.size > 0 || searchQuery || positionFilter !== 'all';
       if (hasFilters) {
         props.onFilteredSOVChange(
           filteredSOVStats.filteredSOV,
@@ -332,7 +433,7 @@ export const KeywordTable: React.FC<KeywordTableProps> = (props) => {
         props.onFilteredSOVChange(0, 0, 0);
       }
     }
-  }, [filteredSOVStats, selectedCategories, searchQuery, positionFilter, props]);
+  }, [filteredSOVStats, selectedCategories, selectedTopics, searchQuery, positionFilter, props]);
 
   const handleSort = (key: SortKey) => {
     if (sortKey === key) {
@@ -522,11 +623,12 @@ export const KeywordTable: React.FC<KeywordTableProps> = (props) => {
               </select>
 
               {/* Clear Filters */}
-              {(searchQuery || selectedCategories.size > 0 || positionFilter !== 'all') && (
+              {(searchQuery || selectedCategories.size > 0 || selectedTopics.size > 0 || positionFilter !== 'all') && (
                 <button
                   onClick={() => {
                     setSearchQuery('');
                     setSelectedCategories(new Set());
+                    setSelectedTopics(new Set());
                     setPositionFilter('all');
                     setCurrentPage(1);
                   }}
@@ -537,58 +639,151 @@ export const KeywordTable: React.FC<KeywordTableProps> = (props) => {
               )}
             </div>
 
-            {/* Category Filter - Multi-select */}
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <svg className="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
-                  </svg>
-                  <span className="text-sm font-medium text-gray-700">Select Categories:</span>
-                  <span className="text-xs text-gray-500">(select multiple to filter)</span>
-                </div>
-                {selectedCategories.size > 0 && (
-                  <button
-                    onClick={clearCategories}
-                    className="px-2 py-1 text-xs border border-gray-300 rounded-lg hover:bg-gray-100 text-gray-600"
-                  >
-                    Clear Selection
-                  </button>
-                )}
+            {/* Grouping Mode Toggle */}
+            <div className="flex items-center gap-4">
+              <span className="text-sm font-medium text-gray-700">Group by:</span>
+              <div className="inline-flex rounded-lg border border-gray-300 overflow-hidden">
+                <button
+                  onClick={() => {
+                    setGroupingMode('topic');
+                    setSelectedCategories(new Set());
+                  }}
+                  className={`px-4 py-2 text-sm font-medium transition-colors ${
+                    groupingMode === 'topic'
+                      ? 'bg-purple-600 text-white'
+                      : 'bg-white text-gray-700 hover:bg-gray-50'
+                  }`}
+                >
+                  Topic (URL)
+                </button>
+                <button
+                  onClick={() => {
+                    setGroupingMode('category');
+                    setSelectedTopics(new Set());
+                  }}
+                  className={`px-4 py-2 text-sm font-medium transition-colors border-l border-gray-300 ${
+                    groupingMode === 'category'
+                      ? 'bg-orange-600 text-white'
+                      : 'bg-white text-gray-700 hover:bg-gray-50'
+                  }`}
+                >
+                  Category (Google Ads)
+                </button>
               </div>
-              <div className="flex flex-wrap gap-2">
-                {categoryStats.slice(0, 12).map(({ category, count }) => (
-                  <label
-                    key={category}
-                    className={`inline-flex items-center gap-2 px-2 py-1 rounded-lg border cursor-pointer transition-all text-xs ${
-                      selectedCategories.has(category)
-                        ? 'bg-orange-50 border-orange-300 text-orange-700'
-                        : 'bg-white border-gray-300 text-gray-700 hover:border-orange-400'
-                    }`}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={selectedCategories.has(category)}
-                      onChange={() => toggleCategory(category)}
-                      className="w-3 h-3 rounded border-gray-300 text-orange-600 focus:ring-orange-500"
-                    />
-                    <span>{category}</span>
-                    <span className={`px-1 rounded ${selectedCategories.has(category) ? 'bg-orange-200' : 'bg-gray-100'}`}>
-                      {count}
-                    </span>
-                  </label>
-                ))}
-                {categoryStats.length > 12 && (
-                  <span className="text-xs text-gray-400 self-center">+{categoryStats.length - 12} more</span>
-                )}
-              </div>
-              <p className="text-xs text-orange-600 italic">
-                Changing category selection will update the overall Share of Voice % shown in the metric card above.
-              </p>
+              <span className="text-xs text-gray-500">
+                {groupingMode === 'topic'
+                  ? 'Groups keywords by ranking URL (like Ahrefs Parent Topic)'
+                  : 'Groups by Google Ads product categories'}
+              </span>
             </div>
 
+            {/* Topic Filter (URL-based, like Ahrefs Parent Topic) */}
+            {groupingMode === 'topic' && (
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <svg className="w-5 h-5 text-purple-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+                    </svg>
+                    <span className="text-sm font-medium text-gray-700">Select Topics:</span>
+                    <span className="text-xs text-gray-500">(based on ranking URLs - like Ahrefs Parent Topic)</span>
+                  </div>
+                  {selectedTopics.size > 0 && (
+                    <button
+                      onClick={clearTopics}
+                      className="px-2 py-1 text-xs border border-gray-300 rounded-lg hover:bg-gray-100 text-gray-600"
+                    >
+                      Clear Selection
+                    </button>
+                  )}
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {topicStats.slice(0, 15).map(({ topic, count, volume }) => (
+                    <label
+                      key={topic}
+                      className={`inline-flex items-center gap-2 px-2 py-1 rounded-lg border cursor-pointer transition-all text-xs ${
+                        selectedTopics.has(topic)
+                          ? 'bg-purple-50 border-purple-300 text-purple-700'
+                          : 'bg-white border-gray-300 text-gray-700 hover:border-purple-400'
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={selectedTopics.has(topic)}
+                        onChange={() => toggleTopic(topic)}
+                        className="w-3 h-3 rounded border-gray-300 text-purple-600 focus:ring-purple-500"
+                      />
+                      <span className="max-w-[150px] truncate" title={topic}>{topic}</span>
+                      <span className={`px-1 rounded ${selectedTopics.has(topic) ? 'bg-purple-200' : 'bg-gray-100'}`}>
+                        {count}
+                      </span>
+                      <span className="text-gray-400">{(volume / 1000).toFixed(1)}k</span>
+                    </label>
+                  ))}
+                  {topicStats.length > 15 && (
+                    <span className="text-xs text-gray-400 self-center">+{topicStats.length - 15} more topics</span>
+                  )}
+                </div>
+                <p className="text-xs text-purple-600 italic">
+                  Topics are derived from ranking URLs. Keywords ranking for the same page share the same topic.
+                </p>
+              </div>
+            )}
+
+            {/* Category Filter - Multi-select (Google Ads categories) */}
+            {groupingMode === 'category' && (
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <svg className="w-5 h-5 text-orange-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
+                    </svg>
+                    <span className="text-sm font-medium text-gray-700">Select Categories:</span>
+                    <span className="text-xs text-gray-500">(from Google Ads taxonomy)</span>
+                  </div>
+                  {selectedCategories.size > 0 && (
+                    <button
+                      onClick={clearCategories}
+                      className="px-2 py-1 text-xs border border-gray-300 rounded-lg hover:bg-gray-100 text-gray-600"
+                    >
+                      Clear Selection
+                    </button>
+                  )}
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {categoryStats.slice(0, 12).map(({ category, count }) => (
+                    <label
+                      key={category}
+                      className={`inline-flex items-center gap-2 px-2 py-1 rounded-lg border cursor-pointer transition-all text-xs ${
+                        selectedCategories.has(category)
+                          ? 'bg-orange-50 border-orange-300 text-orange-700'
+                          : 'bg-white border-gray-300 text-gray-700 hover:border-orange-400'
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={selectedCategories.has(category)}
+                        onChange={() => toggleCategory(category)}
+                        className="w-3 h-3 rounded border-gray-300 text-orange-600 focus:ring-orange-500"
+                      />
+                      <span>{category}</span>
+                      <span className={`px-1 rounded ${selectedCategories.has(category) ? 'bg-orange-200' : 'bg-gray-100'}`}>
+                        {count}
+                      </span>
+                    </label>
+                  ))}
+                  {categoryStats.length > 12 && (
+                    <span className="text-xs text-gray-400 self-center">+{categoryStats.length - 12} more</span>
+                  )}
+                </div>
+                <p className="text-xs text-orange-600 italic">
+                  Categories are based on Google Ads product taxonomy from DataForSEO.
+                </p>
+              </div>
+            )}
+
             {/* Active Filters Stats */}
-            {(selectedCategories.size > 0 || searchQuery || positionFilter !== 'all') && filteredSOVStats && (
+            {(selectedCategories.size > 0 || selectedTopics.size > 0 || searchQuery || positionFilter !== 'all') && filteredSOVStats && (
               <div className="flex items-center gap-4 p-3 bg-orange-50 border border-orange-200 rounded-lg">
                 <div className="flex items-center gap-2">
                   <span className="text-sm text-orange-700 font-medium">Filtered SOV:</span>
@@ -612,7 +807,7 @@ export const KeywordTable: React.FC<KeywordTableProps> = (props) => {
                   Keyword{getSortIndicator('keyword')}
                 </th>
                 <th onClick={() => handleSort('category')} className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100">
-                  Category{getSortIndicator('category')}
+                  {groupingMode === 'topic' ? 'Topic' : 'Category'}{getSortIndicator('category')}
                 </th>
                 <th onClick={() => handleSort('searchVolume')} className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100">
                   Volume{getSortIndicator('searchVolume')}
@@ -638,16 +833,30 @@ export const KeywordTable: React.FC<KeywordTableProps> = (props) => {
                     {kw.keyword}
                   </td>
                   <td className="px-6 py-3 whitespace-nowrap">
-                    <button
-                      onClick={() => toggleCategory(kw.category)}
-                      className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium cursor-pointer hover:opacity-80 ${
-                        selectedCategories.has(kw.category)
-                          ? 'bg-orange-500 text-white'
-                          : getCategoryBadgeClass(kw.category)
-                      }`}
-                    >
-                      {kw.category}
-                    </button>
+                    {groupingMode === 'topic' ? (
+                      <button
+                        onClick={() => toggleTopic(kw.topic)}
+                        className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium cursor-pointer hover:opacity-80 max-w-[150px] truncate ${
+                          selectedTopics.has(kw.topic)
+                            ? 'bg-purple-500 text-white'
+                            : 'bg-purple-100 text-purple-800'
+                        }`}
+                        title={kw.topic}
+                      >
+                        {kw.topic}
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => toggleCategory(kw.category)}
+                        className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium cursor-pointer hover:opacity-80 ${
+                          selectedCategories.has(kw.category)
+                            ? 'bg-orange-500 text-white'
+                            : getCategoryBadgeClass(kw.category)
+                        }`}
+                      >
+                        {kw.category}
+                      </button>
+                    )}
                   </td>
                   <td className="px-6 py-3 whitespace-nowrap text-sm text-gray-600 text-right">
                     {kw.searchVolume.toLocaleString()}

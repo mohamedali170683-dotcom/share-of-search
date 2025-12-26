@@ -128,6 +128,13 @@ export const KeywordTable: React.FC<KeywordTableProps> = (props) => {
     return [...new Set(brands)];
   }, [props.keywords, props.type]);
 
+  // Reset initialization when keywords change (new data fetched)
+  useEffect(() => {
+    if (props.type === 'sos') {
+      setCompetitorsInitialized(false);
+    }
+  }, [props.keywords, props.type]);
+
   // Initialize selected competitors (all selected by default)
   useEffect(() => {
     if (props.type === 'sos' && competitorBrands.length > 0 && !competitorsInitialized) {

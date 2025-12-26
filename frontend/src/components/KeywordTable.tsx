@@ -54,26 +54,21 @@ const CATEGORY_PATTERNS: { category: string; patterns: RegExp[] }[] = [
 ];
 
 // Detect category for a keyword (fallback when API doesn't provide one)
+// This is only used when DataForSEO doesn't return category IDs
 const detectCategoryFallback = (keyword: string): string => {
   const keywordLower = keyword.toLowerCase();
 
+  // Try each pattern - first match wins
   for (const { category, patterns } of CATEGORY_PATTERNS) {
-    const matches = patterns.filter(pattern => pattern.test(keywordLower));
-    if (matches.length > 0) {
-      return category;
+    for (const pattern of patterns) {
+      if (pattern.test(keywordLower)) {
+        return category;
+      }
     }
   }
 
-  // Try to extract a meaningful category from the keyword itself
-  const words = keywordLower.split(/\s+/);
-  if (words.length >= 2) {
-    const significantWords = words.filter(w => w.length > 3).slice(0, 2);
-    if (significantWords.length > 0) {
-      return significantWords.map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
-    }
-  }
-
-  return 'Other';
+  // Don't create arbitrary categories - just mark as uncategorized
+  return 'Uncategorized';
 };
 
 // Get category - prefer API-provided, fall back to detection

@@ -69,9 +69,9 @@ const LineChart: React.FC<{
   competitors?: CompetitorTrend[];
   selectedCompetitors: string[];
 }> = ({ brandName, sosData, sovData, labels, competitors, selectedCompetitors }) => {
-  const width = 320;
-  const height = 140;
-  const padding = { top: 16, right: 12, bottom: 24, left: 32 };
+  const width = 480;
+  const height = 200;
+  const padding = { top: 24, right: 16, bottom: 32, left: 44 };
   const chartWidth = width - padding.left - padding.right;
   const chartHeight = height - padding.top - padding.bottom;
 
@@ -108,12 +108,12 @@ const LineChart: React.FC<{
   }
 
   return (
-    <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-auto max-w-md">
+    <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-auto">
       {/* Grid */}
       {gridLines.map((line, idx) => (
         <g key={idx}>
           <line x1={padding.left} y1={line.y} x2={width - padding.right} y2={line.y} stroke="#f3f4f6" strokeWidth="1" />
-          <text x={padding.left - 4} y={line.y + 3} textAnchor="end" fontSize="8" fill="#9ca3af">{line.value}%</text>
+          <text x={padding.left - 6} y={line.y + 4} textAnchor="end" fontSize="11" fill="#9ca3af">{line.value}%</text>
         </g>
       ))}
 
@@ -126,46 +126,46 @@ const LineChart: React.FC<{
               d={generatePath(compData)}
               fill="none"
               stroke={COMPETITOR_COLORS[idx]}
-              strokeWidth="2"
-              strokeDasharray="4 2"
+              strokeWidth="2.5"
+              strokeDasharray="6 3"
               opacity="0.7"
             />
             {compData.map((value, i) => (
-              <circle key={i} cx={getX(i)} cy={getY(value)} r="3" fill={COMPETITOR_COLORS[idx]} opacity="0.7" />
+              <circle key={i} cx={getX(i)} cy={getY(value)} r="4" fill={COMPETITOR_COLORS[idx]} opacity="0.7" />
             ))}
           </g>
         );
       })}
 
       {/* SOS Line */}
-      <path d={generatePath(sosData)} fill="none" stroke="#10b981" strokeWidth="2" />
+      <path d={generatePath(sosData)} fill="none" stroke="#10b981" strokeWidth="2.5" />
       {sosData.map((value, index) => (
         <g key={`sos-${index}`}>
-          <circle cx={getX(index)} cy={getY(value)} r="4" fill="#10b981" />
-          <text x={getX(index)} y={getY(value) - 6} textAnchor="middle" fontSize="8" fontWeight="600" fill="#059669">{value}%</text>
+          <circle cx={getX(index)} cy={getY(value)} r="5" fill="#10b981" />
+          <text x={getX(index)} y={getY(value) - 10} textAnchor="middle" fontSize="11" fontWeight="600" fill="#059669">{value}%</text>
         </g>
       ))}
 
       {/* SOV Line */}
-      <path d={generatePath(sovData)} fill="none" stroke="#f97316" strokeWidth="2" />
+      <path d={generatePath(sovData)} fill="none" stroke="#f97316" strokeWidth="2.5" />
       {sovData.map((value, index) => (
         <g key={`sov-${index}`}>
-          <circle cx={getX(index)} cy={getY(value)} r="4" fill="#f97316" />
-          <text x={getX(index)} y={getY(value) + 12} textAnchor="middle" fontSize="8" fontWeight="600" fill="#ea580c">{value}%</text>
+          <circle cx={getX(index)} cy={getY(value)} r="5" fill="#f97316" />
+          <text x={getX(index)} y={getY(value) + 16} textAnchor="middle" fontSize="11" fontWeight="600" fill="#ea580c">{value}%</text>
         </g>
       ))}
 
       {/* X-axis */}
       {labels.map((label, index) => (
-        <text key={index} x={getX(index)} y={height - 6} textAnchor="middle" fontSize="8" fill="#6b7280">{label}</text>
+        <text key={index} x={getX(index)} y={height - 8} textAnchor="middle" fontSize="11" fill="#6b7280">{label}</text>
       ))}
 
       {/* Legend */}
-      <g transform={`translate(${padding.left}, 4)`}>
-        <rect width="6" height="6" fill="#10b981" rx="1" />
-        <text x="8" y="5" fontSize="7" fill="#374151">{brandName} SOS</text>
-        <rect x="55" width="6" height="6" fill="#f97316" rx="1" />
-        <text x="63" y="5" fontSize="7" fill="#374151">SOV</text>
+      <g transform={`translate(${padding.left}, 6)`}>
+        <rect width="10" height="10" fill="#10b981" rx="2" />
+        <text x="14" y="9" fontSize="11" fill="#374151">{brandName} SOS</text>
+        <rect x="90" width="10" height="10" fill="#f97316" rx="2" />
+        <text x="104" y="9" fontSize="11" fill="#374151">SOV</text>
       </g>
     </svg>
   );
@@ -183,13 +183,13 @@ const KeywordImpactSection: React.FC<{
   const hasData = currentData.gainers.length > 0 || currentData.losers.length > 0;
 
   return (
-    <div className="mt-4">
-      <div className="flex items-center justify-between mb-3">
-        <h5 className="text-sm font-medium text-gray-700">Keyword Impact (12mo)</h5>
+    <div className="mt-6">
+      <div className="flex items-center justify-between mb-4">
+        <h5 className="text-sm font-semibold text-gray-700">Keyword Impact (12 months)</h5>
         <div className="flex bg-gray-100 rounded-lg p-0.5">
           <button
             onClick={() => setActiveTab('generic')}
-            className={`px-2 py-1 text-xs rounded-md transition-all ${
+            className={`px-3 py-1.5 text-sm rounded-md transition-all ${
               activeTab === 'generic' ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'
             }`}
           >
@@ -197,7 +197,7 @@ const KeywordImpactSection: React.FC<{
           </button>
           <button
             onClick={() => setActiveTab('branded')}
-            className={`px-2 py-1 text-xs rounded-md transition-all ${
+            className={`px-3 py-1.5 text-sm rounded-md transition-all ${
               activeTab === 'branded' ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'
             }`}
           >
@@ -207,55 +207,55 @@ const KeywordImpactSection: React.FC<{
       </div>
 
       {hasData ? (
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-2 gap-4">
           {/* Gainers */}
-          <div className="bg-emerald-50 rounded-lg p-2.5 border border-emerald-100">
-            <div className="flex items-center gap-1 mb-2">
-              <span className="text-emerald-600 text-xs">↑</span>
-              <span className="text-xs font-medium text-emerald-700">Gainers</span>
+          <div className="bg-emerald-50 rounded-lg p-4 border border-emerald-100">
+            <div className="flex items-center gap-1.5 mb-3">
+              <span className="text-emerald-600 text-sm">↑</span>
+              <span className="text-sm font-medium text-emerald-700">Top Gainers</span>
             </div>
             {currentData.gainers.length > 0 ? (
-              <div className="space-y-1.5">
+              <div className="space-y-2">
                 {currentData.gainers.map((item, idx) => (
-                  <div key={idx} className="flex items-center justify-between text-xs bg-white rounded px-2 py-1.5">
-                    <div className="flex items-center gap-1.5 flex-1 min-w-0">
-                      <span className="text-emerald-600 font-mono text-[10px]">#{item.position}</span>
+                  <div key={idx} className="flex items-center justify-between text-sm bg-white rounded-lg px-3 py-2">
+                    <div className="flex items-center gap-2 flex-1 min-w-0">
+                      <span className="text-emerald-600 font-mono text-xs">#{item.position}</span>
                       <span className="truncate text-gray-700">{item.keyword}</span>
                     </div>
-                    <span className="text-emerald-600 font-medium text-[10px] ml-1">+{item.impactChange}</span>
+                    <span className="text-emerald-600 font-medium text-xs ml-2">+{item.impactChange}</span>
                   </div>
                 ))}
               </div>
             ) : (
-              <p className="text-xs text-emerald-600">No gainers</p>
+              <p className="text-sm text-emerald-600">No gainers detected</p>
             )}
           </div>
 
           {/* Losers */}
-          <div className="bg-red-50 rounded-lg p-2.5 border border-red-100">
-            <div className="flex items-center gap-1 mb-2">
-              <span className="text-red-600 text-xs">↓</span>
-              <span className="text-xs font-medium text-red-700">Losers</span>
+          <div className="bg-red-50 rounded-lg p-4 border border-red-100">
+            <div className="flex items-center gap-1.5 mb-3">
+              <span className="text-red-600 text-sm">↓</span>
+              <span className="text-sm font-medium text-red-700">Top Losers</span>
             </div>
             {currentData.losers.length > 0 ? (
-              <div className="space-y-1.5">
+              <div className="space-y-2">
                 {currentData.losers.map((item, idx) => (
-                  <div key={idx} className="flex items-center justify-between text-xs bg-white rounded px-2 py-1.5">
-                    <div className="flex items-center gap-1.5 flex-1 min-w-0">
-                      <span className="text-red-600 font-mono text-[10px]">#{item.position}</span>
+                  <div key={idx} className="flex items-center justify-between text-sm bg-white rounded-lg px-3 py-2">
+                    <div className="flex items-center gap-2 flex-1 min-w-0">
+                      <span className="text-red-600 font-mono text-xs">#{item.position}</span>
                       <span className="truncate text-gray-700">{item.keyword}</span>
                     </div>
-                    <span className="text-red-600 font-medium text-[10px] ml-1">{item.impactChange}</span>
+                    <span className="text-red-600 font-medium text-xs ml-2">{item.impactChange}</span>
                   </div>
                 ))}
               </div>
             ) : (
-              <p className="text-xs text-red-600">No losers</p>
+              <p className="text-sm text-red-600">No losers detected</p>
             )}
           </div>
         </div>
       ) : (
-        <p className="text-xs text-gray-500 text-center py-2">No {activeTab} keyword data available</p>
+        <p className="text-sm text-gray-500 text-center py-3">No {activeTab} keyword data available</p>
       )}
     </div>
   );
@@ -296,20 +296,20 @@ export const TrendsPanel: React.FC<TrendsPanelProps> = ({ data, isLoading }) => 
   };
 
   return (
-    <div className="bg-white rounded-xl shadow-sm overflow-hidden mb-6">
-      <div className="px-4 py-3 border-b border-gray-200 bg-gradient-to-r from-purple-50 to-pink-50">
+    <div className="bg-white rounded-xl shadow-sm overflow-hidden mb-8">
+      <div className="px-6 py-4 border-b border-gray-200 bg-gradient-to-r from-purple-50 to-pink-50">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <svg className="w-4 h-4 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-5 h-5 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
             </svg>
-            <h3 className="text-sm font-semibold text-gray-900">Historical Trends</h3>
-            <span className="px-1.5 py-0.5 bg-purple-100 text-purple-700 text-[10px] rounded">12mo</span>
+            <h3 className="text-lg font-semibold text-gray-900">Historical Trends</h3>
+            <span className="px-2 py-0.5 bg-purple-100 text-purple-700 text-xs rounded-full">12 months</span>
           </div>
         </div>
       </div>
 
-      <div className="p-4">
+      <div className="p-6">
         {/* Chart and Competitor Selection */}
         <div className="flex gap-4">
           {/* Chart */}
@@ -325,40 +325,40 @@ export const TrendsPanel: React.FC<TrendsPanelProps> = ({ data, isLoading }) => 
           </div>
 
           {/* Competitor Selector & Changes */}
-          <div className="w-40 space-y-3">
+          <div className="w-48 space-y-3">
             {/* Changes */}
             <div className="space-y-2">
-              <div className="p-2 bg-emerald-50 rounded border border-emerald-100">
-                <div className="text-[10px] font-medium text-emerald-700 mb-1">SOS</div>
-                <ChangeValue value={data.changes.sos.vs6MonthsAgo} label="6mo" />
-                <ChangeValue value={data.changes.sos.vs12MonthsAgo} label="12mo" />
+              <div className="p-3 bg-emerald-50 rounded-lg border border-emerald-100">
+                <div className="text-xs font-medium text-emerald-700 mb-1">Share of Search</div>
+                <ChangeValue value={data.changes.sos.vs6MonthsAgo} label="vs 6mo" />
+                <ChangeValue value={data.changes.sos.vs12MonthsAgo} label="vs 12mo" />
               </div>
-              <div className="p-2 bg-orange-50 rounded border border-orange-100">
-                <div className="text-[10px] font-medium text-orange-700 mb-1">SOV</div>
-                <ChangeValue value={data.changes.sov.vs6MonthsAgo} label="6mo" />
-                <ChangeValue value={data.changes.sov.vs12MonthsAgo} label="12mo" />
+              <div className="p-3 bg-orange-50 rounded-lg border border-orange-100">
+                <div className="text-xs font-medium text-orange-700 mb-1">Share of Voice</div>
+                <ChangeValue value={data.changes.sov.vs6MonthsAgo} label="vs 6mo" />
+                <ChangeValue value={data.changes.sov.vs12MonthsAgo} label="vs 12mo" />
               </div>
             </div>
 
             {/* Competitor Toggle */}
             {data.competitorTrends && data.competitorTrends.length > 0 && (
-              <div className="p-2 bg-gray-50 rounded border border-gray-200">
-                <div className="text-[10px] font-medium text-gray-600 mb-1.5">Compare with:</div>
-                <div className="space-y-1">
+              <div className="p-3 bg-gray-50 rounded-lg border border-gray-200">
+                <div className="text-xs font-medium text-gray-600 mb-2">Compare with:</div>
+                <div className="space-y-1.5">
                   {data.competitorTrends.map((comp, idx) => (
-                    <label key={comp.name} className="flex items-center gap-1.5 cursor-pointer">
+                    <label key={comp.name} className="flex items-center gap-2 cursor-pointer">
                       <input
                         type="checkbox"
                         checked={selectedCompetitors.includes(comp.name)}
                         onChange={() => toggleCompetitor(comp.name)}
-                        className="w-3 h-3 rounded border-gray-300"
+                        className="w-3.5 h-3.5 rounded border-gray-300"
                         style={{ accentColor: COMPETITOR_COLORS[idx] }}
                       />
                       <span
-                        className="w-2 h-2 rounded-full"
+                        className="w-2.5 h-2.5 rounded-full"
                         style={{ backgroundColor: COMPETITOR_COLORS[idx] }}
                       />
-                      <span className="text-[10px] text-gray-700 truncate">{comp.name}</span>
+                      <span className="text-xs text-gray-700">{comp.name}</span>
                     </label>
                   ))}
                 </div>
@@ -370,21 +370,33 @@ export const TrendsPanel: React.FC<TrendsPanelProps> = ({ data, isLoading }) => 
         {/* Keyword Impact */}
         <KeywordImpactSection keywordImpact={data.keywordImpact} />
 
-        {/* Compact Insights */}
-        <div className="mt-4 grid grid-cols-2 gap-2 text-[11px]">
-          <div className={`p-2 rounded ${
-            data.changes.sos.vs12MonthsAgo > 2 ? 'bg-emerald-50 text-emerald-700' :
-            data.changes.sos.vs12MonthsAgo < -2 ? 'bg-red-50 text-red-700' : 'bg-gray-50 text-gray-600'
+        {/* Trend Insights */}
+        <div className="mt-6 grid grid-cols-2 gap-4">
+          <div className={`p-4 rounded-lg border ${
+            data.changes.sos.vs12MonthsAgo > 2 ? 'bg-emerald-50 border-emerald-200 text-emerald-700' :
+            data.changes.sos.vs12MonthsAgo < -2 ? 'bg-red-50 border-red-200 text-red-700' : 'bg-gray-50 border-gray-200 text-gray-600'
           }`}>
-            {data.changes.sos.vs12MonthsAgo > 2 ? 'Brand awareness growing' :
-             data.changes.sos.vs12MonthsAgo < -2 ? 'Brand awareness declining' : 'Brand stable'}
+            <div className="text-sm font-medium">
+              {data.changes.sos.vs12MonthsAgo > 2 ? 'Brand awareness is growing' :
+               data.changes.sos.vs12MonthsAgo < -2 ? 'Brand awareness is declining' : 'Brand awareness is stable'}
+            </div>
+            <div className="text-xs mt-1 opacity-80">
+              {data.changes.sos.vs12MonthsAgo > 2 ? 'Your brand searches have increased over the past year.' :
+               data.changes.sos.vs12MonthsAgo < -2 ? 'Consider investing in brand marketing.' : 'Consistent performance over time.'}
+            </div>
           </div>
-          <div className={`p-2 rounded ${
-            data.changes.sov.vs12MonthsAgo > 2 ? 'bg-emerald-50 text-emerald-700' :
-            data.changes.sov.vs12MonthsAgo < -2 ? 'bg-red-50 text-red-700' : 'bg-gray-50 text-gray-600'
+          <div className={`p-4 rounded-lg border ${
+            data.changes.sov.vs12MonthsAgo > 2 ? 'bg-emerald-50 border-emerald-200 text-emerald-700' :
+            data.changes.sov.vs12MonthsAgo < -2 ? 'bg-red-50 border-red-200 text-red-700' : 'bg-gray-50 border-gray-200 text-gray-600'
           }`}>
-            {data.changes.sov.vs12MonthsAgo > 2 ? 'SEO visibility improving' :
-             data.changes.sov.vs12MonthsAgo < -2 ? 'SEO visibility declining' : 'Visibility stable'}
+            <div className="text-sm font-medium">
+              {data.changes.sov.vs12MonthsAgo > 2 ? 'SEO visibility is improving' :
+               data.changes.sov.vs12MonthsAgo < -2 ? 'SEO visibility is declining' : 'SEO visibility is stable'}
+            </div>
+            <div className="text-xs mt-1 opacity-80">
+              {data.changes.sov.vs12MonthsAgo > 2 ? 'Your organic rankings have improved.' :
+               data.changes.sov.vs12MonthsAgo < -2 ? 'Review your SEO strategy for improvements.' : 'Organic presence remains consistent.'}
+            </div>
           </div>
         </div>
       </div>

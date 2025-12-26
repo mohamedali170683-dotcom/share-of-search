@@ -90,6 +90,53 @@ export async function getBrandKeywords(
   return response.json();
 }
 
+// Trends data types
+export interface TrendPoint {
+  period: string;
+  monthsAgo: number;
+  sos?: number;
+  sov?: number;
+  brandVolume?: number;
+  totalVolume?: number;
+  visibleVolume?: number;
+  totalMarketVolume?: number;
+}
+
+export interface TrendsData {
+  brandName: string;
+  sosTrends: TrendPoint[];
+  sovTrends: TrendPoint[];
+  changes: {
+    sos: {
+      vs6MonthsAgo: number;
+      vs12MonthsAgo: number;
+    };
+    sov: {
+      vs6MonthsAgo: number;
+      vs12MonthsAgo: number;
+    };
+  };
+}
+
+export async function getTrends(
+  domain: string,
+  locationCode: number,
+  languageCode: string,
+  login: string,
+  password: string
+): Promise<TrendsData> {
+  const response = await fetch(`${API_BASE}/trends`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ domain, locationCode, languageCode, login, password })
+  });
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.error || 'Failed to fetch trends data');
+  }
+  return response.json();
+}
+
 // Project management functions
 export async function getProjects(): Promise<Project[]> {
   const response = await fetch(`${API_BASE}/projects`);

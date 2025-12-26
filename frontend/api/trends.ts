@@ -1,0 +1,256 @@
+import type { VercelRequest, VercelResponse } from '@vercel/node';
+
+interface MonthlySearch {
+  year: number;
+  month: number;
+  search_volume: number;
+}
+
+interface KeywordVolumeResult {
+  keyword: string;
+  search_volume: number;
+  monthly_searches: MonthlySearch[];
+}
+
+interface RankedKeywordItem {
+  keyword_data: {
+    keyword: string;
+    keyword_info: {
+      search_volume: number;
+      monthly_searches: MonthlySearch[];
+    };
+  };
+  ranked_serp_element: {
+    serp_item: {
+      rank_group: number;
+    };
+  };
+}
+
+// CTR curve for positions 1-20
+const CTR_CURVE: Record<number, number> = {
+  1: 28.0, 2: 15.0, 3: 11.0, 4: 8.0, 5: 7.0,
+  6: 5.0, 7: 4.0, 8: 3.5, 9: 3.0, 10: 2.5,
+  11: 2.0, 12: 1.8, 13: 1.5, 14: 1.3, 15: 1.0,
+  16: 0.8, 17: 0.6, 18: 0.5, 19: 0.3, 20: 0.2
+};
+
+// Get volume for a specific period (months ago from now)
+function getVolumeForPeriod(monthlySearches: MonthlySearch[], monthsAgo: number): number {
+  if (!monthlySearches || monthlySearches.length === 0) return 0;
+
+  const now = new Date();
+  const targetDate = new Date(now.getFullYear(), now.getMonth() - monthsAgo, 1);
+  const targetYear = targetDate.getFullYear();
+  const targetMonth = targetDate.getMonth() + 1; // 1-indexed
+
+  // Find the closest month
+  const match = monthlySearches.find(m => m.year === targetYear && m.month === targetMonth);
+  if (match) return match.search_volume;
+
+  // If exact match not found, return average of nearby months
+  const sorted = [...monthlySearches].sort((a, b) => {
+    const aDate = new Date(a.year, a.month - 1);
+    const bDate = new Date(b.year, b.month - 1);
+    return Math.abs(aDate.getTime() - targetDate.getTime()) - Math.abs(bDate.getTime() - targetDate.getTime());
+  });
+
+  return sorted[0]?.search_volume || 0;
+}
+
+// Common competitor brands by industry
+const INDUSTRY_COMPETITORS: Record<string, string[]> = {
+  sportswear: ['nike', 'adidas', 'puma', 'reebok', 'under armour', 'new balance', 'asics'],
+  cosmetics: ['weleda', 'dr hauschka', 'alverde', 'lavera', 'sante', 'logona'],
+  fashion: ['zara', 'h&m', 'uniqlo', 'gap', 'mango', 'asos'],
+  tech: ['apple', 'samsung', 'google', 'microsoft', 'sony', 'huawei'],
+};
+
+const BRAND_INDUSTRY_MAP: Record<string, string> = {
+  'nike': 'sportswear', 'adidas': 'sportswear', 'puma': 'sportswear',
+  'lavera': 'cosmetics', 'weleda': 'cosmetics', 'alverde': 'cosmetics',
+  'zara': 'fashion', 'h&m': 'fashion', 'uniqlo': 'fashion',
+  'apple': 'tech', 'samsung': 'tech', 'google': 'tech',
+};
+
+function extractBrandFromDomain(domain: string): string {
+  return domain
+    .replace(/^(https?:\/\/)?(www\.)?/, '')
+    .replace(/\.(com|de|co\.uk|fr|es|it|net|org|io|eu).*$/, '')
+    .toLowerCase()
+    .replace(/-/g, ' ')
+    .trim();
+}
+
+function detectIndustry(brandName: string): string {
+  for (const [brand, industry] of Object.entries(BRAND_INDUSTRY_MAP)) {
+    if (brandName.includes(brand) || brand.includes(brandName)) {
+      return industry;
+    }
+  }
+  return 'default';
+}
+
+export default async function handler(req: VercelRequest, res: VercelResponse) {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+
+  if (req.method === 'OPTIONS') {
+    return res.status(200).end();
+  }
+
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Method not allowed' });
+  }
+
+  try {
+    const { domain, locationCode, languageCode, login, password } = req.body;
+
+    if (!login || !password) {
+      return res.status(400).json({ error: 'DataForSEO credentials required' });
+    }
+
+    const auth = Buffer.from(`${login}:${password}`).toString('base64');
+    const brandName = extractBrandFromDomain(domain);
+    const industry = detectIndustry(brandName);
+    const competitors = INDUSTRY_COMPETITORS[industry] || [];
+
+    // Fetch brand keywords with monthly data
+    const brandKeywordsToFetch = [
+      brandName,
+      ...competitors.filter(c => c !== brandName)
+    ];
+
+    const [brandResponse, rankedResponse] = await Promise.all([
+      // Fetch brand search volumes with history
+      fetch('https://api.dataforseo.com/v3/keywords_data/google_ads/search_volume/live', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Basic ${auth}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify([{
+          keywords: brandKeywordsToFetch,
+          location_code: locationCode,
+          language_code: languageCode,
+          include_serp_info: false,
+          include_adult_keywords: false
+        }])
+      }),
+      // Fetch ranked keywords with history
+      fetch('https://api.dataforseo.com/v3/dataforseo_labs/google/ranked_keywords/live', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Basic ${auth}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify([{
+          target: domain,
+          location_code: locationCode,
+          language_code: languageCode,
+          item_types: ['organic'],
+          limit: 100,
+          filters: [
+            ['keyword_data.keyword_info.search_volume', '>', 0],
+            'and',
+            ['ranked_serp_element.serp_item.rank_group', '<=', 20]
+          ],
+          order_by: ['keyword_data.keyword_info.search_volume,desc']
+        }])
+      })
+    ]);
+
+    const brandData = await brandResponse.json();
+    const rankedData = await rankedResponse.json();
+
+    const brandItems: KeywordVolumeResult[] = brandData.tasks?.[0]?.result || [];
+    const rankedItems: RankedKeywordItem[] = rankedData.tasks?.[0]?.result?.[0]?.items || [];
+
+    // Calculate SOS for different periods
+    const periods = [
+      { label: 'Now', monthsAgo: 0 },
+      { label: '6 Months Ago', monthsAgo: 6 },
+      { label: '12 Months Ago', monthsAgo: 12 }
+    ];
+
+    const sosTrends = periods.map(period => {
+      let brandVolume = 0;
+      let totalVolume = 0;
+
+      for (const item of brandItems) {
+        const volume = period.monthsAgo === 0
+          ? item.search_volume
+          : getVolumeForPeriod(item.monthly_searches, period.monthsAgo);
+
+        if (item.keyword.toLowerCase().includes(brandName)) {
+          brandVolume += volume;
+        }
+        totalVolume += volume;
+      }
+
+      const sos = totalVolume > 0 ? Math.round((brandVolume / totalVolume) * 100 * 10) / 10 : 0;
+
+      return {
+        period: period.label,
+        monthsAgo: period.monthsAgo,
+        sos,
+        brandVolume,
+        totalVolume
+      };
+    });
+
+    // Calculate SOV for different periods
+    const sovTrends = periods.map(period => {
+      let visibleVolume = 0;
+      let totalMarketVolume = 0;
+
+      for (const item of rankedItems) {
+        const volume = period.monthsAgo === 0
+          ? item.keyword_data.keyword_info.search_volume
+          : getVolumeForPeriod(item.keyword_data.keyword_info.monthly_searches, period.monthsAgo);
+
+        const position = item.ranked_serp_element.serp_item.rank_group;
+        const ctr = CTR_CURVE[position] || 0;
+
+        visibleVolume += volume * (ctr / 100);
+        totalMarketVolume += volume;
+      }
+
+      const sov = totalMarketVolume > 0 ? Math.round((visibleVolume / totalMarketVolume) * 100 * 10) / 10 : 0;
+
+      return {
+        period: period.label,
+        monthsAgo: period.monthsAgo,
+        sov,
+        visibleVolume: Math.round(visibleVolume),
+        totalMarketVolume
+      };
+    });
+
+    // Calculate changes
+    const sosChange6m = sosTrends[0].sos - sosTrends[1].sos;
+    const sosChange12m = sosTrends[0].sos - sosTrends[2].sos;
+    const sovChange6m = sovTrends[0].sov - sovTrends[1].sov;
+    const sovChange12m = sovTrends[0].sov - sovTrends[2].sov;
+
+    return res.status(200).json({
+      brandName,
+      sosTrends,
+      sovTrends,
+      changes: {
+        sos: {
+          vs6MonthsAgo: Math.round(sosChange6m * 10) / 10,
+          vs12MonthsAgo: Math.round(sosChange12m * 10) / 10
+        },
+        sov: {
+          vs6MonthsAgo: Math.round(sovChange6m * 10) / 10,
+          vs12MonthsAgo: Math.round(sovChange12m * 10) / 10
+        }
+      }
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown error';
+    return res.status(500).json({ error: message });
+  }
+}

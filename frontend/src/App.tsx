@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
-import { MetricCard, KeywordTable, APIConfigPanel } from './components';
+import { MetricCard, KeywordTable, APIConfigPanel, TrendsPanel } from './components';
 import type { BrandKeyword, RankedKeyword, SOSResult, SOVResult, GrowthGapResult } from './types';
-import { getSampleData, calculateMetrics, getRankedKeywords, getBrandKeywords, exportToCSV } from './services/api';
+import { getSampleData, calculateMetrics, getRankedKeywords, getBrandKeywords, getTrends, exportToCSV } from './services/api';
+import type { TrendsData } from './services/api';
 
 function App() {
   const [brandKeywords, setBrandKeywords] = useState<BrandKeyword[]>([]);
@@ -13,6 +14,15 @@ function App() {
   const [error, setError] = useState<string | null>(null);
   const [analyzedDomain, setAnalyzedDomain] = useState<string>('');
   const [brandName, setBrandName] = useState<string>('');
+  const [trendsData, setTrendsData] = useState<TrendsData | null>(null);
+  const [trendsLoading, setTrendsLoading] = useState(false);
+  const [lastFetchConfig, setLastFetchConfig] = useState<{
+    login: string;
+    password: string;
+    domain: string;
+    locationCode: number;
+    languageCode: string;
+  } | null>(null);
 
   // Load sample data on mount
   useEffect(() => {
@@ -49,6 +59,8 @@ function App() {
       setIsLoading(true);
       setError(null);
       setAnalyzedDomain(config.domain);
+      setLastFetchConfig(config);
+      setTrendsData(null); // Reset trends when fetching new data
 
       // Fetch both ranked keywords and brand keywords in parallel
       const [rankedData, brandData] = await Promise.all([
@@ -83,6 +95,27 @@ function App() {
       setError(err instanceof Error ? err.message : 'Failed to fetch data');
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleFetchTrends = async () => {
+    if (!lastFetchConfig) return;
+
+    try {
+      setTrendsLoading(true);
+      const trends = await getTrends(
+        lastFetchConfig.domain,
+        lastFetchConfig.locationCode,
+        lastFetchConfig.languageCode,
+        lastFetchConfig.login,
+        lastFetchConfig.password
+      );
+      setTrendsData(trends);
+    } catch (err) {
+      console.error('Failed to fetch trends:', err);
+      // Don't set error state - trends are optional
+    } finally {
+      setTrendsLoading(false);
     }
   };
 
@@ -326,6 +359,37 @@ function App() {
                 </div>
               </div>
             </div>
+          </div>
+        )}
+
+        {/* Trends Section */}
+        {sosResult && sovResult && lastFetchConfig && (
+          <div className="mb-8">
+            {!trendsData && !trendsLoading && (
+              <div className="bg-white rounded-xl shadow-sm p-6 text-center">
+                <div className="flex flex-col items-center gap-4">
+                  <svg className="w-12 h-12 text-purple-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+                  </svg>
+                  <div>
+                    <h3 className="text-lg font-semibold text-gray-900 mb-1">Historical Trends Available</h3>
+                    <p className="text-sm text-gray-500 mb-4">
+                      See how your Share of Search and Share of Voice have changed over the past 12 months
+                    </p>
+                  </div>
+                  <button
+                    onClick={handleFetchTrends}
+                    className="px-6 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 flex items-center gap-2 transition-colors"
+                  >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+                    </svg>
+                    Load Historical Trends
+                  </button>
+                </div>
+              </div>
+            )}
+            <TrendsPanel data={trendsData} isLoading={trendsLoading} />
           </div>
         )}
 

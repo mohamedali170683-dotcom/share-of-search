@@ -86,46 +86,34 @@ interface CategorizedKeyword extends RankedKeyword {
   topic: string; // URL-based topic (similar to Ahrefs Parent Topic)
 }
 
-// Extract topic from URL (similar to Ahrefs Parent Topic)
-// Groups keywords by the page they rank for
-const extractTopicFromUrl = (url?: string): string => {
-  if (!url) return 'Unknown';
+// This will be populated after we process all keywords
+// Maps URL -> highest volume keyword for that URL (Parent Topic)
+const getParentTopics = (keywords: RankedKeyword[]): Map<string, string> => {
+  const urlToKeywords = new Map<string, { keyword: string; volume: number }[]>();
 
-  // Remove leading/trailing slashes and get path segments
-  const cleanUrl = url.replace(/^\/+|\/+$/g, '');
-  if (!cleanUrl) return 'Homepage';
-
-  // Get the main path segment (first meaningful part)
-  const segments = cleanUrl.split('/').filter(s => s && s.length > 0);
-  if (segments.length === 0) return 'Homepage';
-
-  // Use the first segment as the main topic, clean it up
-  let topic = segments[0]
-    .replace(/[-_]/g, ' ')  // Replace hyphens/underscores with spaces
-    .replace(/\.html?$/i, '') // Remove .html extension
-    .replace(/\.(php|aspx?|jsp)$/i, '') // Remove other extensions
-    .trim();
-
-  // Capitalize first letter of each word
-  topic = topic.split(' ')
-    .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
-    .join(' ');
-
-  // If there's a second segment, add it for more specificity
-  if (segments.length > 1 && segments[1].length > 2) {
-    const subTopic = segments[1]
-      .replace(/[-_]/g, ' ')
-      .replace(/\.(html?|php|aspx?|jsp)$/i, '')
-      .trim();
-    if (subTopic && subTopic !== topic.toLowerCase()) {
-      const formattedSub = subTopic.split(' ')
-        .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
-        .join(' ');
-      topic = `${topic} › ${formattedSub}`;
-    }
+  // Group keywords by URL
+  for (const kw of keywords) {
+    const url = kw.url || 'unknown';
+    const existing = urlToKeywords.get(url) || [];
+    existing.push({ keyword: kw.keyword, volume: kw.searchVolume });
+    urlToKeywords.set(url, existing);
   }
 
-  return topic || 'Other';
+  // For each URL, find the keyword with highest volume = Parent Topic
+  const urlToParentTopic = new Map<string, string>();
+  for (const [url, kwList] of urlToKeywords) {
+    // Sort by volume descending and take the first one
+    kwList.sort((a, b) => b.volume - a.volume);
+    const parentTopic = kwList[0]?.keyword || 'Unknown';
+    // Capitalize first letter of each word for display
+    const formattedTopic = parentTopic
+      .split(' ')
+      .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+      .join(' ');
+    urlToParentTopic.set(url, formattedTopic);
+  }
+
+  return urlToParentTopic;
 };
 
 const getPositionBadgeClass = (position: number): string => {
@@ -172,14 +160,20 @@ export const KeywordTable: React.FC<KeywordTableProps> = (props) => {
   const [selectedCompetitors, setSelectedCompetitors] = useState<Set<string>>(new Set());
   const [competitorsInitialized, setCompetitorsInitialized] = useState(false);
 
-  // Categorize all keywords and extract topics from URLs
+  // Categorize all keywords and extract Parent Topics (like Ahrefs)
+  // Parent Topic = highest volume keyword ranking for the same URL
   const categorizedKeywords = useMemo(() => {
     if (props.type !== 'sov') return [];
 
-    return (props.keywords as RankedKeyword[]).map(kw => ({
+    const keywords = props.keywords as RankedKeyword[];
+    // First, compute parent topics for all URLs
+    const parentTopics = getParentTopics(keywords);
+
+    return keywords.map(kw => ({
       ...kw,
       category: getCategory(kw),
-      topic: extractTopicFromUrl(kw.url) // URL-based topic like Ahrefs Parent Topic
+      // Parent Topic: the highest-volume keyword for this URL (like Ahrefs)
+      topic: parentTopics.get(kw.url || 'unknown') || 'Unknown'
     })) as CategorizedKeyword[];
   }, [props.keywords, props.type]);
 
@@ -654,7 +648,7 @@ export const KeywordTable: React.FC<KeywordTableProps> = (props) => {
                       : 'bg-white text-gray-700 hover:bg-gray-50'
                   }`}
                 >
-                  Topic (URL)
+                  Parent Topic
                 </button>
                 <button
                   onClick={() => {
@@ -667,26 +661,26 @@ export const KeywordTable: React.FC<KeywordTableProps> = (props) => {
                       : 'bg-white text-gray-700 hover:bg-gray-50'
                   }`}
                 >
-                  Category (Google Ads)
+                  Category
                 </button>
               </div>
               <span className="text-xs text-gray-500">
                 {groupingMode === 'topic'
-                  ? 'Groups keywords by ranking URL (like Ahrefs Parent Topic)'
+                  ? 'Groups by main keyword per URL (like Ahrefs Parent Topic)'
                   : 'Groups by Google Ads product categories'}
               </span>
             </div>
 
-            {/* Topic Filter (URL-based, like Ahrefs Parent Topic) */}
+            {/* Parent Topic Filter (like Ahrefs) */}
             {groupingMode === 'topic' && (
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <svg className="w-5 h-5 text-purple-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                     </svg>
-                    <span className="text-sm font-medium text-gray-700">Select Topics:</span>
-                    <span className="text-xs text-gray-500">(based on ranking URLs - like Ahrefs Parent Topic)</span>
+                    <span className="text-sm font-medium text-gray-700">Parent Topics:</span>
+                    <span className="text-xs text-gray-500">(main keyword per ranking page)</span>
                   </div>
                   {selectedTopics.size > 0 && (
                     <button
@@ -725,7 +719,7 @@ export const KeywordTable: React.FC<KeywordTableProps> = (props) => {
                   )}
                 </div>
                 <p className="text-xs text-purple-600 italic">
-                  Topics are derived from ranking URLs. Keywords ranking for the same page share the same topic.
+                  Parent Topic = highest-volume keyword per URL. Keywords ranking for the same page share the same parent topic.
                 </p>
               </div>
             )}
@@ -807,7 +801,7 @@ export const KeywordTable: React.FC<KeywordTableProps> = (props) => {
                   Keyword{getSortIndicator('keyword')}
                 </th>
                 <th onClick={() => handleSort('category')} className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100">
-                  {groupingMode === 'topic' ? 'Topic' : 'Category'}{getSortIndicator('category')}
+                  {groupingMode === 'topic' ? 'Parent Topic' : 'Category'}{getSortIndicator('category')}
                 </th>
                 <th onClick={() => handleSort('searchVolume')} className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100">
                   Volume{getSortIndicator('searchVolume')}

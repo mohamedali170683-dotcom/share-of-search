@@ -16,79 +16,88 @@ A Share of Search and Share of Voice analytics tool that helps measure brand awa
 - **Frontend**: React + TypeScript + Vite + Tailwind CSS
 - **Backend**: Vercel Serverless Functions
 - **Database**: PostgreSQL with Prisma ORM
-- **Deployment**: Vercel
+- **Deployment**: Vercel (via GitHub)
 
-## Quick Start
+---
 
-### Prerequisites
+## Deploy to Vercel (from GitHub)
 
-- Node.js 18+
-- PostgreSQL database (Vercel Postgres, Neon, Supabase, etc.)
+### Step 1: Import Project to Vercel
 
-### Local Development
+1. Go to [vercel.com](https://vercel.com) and sign in with GitHub
+2. Click **"Add New Project"**
+3. Select your **share-of-search** repository
+4. Configure the project:
+   - **Root Directory**: `frontend`
+   - **Framework Preset**: Vite
+   - **Build Command**: `prisma generate && npm run build`
+   - **Output Directory**: `dist`
 
-1. **Clone and install dependencies**:
-   ```bash
-   cd frontend
-   npm install
-   ```
+### Step 2: Add PostgreSQL Database
 
-2. **Set up environment variables**:
-   ```bash
-   cp .env.example .env
-   # Edit .env with your database credentials
-   ```
+**Option A: Vercel Postgres (Recommended)**
+1. In your Vercel project dashboard, go to **Storage** tab
+2. Click **Create Database** → Select **Postgres**
+3. Follow the setup wizard
+4. Vercel automatically adds `POSTGRES_URL` environment variables
 
-3. **Push database schema**:
-   ```bash
-   npm run db:push
-   ```
+**Option B: Neon (Free tier available)**
+1. Go to [neon.tech](https://neon.tech) and create a free account
+2. Create a new project and database
+3. Copy the connection string
 
-4. **Start development server**:
-   ```bash
-   npm run dev
-   ```
+**Option C: Supabase**
+1. Go to [supabase.com](https://supabase.com) and create a project
+2. Go to Settings → Database → Connection string
+3. Copy the URI connection string
 
-5. **For local API development**, also run the backend:
-   ```bash
-   cd ../backend
-   npm install
-   npm run dev
-   ```
+### Step 3: Configure Environment Variables
 
-## Vercel Deployment
+In Vercel dashboard → **Settings** → **Environment Variables**, add:
 
-### 1. Create a Vercel Project
+| Variable | Value | Notes |
+|----------|-------|-------|
+| `DATABASE_URL` | `postgresql://...` | Connection string with pooling |
+| `DIRECT_URL` | `postgresql://...` | Direct connection (for migrations) |
 
+**For Vercel Postgres**, use:
+```
+DATABASE_URL = ${POSTGRES_PRISMA_URL}
+DIRECT_URL = ${POSTGRES_URL_NON_POOLING}
+```
+
+**For Neon**, use:
+```
+DATABASE_URL = postgresql://user:pass@ep-xxx.region.aws.neon.tech/neondb?sslmode=require
+DIRECT_URL = postgresql://user:pass@ep-xxx.region.aws.neon.tech/neondb?sslmode=require
+```
+
+### Step 4: Deploy
+
+1. Click **Deploy** in Vercel
+2. Vercel will:
+   - Install dependencies
+   - Generate Prisma client
+   - Build the Vite app
+   - Deploy serverless API functions
+
+### Step 5: Initialize Database
+
+After first deployment, you need to push the Prisma schema to your database.
+
+**Option A**: Use Vercel's "Run Command" feature in the dashboard
+
+**Option B**: Connect via Prisma Studio
+1. In Vercel dashboard → Storage → Your database → Click "Open Prisma Studio"
+
+**Option C**: Run locally once (if you have Node.js):
 ```bash
-npm i -g vercel
-vercel
+cd frontend
+npm install
+npx prisma db push
 ```
 
-### 2. Add a PostgreSQL Database
-
-Option A: **Vercel Postgres** (recommended)
-- Go to your Vercel dashboard → Storage → Create Database → Postgres
-- It will automatically add the environment variables
-
-Option B: **Neon** or **Supabase**
-- Create a PostgreSQL database
-- Add `DATABASE_URL` and `DIRECT_URL` to Vercel environment variables
-
-### 3. Environment Variables
-
-Set these in Vercel dashboard → Settings → Environment Variables:
-
-```
-DATABASE_URL=postgresql://...
-DIRECT_URL=postgresql://...
-```
-
-### 4. Deploy
-
-```bash
-vercel --prod
-```
+---
 
 ## API Endpoints
 
@@ -100,6 +109,8 @@ vercel --prod
 | `/api/projects` | GET/POST | List/create projects |
 | `/api/projects/[id]` | GET/PUT/DELETE | Manage single project |
 | `/api/projects/[id]/calculate` | POST | Calculate and save metrics |
+
+---
 
 ## Core Formulas
 
@@ -134,6 +145,15 @@ Position-based click-through rates used for SOV calculation:
 | 5 | 4% |
 | 6-10 | 3-1.5% |
 | 11-20 | 1.2-0.2% |
+
+---
+
+## Using the App
+
+1. **Sample Data**: The app loads with sample cosmetics brand data by default
+2. **DataForSEO Integration**: Expand the API Configuration panel to connect to DataForSEO for live data
+3. **Export**: Click "Export CSV" to download your analysis
+4. **Projects** (with database): Save analyses and track changes over time
 
 ## License
 

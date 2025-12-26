@@ -194,12 +194,12 @@ function App() {
 
         {/* Tables */}
         <div className="space-y-6">
-          {sovResult && (
-            <KeywordTable type="sov" keywords={sovResult.keywordBreakdown} />
-          )}
-
           {brandKeywords.length > 0 && (
             <KeywordTable type="sos" keywords={brandKeywords} />
+          )}
+
+          {sovResult && (
+            <KeywordTable type="sov" keywords={sovResult.keywordBreakdown} />
           )}
         </div>
 

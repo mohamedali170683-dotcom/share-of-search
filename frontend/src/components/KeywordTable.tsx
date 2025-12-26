@@ -141,33 +141,45 @@ export const KeywordTable: React.FC<KeywordTableProps> = (props) => {
 
   // Filter keywords by category, search, and position
   const filteredKeywords = useMemo(() => {
-    let keywords = props.type === 'sov' ? categorizedKeywords : props.keywords;
+    if (props.type === 'sov') {
+      let keywords: CategorizedKeyword[] = categorizedKeywords;
 
-    // Apply category filter (SOV only)
-    if (props.type === 'sov' && selectedCategory) {
-      keywords = (keywords as CategorizedKeyword[]).filter(kw => kw.category === selectedCategory);
+      // Apply category filter
+      if (selectedCategory) {
+        keywords = keywords.filter(kw => kw.category === selectedCategory);
+      }
+
+      // Apply search filter
+      if (searchQuery.trim()) {
+        const query = searchQuery.toLowerCase();
+        keywords = keywords.filter(kw => kw.keyword.toLowerCase().includes(query));
+      }
+
+      // Apply position filter
+      if (positionFilter !== 'all') {
+        keywords = keywords.filter(kw => {
+          switch (positionFilter) {
+            case 'top3': return kw.position <= 3;
+            case 'top10': return kw.position <= 10;
+            case 'page1': return kw.position <= 10;
+            case 'page2': return kw.position > 10 && kw.position <= 20;
+            default: return true;
+          }
+        });
+      }
+
+      return keywords;
+    } else {
+      let keywords: BrandKeyword[] = props.keywords as BrandKeyword[];
+
+      // Apply search filter
+      if (searchQuery.trim()) {
+        const query = searchQuery.toLowerCase();
+        keywords = keywords.filter(kw => kw.keyword.toLowerCase().includes(query));
+      }
+
+      return keywords;
     }
-
-    // Apply search filter
-    if (searchQuery.trim()) {
-      const query = searchQuery.toLowerCase();
-      keywords = keywords.filter(kw => kw.keyword.toLowerCase().includes(query));
-    }
-
-    // Apply position filter (SOV only)
-    if (props.type === 'sov' && positionFilter !== 'all') {
-      keywords = (keywords as CategorizedKeyword[]).filter(kw => {
-        switch (positionFilter) {
-          case 'top3': return kw.position <= 3;
-          case 'top10': return kw.position <= 10;
-          case 'page1': return kw.position <= 10;
-          case 'page2': return kw.position > 10 && kw.position <= 20;
-          default: return true;
-        }
-      });
-    }
-
-    return keywords;
   }, [categorizedKeywords, selectedCategory, searchQuery, positionFilter, props.keywords, props.type]);
 
   // Calculate filtered SOV stats
@@ -399,7 +411,7 @@ export const KeywordTable: React.FC<KeywordTableProps> = (props) => {
               </svg>
               <span className="text-sm font-medium text-gray-700">Categories:</span>
               <div className="flex flex-wrap gap-2">
-                {categoryStats.slice(0, 10).map(({ category, count, sov }) => (
+                {categoryStats.slice(0, 10).map(({ category, count }) => (
                   <button
                     key={category}
                     onClick={() => handleFilterChange(setSelectedCategory, selectedCategory === category ? '' : category)}

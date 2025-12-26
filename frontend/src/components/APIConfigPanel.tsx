@@ -14,8 +14,8 @@ interface APIConfigPanelProps {
 
 export const APIConfigPanel: React.FC<APIConfigPanelProps> = ({ onFetchData, isLoading }) => {
   const [isOpen, setIsOpen] = useState(false);
-  const [login, setLogin] = useState('');
-  const [password, setPassword] = useState('');
+  const [login, setLogin] = useState('mohamed.alimohamed@wppmedia.com');
+  const [password, setPassword] = useState('0d925a94bf0c0b56');
   const [domain, setDomain] = useState('');
   const [location, setLocation] = useState('germany');
 

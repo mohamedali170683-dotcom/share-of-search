@@ -69,9 +69,9 @@ const LineChart: React.FC<{
   competitors?: CompetitorTrend[];
   selectedCompetitors: string[];
 }> = ({ brandName, sosData, sovData, labels, competitors, selectedCompetitors }) => {
-  const width = 480;
-  const height = 200;
-  const padding = { top: 24, right: 16, bottom: 32, left: 44 };
+  const width = 420;
+  const height = 180;
+  const padding = { top: 20, right: 12, bottom: 28, left: 36 };
   const chartWidth = width - padding.left - padding.right;
   const chartHeight = height - padding.top - padding.bottom;
 
@@ -113,11 +113,11 @@ const LineChart: React.FC<{
       {gridLines.map((line, idx) => (
         <g key={idx}>
           <line x1={padding.left} y1={line.y} x2={width - padding.right} y2={line.y} stroke="#f3f4f6" strokeWidth="1" />
-          <text x={padding.left - 6} y={line.y + 4} textAnchor="end" fontSize="11" fill="#9ca3af">{line.value}%</text>
+          <text x={padding.left - 4} y={line.y + 3} textAnchor="end" fontSize="9" fill="#9ca3af">{line.value}%</text>
         </g>
       ))}
 
-      {/* Competitor lines */}
+      {/* Competitor lines with values */}
       {competitors?.filter(c => selectedCompetitors.includes(c.name)).map((comp, idx) => {
         const compData = [...comp.trends].reverse().map(t => t.sos);
         return (
@@ -126,46 +126,59 @@ const LineChart: React.FC<{
               d={generatePath(compData)}
               fill="none"
               stroke={COMPETITOR_COLORS[idx]}
-              strokeWidth="2.5"
-              strokeDasharray="6 3"
-              opacity="0.7"
+              strokeWidth="2"
+              strokeDasharray="5 3"
+              opacity="0.8"
             />
             {compData.map((value, i) => (
-              <circle key={i} cx={getX(i)} cy={getY(value)} r="4" fill={COMPETITOR_COLORS[idx]} opacity="0.7" />
+              <g key={i}>
+                <circle cx={getX(i)} cy={getY(value)} r="3" fill={COMPETITOR_COLORS[idx]} opacity="0.8" />
+                <text
+                  x={getX(i)}
+                  y={getY(value) - 6}
+                  textAnchor="middle"
+                  fontSize="8"
+                  fontWeight="500"
+                  fill={COMPETITOR_COLORS[idx]}
+                  opacity="0.9"
+                >
+                  {value}%
+                </text>
+              </g>
             ))}
           </g>
         );
       })}
 
       {/* SOS Line */}
-      <path d={generatePath(sosData)} fill="none" stroke="#10b981" strokeWidth="2.5" />
+      <path d={generatePath(sosData)} fill="none" stroke="#10b981" strokeWidth="2" />
       {sosData.map((value, index) => (
         <g key={`sos-${index}`}>
-          <circle cx={getX(index)} cy={getY(value)} r="5" fill="#10b981" />
-          <text x={getX(index)} y={getY(value) - 10} textAnchor="middle" fontSize="11" fontWeight="600" fill="#059669">{value}%</text>
+          <circle cx={getX(index)} cy={getY(value)} r="4" fill="#10b981" />
+          <text x={getX(index)} y={getY(value) - 8} textAnchor="middle" fontSize="9" fontWeight="600" fill="#059669">{value}%</text>
         </g>
       ))}
 
       {/* SOV Line */}
-      <path d={generatePath(sovData)} fill="none" stroke="#f97316" strokeWidth="2.5" />
+      <path d={generatePath(sovData)} fill="none" stroke="#f97316" strokeWidth="2" />
       {sovData.map((value, index) => (
         <g key={`sov-${index}`}>
-          <circle cx={getX(index)} cy={getY(value)} r="5" fill="#f97316" />
-          <text x={getX(index)} y={getY(value) + 16} textAnchor="middle" fontSize="11" fontWeight="600" fill="#ea580c">{value}%</text>
+          <circle cx={getX(index)} cy={getY(value)} r="4" fill="#f97316" />
+          <text x={getX(index)} y={getY(value) + 14} textAnchor="middle" fontSize="9" fontWeight="600" fill="#ea580c">{value}%</text>
         </g>
       ))}
 
       {/* X-axis */}
       {labels.map((label, index) => (
-        <text key={index} x={getX(index)} y={height - 8} textAnchor="middle" fontSize="11" fill="#6b7280">{label}</text>
+        <text key={index} x={getX(index)} y={height - 6} textAnchor="middle" fontSize="9" fill="#6b7280">{label}</text>
       ))}
 
       {/* Legend */}
-      <g transform={`translate(${padding.left}, 6)`}>
-        <rect width="10" height="10" fill="#10b981" rx="2" />
-        <text x="14" y="9" fontSize="11" fill="#374151">{brandName} SOS</text>
-        <rect x="90" width="10" height="10" fill="#f97316" rx="2" />
-        <text x="104" y="9" fontSize="11" fill="#374151">SOV</text>
+      <g transform={`translate(${padding.left}, 4)`}>
+        <rect width="8" height="8" fill="#10b981" rx="1" />
+        <text x="10" y="7" fontSize="9" fill="#374151">{brandName} SOS</text>
+        <rect x="70" width="8" height="8" fill="#f97316" rx="1" />
+        <text x="80" y="7" fontSize="9" fill="#374151">SOV</text>
       </g>
     </svg>
   );
@@ -311,7 +324,7 @@ export const TrendsPanel: React.FC<TrendsPanelProps> = ({ data, isLoading }) => 
 
       <div className="p-6">
         {/* Chart and Competitor Selection */}
-        <div className="flex gap-4">
+        <div className="flex gap-5">
           {/* Chart */}
           <div className="flex-1">
             <LineChart
@@ -325,15 +338,15 @@ export const TrendsPanel: React.FC<TrendsPanelProps> = ({ data, isLoading }) => 
           </div>
 
           {/* Competitor Selector & Changes */}
-          <div className="w-48 space-y-3">
+          <div className="w-44 space-y-2">
             {/* Changes */}
             <div className="space-y-2">
-              <div className="p-3 bg-emerald-50 rounded-lg border border-emerald-100">
+              <div className="p-2.5 bg-emerald-50 rounded-lg border border-emerald-100">
                 <div className="text-xs font-medium text-emerald-700 mb-1">Share of Search</div>
                 <ChangeValue value={data.changes.sos.vs6MonthsAgo} label="vs 6mo" />
                 <ChangeValue value={data.changes.sos.vs12MonthsAgo} label="vs 12mo" />
               </div>
-              <div className="p-3 bg-orange-50 rounded-lg border border-orange-100">
+              <div className="p-2.5 bg-orange-50 rounded-lg border border-orange-100">
                 <div className="text-xs font-medium text-orange-700 mb-1">Share of Voice</div>
                 <ChangeValue value={data.changes.sov.vs6MonthsAgo} label="vs 6mo" />
                 <ChangeValue value={data.changes.sov.vs12MonthsAgo} label="vs 12mo" />
@@ -342,20 +355,20 @@ export const TrendsPanel: React.FC<TrendsPanelProps> = ({ data, isLoading }) => 
 
             {/* Competitor Toggle */}
             {data.competitorTrends && data.competitorTrends.length > 0 && (
-              <div className="p-3 bg-gray-50 rounded-lg border border-gray-200">
-                <div className="text-xs font-medium text-gray-600 mb-2">Compare with:</div>
-                <div className="space-y-1.5">
+              <div className="p-2.5 bg-gray-50 rounded-lg border border-gray-200">
+                <div className="text-xs font-medium text-gray-600 mb-1.5">Compare with:</div>
+                <div className="space-y-1">
                   {data.competitorTrends.map((comp, idx) => (
-                    <label key={comp.name} className="flex items-center gap-2 cursor-pointer">
+                    <label key={comp.name} className="flex items-center gap-1.5 cursor-pointer">
                       <input
                         type="checkbox"
                         checked={selectedCompetitors.includes(comp.name)}
                         onChange={() => toggleCompetitor(comp.name)}
-                        className="w-3.5 h-3.5 rounded border-gray-300"
+                        className="w-3 h-3 rounded border-gray-300"
                         style={{ accentColor: COMPETITOR_COLORS[idx] }}
                       />
                       <span
-                        className="w-2.5 h-2.5 rounded-full"
+                        className="w-2 h-2 rounded-full"
                         style={{ backgroundColor: COMPETITOR_COLORS[idx] }}
                       />
                       <span className="text-xs text-gray-700">{comp.name}</span>

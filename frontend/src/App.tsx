@@ -23,6 +23,8 @@ function App() {
     languageCode: string;
     customCompetitors?: string[];
   } | null>(null);
+  // Store actual competitors from brand-keywords API for use in trends
+  const [actualCompetitors, setActualCompetitors] = useState<string[]>([]);
 
   // Custom metric overrides from table filters
   const [customSOS, setCustomSOS] = useState<{ sos: number; brandVolume: number; totalVolume: number } | null>(null);
@@ -111,6 +113,9 @@ function App() {
       // Update brand keywords with fresh data
       setBrandKeywords(brandData.brandKeywords);
       setBrandName(brandData.brandName);
+      // Store actual competitors for trends API - these are the competitors
+      // actually used in the analysis (either custom or auto-detected)
+      setActualCompetitors(brandData.competitors || []);
 
       // Calculate with the new data
       const calcResults = await calculateMetrics(brandData.brandKeywords, rankedData.results);
@@ -130,13 +135,15 @@ function App() {
 
     try {
       setTrendsLoading(true);
+      // Use actualCompetitors (from brand-keywords API) so trends match main analysis
+      // These are the same competitors used to calculate the current SOS
       const trends = await getTrends(
         lastFetchConfig.domain,
         lastFetchConfig.locationCode,
         lastFetchConfig.languageCode,
         lastFetchConfig.login,
         lastFetchConfig.password,
-        lastFetchConfig.customCompetitors // Pass custom competitors to trends API
+        actualCompetitors.length > 0 ? actualCompetitors : undefined
       );
       setTrendsData(trends);
     } catch (err) {

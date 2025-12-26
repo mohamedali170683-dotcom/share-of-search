@@ -257,10 +257,55 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       };
     });
 
-    // Sort impacts and get top gainers/losers
-    const sortedImpacts = [...keywordImpacts].sort((a, b) => b.impactChange - a.impactChange);
-    const topGainers = sortedImpacts.filter(k => k.impactChange > 0).slice(0, 5);
-    const topLosers = sortedImpacts.filter(k => k.impactChange < 0).slice(-5).reverse();
+    // Classify keywords as branded or generic
+    const isBrandedKeyword = (keyword: string) => {
+      const kw = keyword.toLowerCase();
+      // Check if keyword contains the brand name or any competitor name
+      const allBrands = [brandName, ...competitors];
+      return allBrands.some(brand => kw.includes(brand.toLowerCase()));
+    };
+
+    // Sort impacts and split by branded/generic
+    const brandedImpacts = keywordImpacts.filter(k => isBrandedKeyword(k.keyword));
+    const genericImpacts = keywordImpacts.filter(k => !isBrandedKeyword(k.keyword));
+
+    const sortedBrandedImpacts = [...brandedImpacts].sort((a, b) => b.impactChange - a.impactChange);
+    const sortedGenericImpacts = [...genericImpacts].sort((a, b) => b.impactChange - a.impactChange);
+
+    const brandedGainers = sortedBrandedImpacts.filter(k => k.impactChange > 0).slice(0, 3);
+    const brandedLosers = sortedBrandedImpacts.filter(k => k.impactChange < 0).slice(-3).reverse();
+    const genericGainers = sortedGenericImpacts.filter(k => k.impactChange > 0).slice(0, 3);
+    const genericLosers = sortedGenericImpacts.filter(k => k.impactChange < 0).slice(-3).reverse();
+
+    // Calculate competitor SOS trends
+    const competitorTrends = competitors
+      .filter(c => c !== brandName)
+      .slice(0, 3)
+      .map(competitorName => {
+        const trends = periods.map(period => {
+          let competitorVolume = 0;
+          let totalVolume = 0;
+
+          for (const item of brandItems) {
+            const volume = period.monthsAgo === 0
+              ? item.search_volume
+              : getVolumeForPeriod(item.monthly_searches, period.monthsAgo);
+
+            if (item.keyword.toLowerCase().includes(competitorName.toLowerCase())) {
+              competitorVolume += volume;
+            }
+            totalVolume += volume;
+          }
+
+          const sos = totalVolume > 0 ? Math.round((competitorVolume / totalVolume) * 100 * 10) / 10 : 0;
+          return { period: period.label, monthsAgo: period.monthsAgo, sos };
+        });
+
+        return {
+          name: competitorName.charAt(0).toUpperCase() + competitorName.slice(1),
+          trends
+        };
+      });
 
     // Calculate changes
     const sosChange6m = sosTrends[0].sos - sosTrends[1].sos;
@@ -268,10 +313,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const sovChange6m = sovTrends[0].sov - sovTrends[1].sov;
     const sovChange12m = sovTrends[0].sov - sovTrends[2].sov;
 
+    const mapKeywordImpact = (k: KeywordImpact) => ({
+      keyword: k.keyword,
+      position: k.position,
+      volumeChange: Math.round(k.volumeNow - k.volume12MonthsAgo),
+      impactChange: Math.round(k.impactChange)
+    });
+
     return res.status(200).json({
       brandName,
       sosTrends,
       sovTrends,
+      competitorTrends,
       changes: {
         sos: {
           vs6MonthsAgo: Math.round(sosChange6m * 10) / 10,
@@ -283,18 +336,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         }
       },
       keywordImpact: {
-        gainers: topGainers.map(k => ({
-          keyword: k.keyword,
-          position: k.position,
-          volumeChange: Math.round(k.volumeNow - k.volume12MonthsAgo),
-          impactChange: Math.round(k.impactChange)
-        })),
-        losers: topLosers.map(k => ({
-          keyword: k.keyword,
-          position: k.position,
-          volumeChange: Math.round(k.volumeNow - k.volume12MonthsAgo),
-          impactChange: Math.round(k.impactChange)
-        }))
+        branded: {
+          gainers: brandedGainers.map(mapKeywordImpact),
+          losers: brandedLosers.map(mapKeywordImpact)
+        },
+        generic: {
+          gainers: genericGainers.map(mapKeywordImpact),
+          losers: genericLosers.map(mapKeywordImpact)
+        }
       }
     });
   } catch (error) {

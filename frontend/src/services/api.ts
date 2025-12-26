@@ -109,10 +109,16 @@ export interface KeywordImpactItem {
   impactChange: number;
 }
 
+export interface CompetitorTrend {
+  name: string;
+  trends: Array<{ period: string; monthsAgo: number; sos: number }>;
+}
+
 export interface TrendsData {
   brandName: string;
   sosTrends: TrendPoint[];
   sovTrends: TrendPoint[];
+  competitorTrends?: CompetitorTrend[];
   changes: {
     sos: {
       vs6MonthsAgo: number;
@@ -124,8 +130,14 @@ export interface TrendsData {
     };
   };
   keywordImpact?: {
-    gainers: KeywordImpactItem[];
-    losers: KeywordImpactItem[];
+    branded: {
+      gainers: KeywordImpactItem[];
+      losers: KeywordImpactItem[];
+    };
+    generic: {
+      gainers: KeywordImpactItem[];
+      losers: KeywordImpactItem[];
+    };
   };
 }
 

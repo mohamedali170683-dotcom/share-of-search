@@ -5,7 +5,26 @@ import type {
   SampleDataResponse
 } from '../types';
 
-const API_BASE = 'http://localhost:3001/api';
+// Use relative paths for Vercel deployment, absolute for local development
+const API_BASE = import.meta.env.DEV ? 'http://localhost:3001/api' : '/api';
+
+// Project types
+export interface Project {
+  id: string;
+  name: string;
+  domain: string | null;
+  locationCode: number;
+  languageCode: string;
+  createdAt: string;
+  updatedAt: string;
+  brandKeywords?: BrandKeyword[];
+  rankedKeywords?: RankedKeyword[];
+  _count?: {
+    brandKeywords: number;
+    rankedKeywords: number;
+    calculations: number;
+  };
+}
 
 export async function getSampleData(): Promise<SampleDataResponse> {
   const response = await fetch(`${API_BASE}/sample-data`);
@@ -26,31 +45,6 @@ export async function calculateMetrics(
   return response.json();
 }
 
-export async function calculateSampleMetrics(): Promise<CalculateResponse> {
-  const response = await fetch(`${API_BASE}/calculate-sample`);
-  if (!response.ok) throw new Error('Failed to calculate sample metrics');
-  return response.json();
-}
-
-export async function getSearchVolume(
-  keywords: string[],
-  locationCode: number,
-  languageCode: string,
-  login: string,
-  password: string
-): Promise<{ results: Array<{ keyword: string; search_volume: number }> }> {
-  const response = await fetch(`${API_BASE}/search-volume`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ keywords, locationCode, languageCode, login, password })
-  });
-  if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.error || 'Failed to fetch search volume');
-  }
-  return response.json();
-}
-
 export async function getRankedKeywords(
   domain: string,
   locationCode: number,
@@ -68,6 +62,69 @@ export async function getRankedKeywords(
     const error = await response.json();
     throw new Error(error.error || 'Failed to fetch ranked keywords');
   }
+  return response.json();
+}
+
+// Project management functions
+export async function getProjects(): Promise<Project[]> {
+  const response = await fetch(`${API_BASE}/projects`);
+  if (!response.ok) throw new Error('Failed to fetch projects');
+  return response.json();
+}
+
+export async function getProject(id: string): Promise<Project> {
+  const response = await fetch(`${API_BASE}/projects/${id}`);
+  if (!response.ok) throw new Error('Failed to fetch project');
+  return response.json();
+}
+
+export async function createProject(data: {
+  name: string;
+  domain?: string;
+  locationCode?: number;
+  languageCode?: string;
+}): Promise<Project> {
+  const response = await fetch(`${API_BASE}/projects`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data)
+  });
+  if (!response.ok) throw new Error('Failed to create project');
+  return response.json();
+}
+
+export async function updateProject(
+  id: string,
+  data: {
+    name?: string;
+    domain?: string;
+    locationCode?: number;
+    languageCode?: string;
+    brandKeywords?: BrandKeyword[];
+    rankedKeywords?: RankedKeyword[];
+  }
+): Promise<Project> {
+  const response = await fetch(`${API_BASE}/projects/${id}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data)
+  });
+  if (!response.ok) throw new Error('Failed to update project');
+  return response.json();
+}
+
+export async function deleteProject(id: string): Promise<void> {
+  const response = await fetch(`${API_BASE}/projects/${id}`, {
+    method: 'DELETE'
+  });
+  if (!response.ok) throw new Error('Failed to delete project');
+}
+
+export async function calculateProjectMetrics(projectId: string): Promise<CalculateResponse> {
+  const response = await fetch(`${API_BASE}/projects/${projectId}/calculate`, {
+    method: 'POST'
+  });
+  if (!response.ok) throw new Error('Failed to calculate project metrics');
   return response.json();
 }
 

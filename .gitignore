@@ -25,3 +25,12 @@ Thumbs.db
 # Cache
 .cache/
 .eslintcache
+
+# Vercel
+.vercel
+
+# Prisma
+prisma/migrations/
+
+# TypeScript
+*.tsbuildinfo

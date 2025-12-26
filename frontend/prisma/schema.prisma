@@ -1,0 +1,79 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model Project {
+  id          String   @id @default(cuid())
+  name        String
+  domain      String?
+  locationCode Int     @default(2840)
+  languageCode String  @default("en")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  brandKeywords  BrandKeyword[]
+  rankedKeywords RankedKeyword[]
+  calculations   Calculation[]
+}
+
+model BrandKeyword {
+  id           String  @id @default(cuid())
+  keyword      String
+  searchVolume Int
+  isOwnBrand   Boolean @default(false)
+
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@index([projectId])
+}
+
+model RankedKeyword {
+  id           String  @id @default(cuid())
+  keyword      String
+  searchVolume Int
+  position     Int
+  url          String?
+  ctr          Float?
+  visibleVolume Int?
+
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@index([projectId])
+}
+
+model Calculation {
+  id              String   @id @default(cuid())
+
+  // Share of Search
+  shareOfSearch   Float
+  brandVolume     Int
+  totalBrandVolume Int
+
+  // Share of Voice
+  shareOfVoice    Float
+  visibleVolume   Int
+  totalMarketVolume Int
+
+  // Growth Gap
+  gap             Float
+  interpretation  String   // 'growth_potential' | 'missing_opportunities' | 'balanced'
+
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@index([projectId])
+}

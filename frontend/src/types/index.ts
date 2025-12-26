@@ -11,6 +11,8 @@ export interface RankedKeyword {
   url?: string;
   ctr?: number;
   visibleVolume?: number;
+  category?: string; // Category from DataForSEO API
+  categoryIds?: number[]; // Raw category IDs from DataForSEO
 }
 
 export interface SOSResult {

@@ -53,8 +53,8 @@ const CATEGORY_PATTERNS: { category: string; patterns: RegExp[] }[] = [
   { category: 'Vegan', patterns: [/\bvegan\b|tierversuchsfrei|cruelty.?free/i] },
 ];
 
-// Detect category for a keyword
-const detectCategory = (keyword: string): string => {
+// Detect category for a keyword (fallback when API doesn't provide one)
+const detectCategoryFallback = (keyword: string): string => {
   const keywordLower = keyword.toLowerCase();
 
   for (const { category, patterns } of CATEGORY_PATTERNS) {
@@ -74,6 +74,16 @@ const detectCategory = (keyword: string): string => {
   }
 
   return 'Other';
+};
+
+// Get category - prefer API-provided, fall back to detection
+const getCategory = (kw: RankedKeyword): string => {
+  // Use API-provided category if available
+  if (kw.category) {
+    return kw.category;
+  }
+  // Fall back to regex-based detection
+  return detectCategoryFallback(kw.keyword);
 };
 
 interface CategorizedKeyword extends RankedKeyword {
@@ -126,7 +136,7 @@ export const KeywordTable: React.FC<KeywordTableProps> = (props) => {
 
     return (props.keywords as RankedKeyword[]).map(kw => ({
       ...kw,
-      category: detectCategory(kw.keyword)
+      category: getCategory(kw)
     })) as CategorizedKeyword[];
   }, [props.keywords, props.type]);
 

@@ -77,6 +77,7 @@ function App() {
     domain: string;
     locationCode: number;
     languageCode: string;
+    customCompetitors?: string[];
   }) => {
     try {
       setIsLoading(true);
@@ -101,7 +102,8 @@ function App() {
           config.locationCode,
           config.languageCode,
           config.login,
-          config.password
+          config.password,
+          config.customCompetitors // Pass custom competitors to API
         )
       ]);
 

@@ -8,6 +8,7 @@ interface APIConfigPanelProps {
     domain: string;
     locationCode: number;
     languageCode: string;
+    customCompetitors?: string[];
   }) => void;
   isLoading: boolean;
 }
@@ -20,16 +21,26 @@ export const APIConfigPanel: React.FC<APIConfigPanelProps> = ({ onFetchData, isL
   const [isOpen, setIsOpen] = useState(true); // Open by default
   const [domain, setDomain] = useState('');
   const [location, setLocation] = useState('germany');
+  const [customCompetitors, setCustomCompetitors] = useState('');
+  const [showAdvanced, setShowAdvanced] = useState(false);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const locationData = LOCATIONS[location];
+
+    // Parse custom competitors from comma-separated string
+    const competitors = customCompetitors
+      .split(',')
+      .map(c => c.trim().toLowerCase())
+      .filter(c => c.length > 0);
+
     onFetchData({
       login: DATAFORSEO_LOGIN,
       password: DATAFORSEO_PASSWORD,
       domain,
       locationCode: locationData.code,
-      languageCode: location === 'germany' ? 'de' : location === 'france' ? 'fr' : location === 'spain' ? 'es' : 'en'
+      languageCode: location === 'germany' ? 'de' : location === 'france' ? 'fr' : location === 'spain' ? 'es' : 'en',
+      customCompetitors: competitors.length > 0 ? competitors : undefined
     });
   };
 
@@ -86,6 +97,45 @@ export const APIConfigPanel: React.FC<APIConfigPanelProps> = ({ onFetchData, isL
               </select>
             </div>
           </div>
+
+          {/* Advanced Options Toggle */}
+          <div className="mt-4">
+            <button
+              type="button"
+              onClick={() => setShowAdvanced(!showAdvanced)}
+              className="flex items-center gap-2 text-sm text-gray-600 hover:text-gray-900"
+            >
+              <svg
+                className={`w-4 h-4 transition-transform ${showAdvanced ? 'rotate-90' : ''}`}
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
+              Advanced Options (Custom Competitors)
+            </button>
+          </div>
+
+          {/* Custom Competitors Input */}
+          {showAdvanced && (
+            <div className="mt-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Custom Competitors for Share of Search
+              </label>
+              <input
+                type="text"
+                value={customCompetitors}
+                onChange={(e) => setCustomCompetitors(e.target.value)}
+                placeholder="e.g., michelin, goodyear, bridgestone, pirelli"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+              />
+              <p className="mt-2 text-xs text-gray-500">
+                Enter competitor brand names separated by commas. Leave empty to use auto-detected industry competitors.
+                The system will fetch search volumes for each competitor to calculate Share of Search.
+              </p>
+            </div>
+          )}
 
           <div className="mt-4">
             <button

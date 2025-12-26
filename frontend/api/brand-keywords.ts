@@ -7,6 +7,9 @@ interface KeywordVolumeResult {
 
 // Common competitor brands by industry
 const INDUSTRY_COMPETITORS: Record<string, string[]> = {
+  // Tires / Wheels
+  tires: ['continental', 'michelin', 'goodyear', 'bridgestone', 'pirelli', 'dunlop', 'hankook', 'yokohama', 'firestone', 'falken', 'nokian', 'kumho', 'toyo', 'bf goodrich', 'cooper tires'],
+
   // Sportswear & Athletic brands
   sportswear: ['nike', 'adidas', 'puma', 'reebok', 'under armour', 'new balance', 'asics', 'fila', 'converse', 'vans', 'jordan', 'skechers'],
 
@@ -21,7 +24,7 @@ const INDUSTRY_COMPETITORS: Record<string, string[]> = {
   // Technology
   tech: ['apple', 'samsung', 'google', 'microsoft', 'sony', 'lg', 'huawei', 'xiaomi', 'oneplus', 'lenovo'],
 
-  // Automotive
+  // Automotive (car manufacturers)
   automotive: ['volkswagen', 'bmw', 'mercedes', 'audi', 'toyota', 'honda', 'ford', 'tesla', 'porsche', 'hyundai'],
 
   // Food & Beverage
@@ -45,6 +48,13 @@ const INDUSTRY_COMPETITORS: Record<string, string[]> = {
 
 // Brand to industry mapping for detection
 const BRAND_INDUSTRY_MAP: Record<string, string> = {
+  // Tires / Wheels
+  'continental': 'tires', 'michelin': 'tires', 'goodyear': 'tires', 'bridgestone': 'tires',
+  'pirelli': 'tires', 'dunlop': 'tires', 'hankook': 'tires', 'yokohama': 'tires',
+  'firestone': 'tires', 'falken': 'tires', 'nokian': 'tires', 'kumho': 'tires',
+  'toyo': 'tires', 'bf goodrich': 'tires', 'cooper': 'tires', 'vredestein': 'tires',
+  'semperit': 'tires', 'uniroyal': 'tires', 'barum': 'tires', 'nexen': 'tires',
+
   // Sportswear
   'nike': 'sportswear', 'adidas': 'sportswear', 'puma': 'sportswear', 'reebok': 'sportswear',
   'under armour': 'sportswear', 'new balance': 'sportswear', 'asics': 'sportswear', 'fila': 'sportswear',

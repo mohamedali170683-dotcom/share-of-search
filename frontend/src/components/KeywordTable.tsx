@@ -20,26 +20,37 @@ type SortDirection = 'asc' | 'desc';
 
 // Category patterns for keyword classification
 const CATEGORY_PATTERNS: { category: string; patterns: RegExp[] }[] = [
-  { category: 'Natural Cosmetics', patterns: [/natural|natur|bio|organic|öko|eco/i, /cosmetic|kosmetik|beauty|pflege/i] },
-  { category: 'Skincare', patterns: [/skin|haut|face|gesicht|cream|creme|serum|moistur|feucht/i] },
+  // Automotive / Tires (check first to avoid false positives)
+  { category: 'Tires', patterns: [/\breifen\b|tire|tyre|pneu|räder\b|wheels?\b/i] },
+  { category: 'Winter Tires', patterns: [/winterreifen|winter.?tire|winter.?tyre|schneereifen/i] },
+  { category: 'Summer Tires', patterns: [/sommerreifen|summer.?tire|summer.?tyre/i] },
+  { category: 'All-Season Tires', patterns: [/allwetter|ganzjahres|all.?season|allseason/i] },
+  { category: 'Car Parts', patterns: [/auto.?teil|car.?part|ersatzteil|brake|bremse|felge|rim\b/i] },
+  { category: 'Automotive', patterns: [/auto|car\b|vehicle|fahrzeug|kfz|pkw|suv\b|truck|lkw/i] },
+
+  // Cosmetics / Beauty
+  { category: 'Natural Cosmetics', patterns: [/natural.?cosmetic|natur.?kosmetik|bio.?cosmetic|organic.?beauty/i] },
+  { category: 'Skincare', patterns: [/skincare|skin.?care|hautpflege|face.?cream|gesichtscreme|serum|moistur/i] },
   { category: 'Makeup', patterns: [/makeup|make-up|lipstick|mascara|foundation|eyeshadow|lippenstift|rouge|blush/i] },
-  { category: 'Hair Care', patterns: [/hair|haar|shampoo|conditioner|spülung/i] },
-  { category: 'Body Care', patterns: [/body|körper|lotion|shower|dusch|bath|bad|soap|seife/i] },
-  { category: 'Vegan Products', patterns: [/vegan|tierversuchsfrei|cruelty.?free/i] },
-  { category: 'Eco-Friendly', patterns: [/eco|öko|nachhaltig|sustainab|umwelt|green/i] },
-  { category: 'Anti-Aging', patterns: [/anti.?age|anti.?aging|wrinkle|falten|mature|reif/i] },
-  { category: 'Sun Care', patterns: [/sun|sonn|spf|uv|solar/i] },
-  { category: 'Lip Care', patterns: [/lip|lippe/i] },
-  { category: 'Eye Care', patterns: [/eye|auge/i] },
-  { category: 'Deodorant', patterns: [/deo|deodorant/i] },
-  { category: 'Certified Organic', patterns: [/certified|zertifiziert|natrue|ecocert|cosmos/i] },
-  // Sportswear categories
-  { category: 'Running', patterns: [/running|lauf|jogging|marathon/i] },
-  { category: 'Training', patterns: [/training|workout|fitness|gym/i] },
+  { category: 'Hair Care', patterns: [/hair.?care|haarpflege|shampoo|conditioner|spülung/i] },
+  { category: 'Body Care', patterns: [/body.?care|körperpflege|body.?lotion|duschgel|shower/i] },
+  { category: 'Anti-Aging', patterns: [/anti.?age|anti.?aging|anti.?falten|wrinkle/i] },
+  { category: 'Sun Care', patterns: [/sun.?care|sonnenschutz|sunscreen|spf\s?\d|uv.?schutz/i] },
+
+  // Sportswear / Fashion
+  { category: 'Running', patterns: [/running|laufschuh|jogging|marathon/i] },
+  { category: 'Training', patterns: [/training|workout|fitness|gym\b/i] },
   { category: 'Football', patterns: [/football|fußball|soccer|fussball/i] },
-  { category: 'Basketball', patterns: [/basketball|nba/i] },
-  { category: 'Sneakers', patterns: [/sneaker|shoe|schuh|trainer/i] },
-  { category: 'Apparel', patterns: [/shirt|hoodie|jacket|jacke|pants|hose|shorts/i] },
+  { category: 'Sneakers', patterns: [/sneaker|sportschuh|trainer\b/i] },
+  { category: 'Apparel', patterns: [/\bshirt\b|hoodie|jacket|jacke|pants|hose|shorts/i] },
+
+  // Technology
+  { category: 'Electronics', patterns: [/electronic|elektronik|gadget|device/i] },
+  { category: 'Software', patterns: [/software|app\b|application|programm/i] },
+
+  // General
+  { category: 'Eco-Friendly', patterns: [/eco.?friendly|öko|nachhaltig|sustainab|umweltfreundlich/i] },
+  { category: 'Vegan', patterns: [/\bvegan\b|tierversuchsfrei|cruelty.?free/i] },
 ];
 
 // Detect category for a keyword

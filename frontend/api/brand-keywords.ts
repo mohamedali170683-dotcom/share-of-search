@@ -5,21 +5,99 @@ interface KeywordVolumeResult {
   search_volume: number;
 }
 
-// Common competitor brands by industry (can be expanded)
+// Common competitor brands by industry
 const INDUSTRY_COMPETITORS: Record<string, string[]> = {
+  // Sportswear & Athletic brands
+  sportswear: ['nike', 'adidas', 'puma', 'reebok', 'under armour', 'new balance', 'asics', 'fila', 'converse', 'vans', 'jordan', 'skechers'],
+
+  // Fashion & Luxury
+  fashion: ['zara', 'h&m', 'uniqlo', 'gap', 'primark', 'mango', 'asos', 'shein', 'forever 21', 'pull&bear'],
+  luxury: ['gucci', 'louis vuitton', 'chanel', 'prada', 'hermes', 'dior', 'burberry', 'versace', 'armani', 'balenciaga'],
+
   // Natural cosmetics brands
-  cosmetics: ['weleda', 'dr hauschka', 'annemarie börlind', 'alverde', 'lavera', 'sante', 'logona', 'primavera'],
-  // Add more industries as needed
+  cosmetics: ['weleda', 'dr hauschka', 'annemarie börlind', 'alverde', 'lavera', 'sante', 'logona', 'primavera', 'korres', 'origins'],
+  beauty: ['loreal', 'maybelline', 'mac', 'nyx', 'revlon', 'clinique', 'estee lauder', 'lancome', 'bobbi brown', 'urban decay'],
+
+  // Technology
+  tech: ['apple', 'samsung', 'google', 'microsoft', 'sony', 'lg', 'huawei', 'xiaomi', 'oneplus', 'lenovo'],
+
+  // Automotive
+  automotive: ['volkswagen', 'bmw', 'mercedes', 'audi', 'toyota', 'honda', 'ford', 'tesla', 'porsche', 'hyundai'],
+
+  // Food & Beverage
+  food: ['nestle', 'kraft', 'unilever', 'danone', 'kelloggs', 'pepsico', 'coca cola', 'mondelez', 'mars', 'ferrero'],
+
+  // Retail
+  retail: ['amazon', 'walmart', 'target', 'costco', 'ikea', 'home depot', 'best buy', 'ebay', 'aliexpress', 'otto'],
+
+  // Airlines
+  airlines: ['lufthansa', 'ryanair', 'easyjet', 'british airways', 'air france', 'emirates', 'qatar airways', 'turkish airlines', 'klm', 'swiss'],
+
+  // Hotels
+  hotels: ['marriott', 'hilton', 'ihg', 'accor', 'hyatt', 'wyndham', 'radisson', 'best western', 'four seasons', 'ritz carlton'],
+
+  // Streaming
+  streaming: ['netflix', 'disney plus', 'amazon prime', 'hbo max', 'hulu', 'apple tv', 'paramount plus', 'peacock', 'youtube', 'spotify'],
+
+  // Banking
+  banking: ['deutsche bank', 'commerzbank', 'sparkasse', 'ing', 'n26', 'revolut', 'hsbc', 'barclays', 'santander', 'bnp paribas'],
+};
+
+// Brand to industry mapping for detection
+const BRAND_INDUSTRY_MAP: Record<string, string> = {
+  // Sportswear
+  'nike': 'sportswear', 'adidas': 'sportswear', 'puma': 'sportswear', 'reebok': 'sportswear',
+  'under armour': 'sportswear', 'new balance': 'sportswear', 'asics': 'sportswear', 'fila': 'sportswear',
+  'converse': 'sportswear', 'vans': 'sportswear', 'jordan': 'sportswear', 'skechers': 'sportswear',
+
+  // Fashion
+  'zara': 'fashion', 'h&m': 'fashion', 'uniqlo': 'fashion', 'gap': 'fashion', 'mango': 'fashion',
+  'asos': 'fashion', 'shein': 'fashion', 'primark': 'fashion',
+
+  // Luxury
+  'gucci': 'luxury', 'louis vuitton': 'luxury', 'chanel': 'luxury', 'prada': 'luxury', 'hermes': 'luxury',
+  'dior': 'luxury', 'burberry': 'luxury', 'versace': 'luxury', 'armani': 'luxury', 'balenciaga': 'luxury',
+
+  // Cosmetics
+  'lavera': 'cosmetics', 'weleda': 'cosmetics', 'hauschka': 'cosmetics', 'alverde': 'cosmetics',
+  'sante': 'cosmetics', 'logona': 'cosmetics', 'primavera': 'cosmetics', 'börlind': 'cosmetics',
+
+  // Beauty
+  'loreal': 'beauty', 'maybelline': 'beauty', 'mac': 'beauty', 'nyx': 'beauty', 'revlon': 'beauty',
+
+  // Tech
+  'apple': 'tech', 'samsung': 'tech', 'google': 'tech', 'microsoft': 'tech', 'sony': 'tech',
+  'huawei': 'tech', 'xiaomi': 'tech', 'oneplus': 'tech', 'lenovo': 'tech',
+
+  // Automotive
+  'volkswagen': 'automotive', 'vw': 'automotive', 'bmw': 'automotive', 'mercedes': 'automotive',
+  'audi': 'automotive', 'toyota': 'automotive', 'honda': 'automotive', 'ford': 'automotive',
+  'tesla': 'automotive', 'porsche': 'automotive', 'hyundai': 'automotive',
+
+  // Retail
+  'amazon': 'retail', 'walmart': 'retail', 'target': 'retail', 'ikea': 'retail', 'otto': 'retail',
+
+  // Streaming
+  'netflix': 'streaming', 'disney': 'streaming', 'hulu': 'streaming', 'spotify': 'streaming',
+
+  // Airlines
+  'lufthansa': 'airlines', 'ryanair': 'airlines', 'easyjet': 'airlines', 'emirates': 'airlines',
+
+  // Hotels
+  'marriott': 'hotels', 'hilton': 'hotels', 'hyatt': 'hotels', 'accor': 'hotels',
+
+  // Banking
+  'deutsche bank': 'banking', 'commerzbank': 'banking', 'n26': 'banking', 'revolut': 'banking',
 };
 
 // Detect industry based on domain or brand
-function detectIndustry(domain: string): string {
-  const cosmeticsBrands = ['lavera', 'weleda', 'hauschka', 'alverde', 'sante', 'logona', 'primavera', 'börlind'];
-  const domainLower = domain.toLowerCase();
+function detectIndustry(brandName: string): string {
+  const brandLower = brandName.toLowerCase();
 
-  for (const brand of cosmeticsBrands) {
-    if (domainLower.includes(brand)) {
-      return 'cosmetics';
+  // Check direct mapping
+  for (const [brand, industry] of Object.entries(BRAND_INDUSTRY_MAP)) {
+    if (brandLower.includes(brand) || brand.includes(brandLower)) {
+      return industry;
     }
   }
 
@@ -31,11 +109,11 @@ function extractBrandFromDomain(domain: string): string {
   // Remove common TLDs and www
   let brand = domain
     .replace(/^(https?:\/\/)?(www\.)?/, '')
-    .replace(/\.(com|de|co\.uk|fr|es|it|net|org|io).*$/, '')
+    .replace(/\.(com|de|co\.uk|fr|es|it|net|org|io|eu|at|ch|nl|be|pl).*$/, '')
     .toLowerCase();
 
   // Handle hyphenated domains
-  brand = brand.replace(/-/g, ' ');
+  brand = brand.replace(/-/g, ' ').trim();
 
   return brand;
 }
@@ -62,27 +140,31 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const auth = Buffer.from(`${login}:${password}`).toString('base64');
     const brandName = extractBrandFromDomain(domain);
-    const industry = detectIndustry(domain);
+    const industry = detectIndustry(brandName);
 
     // Get competitors - use custom if provided, otherwise use industry defaults
     let competitors: string[] = customCompetitors || INDUSTRY_COMPETITORS[industry] || [];
 
     // Make sure the brand itself is included
-    if (!competitors.includes(brandName)) {
+    if (!competitors.some(c => c.toLowerCase() === brandName.toLowerCase())) {
       competitors = [brandName, ...competitors];
     }
 
     // Filter out the brand from competitors list for separation
-    const competitorBrands = competitors.filter(c => c !== brandName);
+    const competitorBrands = competitors.filter(c => c.toLowerCase() !== brandName.toLowerCase());
 
-    // Build keywords list: brand + brand variations + competitors
+    // Build keywords list: brand + brand variations + competitors + their variations
     const keywordsToFetch = [
       brandName,
-      `${brandName} naturkosmetik`,
-      `${brandName} kosmetik`,
-      `${brandName} produkte`,
-      ...competitorBrands
+      `${brandName} online`,
+      `${brandName} shop`,
+      `${brandName} store`,
+      ...competitorBrands,
+      ...competitorBrands.slice(0, 5).map(c => `${c} shop`) // Add shop variations for top competitors
     ];
+
+    // Remove duplicates
+    const uniqueKeywords = [...new Set(keywordsToFetch.map(k => k.toLowerCase()))];
 
     // Fetch search volumes from DataForSEO
     const response = await fetch('https://api.dataforseo.com/v3/keywords_data/google_ads/search_volume/live', {
@@ -92,7 +174,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         'Content-Type': 'application/json'
       },
       body: JSON.stringify([{
-        keywords: keywordsToFetch,
+        keywords: uniqueKeywords,
         location_code: locationCode,
         language_code: languageCode
       }])
@@ -109,7 +191,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // Build brand keywords list
     const brandKeywords = items.map((item: KeywordVolumeResult) => {
       const keyword = item.keyword.toLowerCase();
-      const isOwnBrand = keyword.includes(brandName);
+      const isOwnBrand = keyword.includes(brandName.toLowerCase());
 
       return {
         keyword: item.keyword,

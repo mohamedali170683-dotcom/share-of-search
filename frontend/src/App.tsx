@@ -12,7 +12,6 @@ function App() {
   const [gapResult, setGapResult] = useState<GrowthGapResult | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [analyzedDomain, setAnalyzedDomain] = useState<string>('');
   const [brandName, setBrandName] = useState<string>('');
   const [trendsData, setTrendsData] = useState<TrendsData | null>(null);
   const [trendsLoading, setTrendsLoading] = useState(false);
@@ -58,7 +57,6 @@ function App() {
     try {
       setIsLoading(true);
       setError(null);
-      setAnalyzedDomain(config.domain);
       setLastFetchConfig(config);
       setTrendsData(null); // Reset trends when fetching new data
 

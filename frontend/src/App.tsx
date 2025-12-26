@@ -23,6 +23,30 @@ function App() {
     languageCode: string;
   } | null>(null);
 
+  // Custom metric overrides from table filters
+  const [customSOS, setCustomSOS] = useState<{ sos: number; brandVolume: number; totalVolume: number } | null>(null);
+  const [customSOV, setCustomSOV] = useState<{ sov: number; visibleVolume: number; totalVolume: number } | null>(null);
+
+  // Handler for SOS changes from KeywordTable competitor selection
+  const handleSOSChange = (_selectedBrands: string[], sos: number, brandVolume: number, totalVolume: number) => {
+    setCustomSOS({ sos, brandVolume, totalVolume });
+  };
+
+  // Handler for SOV changes from KeywordTable category filter
+  const handleSOVChange = (filteredSOV: number, visibleVolume: number, totalVolume: number) => {
+    if (filteredSOV === 0 && visibleVolume === 0 && totalVolume === 0) {
+      // No filters active - reset to original
+      setCustomSOV(null);
+    } else {
+      setCustomSOV({ sov: filteredSOV, visibleVolume, totalVolume });
+    }
+  };
+
+  // Calculate effective metrics (custom if set, otherwise original)
+  const effectiveSOS = customSOS?.sos ?? sosResult?.shareOfSearch ?? 0;
+  const effectiveSOV = customSOV?.sov ?? sovResult?.shareOfVoice ?? 0;
+  const effectiveGap = Math.round((effectiveSOV - effectiveSOS) * 10) / 10;
+
   // Load sample data on mount
   useEffect(() => {
     loadSampleData();
@@ -59,6 +83,8 @@ function App() {
       setError(null);
       setLastFetchConfig(config);
       setTrendsData(null); // Reset trends when fetching new data
+      setCustomSOS(null); // Reset custom metrics when fetching new data
+      setCustomSOV(null);
 
       // Fetch both ranked keywords and brand keywords in parallel
       const [rankedData, brandData] = await Promise.all([
@@ -206,19 +232,19 @@ function App() {
         {/* Metric Cards */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
           <MetricCard
-            title="Share of Search"
-            value={sosResult ? `${sosResult.shareOfSearch}%` : '—'}
-            subtitle="Brand awareness in search"
+            title={customSOS ? "Share of Search (Filtered)" : "Share of Search"}
+            value={sosResult ? `${customSOS?.sos ?? sosResult.shareOfSearch}%` : '—'}
+            subtitle={customSOS ? "Based on selected competitors" : "Brand awareness in search"}
             borderColor="emerald"
             tooltip="SOS = Your Brand Search Volume / Total Brand Search Volumes × 100. Measures brand awareness through search behavior."
             details={sosResult ? [
-              { label: 'Your Brand Volume', value: sosResult.brandVolume.toLocaleString() },
-              { label: 'Total Brand Volume', value: sosResult.totalBrandVolume.toLocaleString() }
+              { label: 'Your Brand Volume', value: (customSOS?.brandVolume ?? sosResult.brandVolume).toLocaleString() },
+              { label: 'Total Brand Volume', value: (customSOS?.totalVolume ?? sosResult.totalBrandVolume).toLocaleString() }
             ] : undefined}
             insight={sosResult ? {
-              summary: sosResult.shareOfSearch >= 30
+              summary: effectiveSOS >= 30
                 ? `Strong brand awareness! ${brandName || 'Your brand'} captures a significant portion of branded searches.`
-                : sosResult.shareOfSearch >= 15
+                : effectiveSOS >= 15
                 ? `Good brand presence. ${brandName || 'Your brand'} has moderate visibility among competitors.`
                 : `Room for growth. Consider brand marketing to increase awareness.`,
               explanation: 'SOS measures how often people search for your brand compared to all brand searches in your industry.'
@@ -226,19 +252,19 @@ function App() {
           />
 
           <MetricCard
-            title="Share of Voice"
-            value={sovResult ? `${sovResult.shareOfVoice}%` : '—'}
-            subtitle="Visibility-weighted market share"
+            title={customSOV ? "Share of Voice (Filtered)" : "Share of Voice"}
+            value={sovResult ? `${customSOV?.sov ?? sovResult.shareOfVoice}%` : '—'}
+            subtitle={customSOV ? "Based on selected filters" : "Visibility-weighted market share"}
             borderColor="orange"
             tooltip="SOV = Sum(Keyword Volume × CTR at Position) / Total Market Volume × 100. Weights search volume by actual click probability based on ranking position."
             details={sovResult ? [
-              { label: 'Visible Volume', value: sovResult.visibleVolume.toLocaleString() },
-              { label: 'Total Market Volume', value: sovResult.totalMarketVolume.toLocaleString() }
+              { label: 'Visible Volume', value: (customSOV?.visibleVolume ?? sovResult.visibleVolume).toLocaleString() },
+              { label: 'Total Market Volume', value: (customSOV?.totalVolume ?? sovResult.totalMarketVolume).toLocaleString() }
             ] : undefined}
             insight={sovResult ? {
-              summary: sovResult.shareOfVoice >= 25
+              summary: effectiveSOV >= 25
                 ? `Excellent visibility! Your site captures a large share of organic clicks.`
-                : sovResult.shareOfVoice >= 10
+                : effectiveSOV >= 10
                 ? `Decent organic presence. There's potential to improve rankings.`
                 : `Low visibility. Focus on SEO to rank higher for valuable keywords.`,
               explanation: 'SOV shows your actual visibility in search results, weighted by click probability based on position.'
@@ -246,21 +272,23 @@ function App() {
           />
 
           <MetricCard
-            title="Growth Gap"
-            value={gapResult ? `${gapResult.gap > 0 ? '+' : ''}${gapResult.gap}pp` : '—'}
-            subtitle="SOV - SOS differential"
-            borderColor={gapResult ? getGapColor(gapResult.gap) : 'blue'}
+            title={customSOS || customSOV ? "Growth Gap (Filtered)" : "Growth Gap"}
+            value={gapResult ? `${effectiveGap > 0 ? '+' : ''}${effectiveGap}pp` : '—'}
+            subtitle={customSOS || customSOV ? "Based on filtered metrics" : "SOV - SOS differential"}
+            borderColor={gapResult ? getGapColor(effectiveGap) : 'blue'}
             tooltip="Gap = SOV - SOS. Positive gap indicates growth potential (visibility exceeds awareness). Negative gap suggests missing market opportunities."
-            interpretation={gapResult ? getGapInterpretation(gapResult.interpretation) : undefined}
+            interpretation={gapResult ? getGapInterpretation(
+              effectiveGap > 2 ? 'growth_potential' : effectiveGap < -2 ? 'missing_opportunities' : 'balanced'
+            ) : undefined}
             insight={gapResult ? {
-              summary: gapResult.gap > 2
+              summary: effectiveGap > 2
                 ? `Growth Potential! Your visibility exceeds brand awareness - opportunity to convert searches into loyalty.`
-                : gapResult.gap < -2
+                : effectiveGap < -2
                 ? `Missing Opportunities. Your brand awareness exceeds visibility - focus on SEO improvements.`
                 : `Balanced performance. Brand awareness and visibility are well-aligned.`,
-              explanation: gapResult.gap > 2
+              explanation: effectiveGap > 2
                 ? 'Invest in brand marketing to convert search visibility into lasting brand awareness.'
-                : gapResult.gap < -2
+                : effectiveGap < -2
                 ? 'Prioritize SEO to ensure customers who know your brand can find you organically.'
                 : 'Maintain your balanced approach while looking for opportunities to grow both metrics.'
             } : undefined}
@@ -301,11 +329,19 @@ function App() {
         {/* Tables */}
         <div className="space-y-6">
           {brandKeywords.length > 0 && (
-            <KeywordTable type="sos" keywords={brandKeywords} />
+            <KeywordTable
+              type="sos"
+              keywords={brandKeywords}
+              onSelectedCompetitorsChange={handleSOSChange}
+            />
           )}
 
           {sovResult && (
-            <KeywordTable type="sov" keywords={sovResult.keywordBreakdown} />
+            <KeywordTable
+              type="sov"
+              keywords={sovResult.keywordBreakdown}
+              onFilteredSOVChange={handleSOVChange}
+            />
           )}
         </div>
 

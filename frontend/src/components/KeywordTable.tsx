@@ -1,14 +1,16 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import type { BrandKeyword, RankedKeyword } from '../types';
 
 interface SOVTableProps {
   type: 'sov';
   keywords: RankedKeyword[];
+  onFilteredSOVChange?: (filteredSOV: number, totalVisibleVolume: number, totalMarketVolume: number) => void;
 }
 
 interface SOSTableProps {
   type: 'sos';
   keywords: BrandKeyword[];
+  onSelectedCompetitorsChange?: (selectedBrands: string[], sos: number, brandVolume: number, totalVolume: number) => void;
 }
 
 type KeywordTableProps = SOVTableProps | SOSTableProps;
@@ -104,6 +106,8 @@ export const KeywordTable: React.FC<KeywordTableProps> = (props) => {
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [itemsPerPage, setItemsPerPage] = useState<number>(25);
   const [positionFilter, setPositionFilter] = useState<string>('all');
+  const [selectedCompetitors, setSelectedCompetitors] = useState<Set<string>>(new Set());
+  const [competitorsInitialized, setCompetitorsInitialized] = useState(false);
 
   // Categorize all keywords
   const categorizedKeywords = useMemo(() => {
@@ -114,6 +118,75 @@ export const KeywordTable: React.FC<KeywordTableProps> = (props) => {
       category: detectCategory(kw.keyword)
     })) as CategorizedKeyword[];
   }, [props.keywords, props.type]);
+
+  // Get unique competitor brands for SOS
+  const competitorBrands = useMemo(() => {
+    if (props.type !== 'sos') return [];
+    const brands = (props.keywords as BrandKeyword[])
+      .filter(kw => !kw.isOwnBrand)
+      .map(kw => kw.keyword);
+    return [...new Set(brands)];
+  }, [props.keywords, props.type]);
+
+  // Initialize selected competitors (all selected by default)
+  useEffect(() => {
+    if (props.type === 'sos' && competitorBrands.length > 0 && !competitorsInitialized) {
+      setSelectedCompetitors(new Set(competitorBrands));
+      setCompetitorsInitialized(true);
+    }
+  }, [competitorBrands, competitorsInitialized, props.type]);
+
+  // Calculate SOS based on selected competitors
+  const sosCalculation = useMemo(() => {
+    if (props.type !== 'sos') return null;
+
+    const keywords = props.keywords as BrandKeyword[];
+    const ownBrandVolume = keywords
+      .filter(kw => kw.isOwnBrand)
+      .reduce((sum, kw) => sum + kw.searchVolume, 0);
+
+    const competitorVolume = keywords
+      .filter(kw => !kw.isOwnBrand && selectedCompetitors.has(kw.keyword))
+      .reduce((sum, kw) => sum + kw.searchVolume, 0);
+
+    const totalVolume = ownBrandVolume + competitorVolume;
+    const sos = totalVolume > 0 ? Math.round((ownBrandVolume / totalVolume) * 100 * 10) / 10 : 0;
+
+    return { sos, ownBrandVolume, competitorVolume, totalVolume };
+  }, [props.keywords, props.type, selectedCompetitors]);
+
+  // Notify parent of SOS changes
+  useEffect(() => {
+    if (props.type === 'sos' && sosCalculation && props.onSelectedCompetitorsChange && competitorsInitialized) {
+      props.onSelectedCompetitorsChange(
+        Array.from(selectedCompetitors),
+        sosCalculation.sos,
+        sosCalculation.ownBrandVolume,
+        sosCalculation.totalVolume
+      );
+    }
+  }, [sosCalculation, selectedCompetitors, competitorsInitialized, props]);
+
+  // Toggle competitor selection
+  const toggleCompetitor = (brand: string) => {
+    setSelectedCompetitors(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(brand)) {
+        newSet.delete(brand);
+      } else {
+        newSet.add(brand);
+      }
+      return newSet;
+    });
+  };
+
+  const selectAllCompetitors = () => {
+    setSelectedCompetitors(new Set(competitorBrands));
+  };
+
+  const deselectAllCompetitors = () => {
+    setSelectedCompetitors(new Set());
+  };
 
   // Get unique categories with counts
   const categoryStats = useMemo(() => {
@@ -200,6 +273,24 @@ export const KeywordTable: React.FC<KeywordTableProps> = (props) => {
       keywordCount: keywords.length
     };
   }, [filteredKeywords, props.type]);
+
+  // Notify parent of SOV filter changes
+  useEffect(() => {
+    if (props.type === 'sov' && filteredSOVStats && props.onFilteredSOVChange) {
+      // Only notify when filters are active
+      const hasFilters = selectedCategory || searchQuery || positionFilter !== 'all';
+      if (hasFilters) {
+        props.onFilteredSOVChange(
+          filteredSOVStats.filteredSOV,
+          filteredSOVStats.totalVisibleVolume,
+          filteredSOVStats.totalMarketVolume
+        );
+      } else {
+        // Reset to original when no filters
+        props.onFilteredSOVChange(0, 0, 0);
+      }
+    }
+  }, [filteredSOVStats, selectedCategory, searchQuery, positionFilter, props]);
 
   const handleSort = (key: SortKey) => {
     if (sortKey === key) {
@@ -524,12 +615,81 @@ export const KeywordTable: React.FC<KeywordTableProps> = (props) => {
     <div className="bg-white rounded-xl shadow-sm overflow-hidden">
       <div className="px-6 py-4 border-b border-gray-200">
         <h3 className="text-lg font-semibold text-gray-900">Share of Search - Brand Keywords</h3>
-        <p className="text-sm text-gray-500 mt-1">Brand search volumes compared to competitors</p>
+        <p className="text-sm text-gray-500 mt-1">Brand search volumes compared to competitors. Select which competitors to include in the calculation.</p>
       </div>
+
+      {/* Competitor Selection */}
+      {competitorBrands.length > 0 && (
+        <div className="px-6 py-4 bg-gray-50 border-b border-gray-200">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <svg className="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+              </svg>
+              <span className="text-sm font-medium text-gray-700">Select Competitors:</span>
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={selectAllCompetitors}
+                className="px-3 py-1 text-xs border border-gray-300 rounded-lg hover:bg-gray-100 text-gray-600"
+              >
+                Select All
+              </button>
+              <button
+                onClick={deselectAllCompetitors}
+                className="px-3 py-1 text-xs border border-gray-300 rounded-lg hover:bg-gray-100 text-gray-600"
+              >
+                Deselect All
+              </button>
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {competitorBrands.map((brand) => (
+              <label
+                key={brand}
+                className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border cursor-pointer transition-all ${
+                  selectedCompetitors.has(brand)
+                    ? 'bg-emerald-50 border-emerald-300 text-emerald-700'
+                    : 'bg-white border-gray-300 text-gray-500'
+                }`}
+              >
+                <input
+                  type="checkbox"
+                  checked={selectedCompetitors.has(brand)}
+                  onChange={() => toggleCompetitor(brand)}
+                  className="w-4 h-4 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
+                />
+                <span className="text-sm capitalize">{brand}</span>
+              </label>
+            ))}
+          </div>
+
+          {/* Updated SOS Display */}
+          {sosCalculation && (
+            <div className="mt-4 p-3 bg-emerald-50 border border-emerald-200 rounded-lg">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <span className="text-sm text-emerald-700 font-medium">Calculated SOS:</span>
+                  <span className="text-2xl font-bold text-emerald-600">{sosCalculation.sos}%</span>
+                </div>
+                <div className="text-sm text-emerald-600">
+                  Your brand: {sosCalculation.ownBrandVolume.toLocaleString()} |
+                  Total: {sosCalculation.totalVolume.toLocaleString()} |
+                  {selectedCompetitors.size} of {competitorBrands.length} competitors selected
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
       <div className="overflow-x-auto">
         <table className="w-full">
           <thead className="bg-gray-50">
             <tr>
+              <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider w-16">
+                Include
+              </th>
               <th onClick={() => handleSort('keyword')} className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100">
                 Keyword{getSortIndicator('keyword')}
               </th>
@@ -543,7 +703,23 @@ export const KeywordTable: React.FC<KeywordTableProps> = (props) => {
           </thead>
           <tbody className="divide-y divide-gray-200">
             {(sortedKeywords as BrandKeyword[]).map((kw, idx) => (
-              <tr key={idx} className="hover:bg-gray-50">
+              <tr key={idx} className={`hover:bg-gray-50 ${!kw.isOwnBrand && !selectedCompetitors.has(kw.keyword) ? 'opacity-50' : ''}`}>
+                <td className="px-6 py-4 text-center">
+                  {kw.isOwnBrand ? (
+                    <span className="text-emerald-500">
+                      <svg className="w-5 h-5 mx-auto" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                      </svg>
+                    </span>
+                  ) : (
+                    <input
+                      type="checkbox"
+                      checked={selectedCompetitors.has(kw.keyword)}
+                      onChange={() => toggleCompetitor(kw.keyword)}
+                      className="w-4 h-4 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
+                    />
+                  )}
+                </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
                   {kw.keyword}
                 </td>

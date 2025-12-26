@@ -42,21 +42,21 @@ interface TrendsPanelProps {
 const COMPETITOR_COLORS = ['#8b5cf6', '#ec4899', '#06b6d4'];
 
 const TrendArrow: React.FC<{ value: number }> = ({ value }) => {
-  if (value === 0) return <span className="text-gray-400 text-xs">-</span>;
+  if (value === 0) return <span className="text-gray-400 text-sm">-</span>;
   return (
-    <span className={`text-xs ${value > 0 ? 'text-emerald-500' : 'text-red-500'}`}>
+    <span className={`text-sm ${value > 0 ? 'text-emerald-500' : 'text-red-500'}`}>
       {value > 0 ? '↑' : '↓'}
     </span>
   );
 };
 
 const ChangeValue: React.FC<{ value: number; label: string }> = ({ value, label }) => (
-  <div className="flex items-center gap-1">
+  <div className="flex items-center gap-1.5">
     <TrendArrow value={value} />
-    <span className={`text-xs font-medium ${value === 0 ? 'text-gray-500' : value > 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+    <span className={`text-sm font-medium ${value === 0 ? 'text-gray-500' : value > 0 ? 'text-emerald-600' : 'text-red-600'}`}>
       {value > 0 ? '+' : ''}{value}pp
     </span>
-    <span className="text-xs text-gray-400">{label}</span>
+    <span className="text-sm text-gray-400">{label}</span>
   </div>
 );
 
@@ -338,16 +338,16 @@ export const TrendsPanel: React.FC<TrendsPanelProps> = ({ data, isLoading }) => 
           </div>
 
           {/* Competitor Selector & Changes */}
-          <div className="w-44 space-y-2">
+          <div className="w-52 space-y-3">
             {/* Changes */}
-            <div className="space-y-2">
-              <div className="p-2.5 bg-emerald-50 rounded-lg border border-emerald-100">
-                <div className="text-xs font-medium text-emerald-700 mb-1">Share of Search</div>
+            <div className="space-y-3">
+              <div className="p-3 bg-emerald-50 rounded-lg border border-emerald-100">
+                <div className="text-sm font-semibold text-emerald-700 mb-2">Share of Search</div>
                 <ChangeValue value={data.changes.sos.vs6MonthsAgo} label="vs 6mo" />
                 <ChangeValue value={data.changes.sos.vs12MonthsAgo} label="vs 12mo" />
               </div>
-              <div className="p-2.5 bg-orange-50 rounded-lg border border-orange-100">
-                <div className="text-xs font-medium text-orange-700 mb-1">Share of Voice</div>
+              <div className="p-3 bg-orange-50 rounded-lg border border-orange-100">
+                <div className="text-sm font-semibold text-orange-700 mb-2">Share of Voice</div>
                 <ChangeValue value={data.changes.sov.vs6MonthsAgo} label="vs 6mo" />
                 <ChangeValue value={data.changes.sov.vs12MonthsAgo} label="vs 12mo" />
               </div>
@@ -355,23 +355,23 @@ export const TrendsPanel: React.FC<TrendsPanelProps> = ({ data, isLoading }) => 
 
             {/* Competitor Toggle */}
             {data.competitorTrends && data.competitorTrends.length > 0 && (
-              <div className="p-2.5 bg-gray-50 rounded-lg border border-gray-200">
-                <div className="text-xs font-medium text-gray-600 mb-1.5">Compare with:</div>
-                <div className="space-y-1">
+              <div className="p-3 bg-gray-50 rounded-lg border border-gray-200">
+                <div className="text-sm font-semibold text-gray-600 mb-2">Compare with:</div>
+                <div className="space-y-2">
                   {data.competitorTrends.map((comp, idx) => (
-                    <label key={comp.name} className="flex items-center gap-1.5 cursor-pointer">
+                    <label key={comp.name} className="flex items-center gap-2 cursor-pointer">
                       <input
                         type="checkbox"
                         checked={selectedCompetitors.includes(comp.name)}
                         onChange={() => toggleCompetitor(comp.name)}
-                        className="w-3 h-3 rounded border-gray-300"
+                        className="w-4 h-4 rounded border-gray-300"
                         style={{ accentColor: COMPETITOR_COLORS[idx] }}
                       />
                       <span
-                        className="w-2 h-2 rounded-full"
+                        className="w-3 h-3 rounded-full"
                         style={{ backgroundColor: COMPETITOR_COLORS[idx] }}
                       />
-                      <span className="text-xs text-gray-700">{comp.name}</span>
+                      <span className="text-sm text-gray-700">{comp.name}</span>
                     </label>
                   ))}
                 </div>

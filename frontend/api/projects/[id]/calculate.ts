@@ -1,7 +1,16 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { PrismaClient } from '@prisma/client';
 
-const prisma = new PrismaClient();
+async function getPrismaClient() {
+  if (!process.env.DATABASE_URL) {
+    return null;
+  }
+  try {
+    const { PrismaClient } = await import('@prisma/client');
+    return new PrismaClient();
+  } catch {
+    return null;
+  }
+}
 
 const CTR_CURVE: Record<number, number> = {
   1: 0.28, 2: 0.15, 3: 0.09, 4: 0.06, 5: 0.04,
@@ -29,6 +38,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
+  const prisma = await getPrismaClient();
+
+  if (!prisma) {
+    return res.status(503).json({
+      error: 'Database not configured',
+      message: 'Projects feature requires DATABASE_URL environment variable.'
+    });
+  }
+
   const { id } = req.query;
 
   if (!id || typeof id !== 'string') {
@@ -36,7 +54,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
-    // Get project with keywords
     const project = await prisma.project.findUnique({
       where: { id },
       include: {

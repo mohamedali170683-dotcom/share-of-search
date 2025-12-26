@@ -8,94 +8,76 @@ A Share of Search and Share of Voice analytics tool that helps measure brand awa
 - **Share of Voice (SOV)**: Measure visibility-weighted market share using CTR curves
 - **Growth Gap Analysis**: Identify opportunities with SOV-SOS differential
 - **DataForSEO Integration**: Fetch live keyword data from Google
-- **Project Management**: Save and track multiple brand analyses
 - **CSV Export**: Export metrics and keyword data
+- **Projects** (optional): Save analyses with PostgreSQL database
 
 ## Tech Stack
 
 - **Frontend**: React + TypeScript + Vite + Tailwind CSS
 - **Backend**: Vercel Serverless Functions
-- **Database**: PostgreSQL with Prisma ORM
-- **Deployment**: Vercel (via GitHub)
+- **Database**: PostgreSQL with Prisma (optional)
 
 ---
 
-## Deploy to Vercel (from GitHub)
+## Quick Deploy to Vercel
 
-### Step 1: Import Project to Vercel
+### Step 1: Import to Vercel
 
-1. Go to [vercel.com](https://vercel.com) and sign in with GitHub
-2. Click **"Add New Project"**
-3. Select your **share-of-search** repository
-4. Configure the project:
-   - **Root Directory**: `frontend`
-   - **Framework Preset**: Vite
-   - **Build Command**: `prisma generate && npm run build`
-   - **Output Directory**: `dist`
+1. Go to [vercel.com](https://vercel.com) → **Add New Project**
+2. Import your GitHub repository
+3. Set **Root Directory** to `frontend`
+4. Click **Deploy**
 
-### Step 2: Add PostgreSQL Database
+That's it! The app will work immediately with sample data.
 
-**Option A: Vercel Postgres (Recommended)**
-1. In your Vercel project dashboard, go to **Storage** tab
-2. Click **Create Database** → Select **Postgres**
-3. Follow the setup wizard
-4. Vercel automatically adds `POSTGRES_URL` environment variables
+### Step 2: Add DataForSEO Credentials (for live data)
 
-**Option B: Neon (Free tier available)**
-1. Go to [neon.tech](https://neon.tech) and create a free account
-2. Create a new project and database
-3. Copy the connection string
+In Vercel → **Settings** → **Environment Variables**, add:
 
-**Option C: Supabase**
-1. Go to [supabase.com](https://supabase.com) and create a project
-2. Go to Settings → Database → Connection string
-3. Copy the URI connection string
+| Variable | Value |
+|----------|-------|
+| `VITE_DATAFORSEO_LOGIN` | Your DataForSEO email |
+| `VITE_DATAFORSEO_PASSWORD` | Your DataForSEO API password |
 
-### Step 3: Configure Environment Variables
+Then redeploy for changes to take effect.
 
-In Vercel dashboard → **Settings** → **Environment Variables**, add:
+### Step 3: Add Database (optional, for saving projects)
 
-| Variable | Value | Notes |
-|----------|-------|-------|
-| `DATABASE_URL` | `postgresql://...` | Connection string with pooling |
-| `DIRECT_URL` | `postgresql://...` | Direct connection (for migrations) |
+Only needed if you want to save projects. Skip this for basic usage.
 
-**For Vercel Postgres**, use:
-```
-DATABASE_URL = ${POSTGRES_PRISMA_URL}
-DIRECT_URL = ${POSTGRES_URL_NON_POOLING}
-```
+1. In Vercel dashboard → **Storage** → **Create Database** → **Postgres**
+2. Add environment variables:
+   ```
+   DATABASE_URL = ${POSTGRES_PRISMA_URL}
+   DIRECT_URL = ${POSTGRES_URL_NON_POOLING}
+   ```
+3. Redeploy
 
-**For Neon**, use:
-```
-DATABASE_URL = postgresql://user:pass@ep-xxx.region.aws.neon.tech/neondb?sslmode=require
-DIRECT_URL = postgresql://user:pass@ep-xxx.region.aws.neon.tech/neondb?sslmode=require
-```
+---
 
-### Step 4: Deploy
+## How It Works
 
-1. Click **Deploy** in Vercel
-2. Vercel will:
-   - Install dependencies
-   - Generate Prisma client
-   - Build the Vite app
-   - Deploy serverless API functions
+### Without Database (Default)
+- App loads with sample brand data
+- Enter a domain to fetch live ranked keywords via DataForSEO
+- Calculations work in-memory
+- Export to CSV
 
-### Step 5: Initialize Database
+### With Database
+- Create and save projects
+- Store brand keywords and ranked keywords
+- Track calculation history
 
-After first deployment, you need to push the Prisma schema to your database.
+---
 
-**Option A**: Use Vercel's "Run Command" feature in the dashboard
+## Environment Variables
 
-**Option B**: Connect via Prisma Studio
-1. In Vercel dashboard → Storage → Your database → Click "Open Prisma Studio"
-
-**Option C**: Run locally once (if you have Node.js):
-```bash
-cd frontend
-npm install
-npx prisma db push
-```
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `VITE_DATAFORSEO_LOGIN` | For live data | DataForSEO account email |
+| `VITE_DATAFORSEO_PASSWORD` | For live data | DataForSEO API password |
+| `DATABASE_URL` | Optional | PostgreSQL connection URL |
+| `DIRECT_URL` | Optional | PostgreSQL direct URL |
 
 ---
 
@@ -106,9 +88,7 @@ npx prisma db push
 | `/api/sample-data` | GET | Get sample brand and keyword data |
 | `/api/calculate` | POST | Calculate SOS, SOV, and Gap |
 | `/api/ranked-keywords` | POST | Fetch ranked keywords from DataForSEO |
-| `/api/projects` | GET/POST | List/create projects |
-| `/api/projects/[id]` | GET/PUT/DELETE | Manage single project |
-| `/api/projects/[id]/calculate` | POST | Calculate and save metrics |
+| `/api/projects` | GET/POST | List/create projects (requires DB) |
 
 ---
 
@@ -127,14 +107,12 @@ SOV = Sum(Keyword Volume × CTR at Position) / Total Market Volume × 100
 **Growth Gap**:
 ```
 Gap = SOV - SOS
-- Gap > 2: Growth potential (visibility exceeds awareness)
+- Gap > 2: Growth potential
 - Gap < -2: Missing opportunities
 - Gap ±2: Balanced
 ```
 
 ## CTR Curve
-
-Position-based click-through rates used for SOV calculation:
 
 | Position | CTR |
 |----------|-----|
@@ -147,13 +125,6 @@ Position-based click-through rates used for SOV calculation:
 | 11-20 | 1.2-0.2% |
 
 ---
-
-## Using the App
-
-1. **Sample Data**: The app loads with sample cosmetics brand data by default
-2. **DataForSEO Integration**: Expand the API Configuration panel to connect to DataForSEO for live data
-3. **Export**: Click "Export CSV" to download your analysis
-4. **Projects** (with database): Save analyses and track changes over time
 
 ## License
 

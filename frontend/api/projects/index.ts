@@ -1,7 +1,17 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { PrismaClient } from '@prisma/client';
 
-const prisma = new PrismaClient();
+// Dynamic import to handle missing Prisma client
+async function getPrismaClient() {
+  if (!process.env.DATABASE_URL) {
+    return null;
+  }
+  try {
+    const { PrismaClient } = await import('@prisma/client');
+    return new PrismaClient();
+  } catch {
+    return null;
+  }
+}
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -10,6 +20,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
+  }
+
+  const prisma = await getPrismaClient();
+
+  if (!prisma) {
+    return res.status(503).json({
+      error: 'Database not configured',
+      message: 'Projects feature requires DATABASE_URL environment variable. The app works without it using sample data.'
+    });
   }
 
   try {

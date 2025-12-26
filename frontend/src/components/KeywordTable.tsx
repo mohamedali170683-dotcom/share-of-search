@@ -13,20 +13,55 @@ interface SOSTableProps {
 
 type KeywordTableProps = SOVTableProps | SOSTableProps;
 
-type SortKey = 'keyword' | 'searchVolume' | 'position' | 'ctr' | 'visibleVolume' | 'isOwnBrand';
+type SortKey = 'keyword' | 'searchVolume' | 'position' | 'ctr' | 'visibleVolume' | 'isOwnBrand' | 'category';
 type SortDirection = 'asc' | 'desc';
 
-// Common topics/verticals for quick selection
-const SUGGESTED_TOPICS = [
-  'running shoes',
-  'natural cosmetics',
-  'organic food',
-  'fitness equipment',
-  'sustainable fashion',
-  'smart home',
-  'electric vehicles',
-  'vegan products'
+// Category patterns for keyword classification
+const CATEGORY_PATTERNS: { category: string; patterns: RegExp[] }[] = [
+  { category: 'Natural Cosmetics', patterns: [/natural|natur|bio|organic|öko|eco/i, /cosmetic|kosmetik|beauty|pflege/i] },
+  { category: 'Skincare', patterns: [/skin|haut|face|gesicht|cream|creme|serum|moistur|feucht/i] },
+  { category: 'Makeup', patterns: [/makeup|make-up|lipstick|mascara|foundation|eyeshadow|lippenstift|rouge|blush/i] },
+  { category: 'Hair Care', patterns: [/hair|haar|shampoo|conditioner|spülung/i] },
+  { category: 'Body Care', patterns: [/body|körper|lotion|shower|dusch|bath|bad|soap|seife/i] },
+  { category: 'Vegan Products', patterns: [/vegan|tierversuchsfrei|cruelty.?free/i] },
+  { category: 'Eco-Friendly', patterns: [/eco|öko|nachhaltig|sustainab|umwelt|green/i] },
+  { category: 'Anti-Aging', patterns: [/anti.?age|anti.?aging|wrinkle|falten|mature|reif/i] },
+  { category: 'Sun Care', patterns: [/sun|sonn|spf|uv|solar/i] },
+  { category: 'Lip Care', patterns: [/lip|lippe/i] },
+  { category: 'Eye Care', patterns: [/eye|auge/i] },
+  { category: 'Deodorant', patterns: [/deo|deodorant/i] },
+  { category: 'Certified Organic', patterns: [/certified|zertifiziert|natrue|ecocert|cosmos/i] },
 ];
+
+// Detect category for a keyword
+const detectCategory = (keyword: string): string => {
+  const keywordLower = keyword.toLowerCase();
+
+  for (const { category, patterns } of CATEGORY_PATTERNS) {
+    // Check if any pattern matches
+    const matches = patterns.filter(pattern => pattern.test(keywordLower));
+    if (matches.length > 0) {
+      return category;
+    }
+  }
+
+  // Try to extract a meaningful category from the keyword itself
+  const words = keywordLower.split(/\s+/);
+  if (words.length >= 2) {
+    // Use first two significant words as category
+    const significantWords = words.filter(w => w.length > 3).slice(0, 2);
+    if (significantWords.length > 0) {
+      return significantWords.map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+    }
+  }
+
+  return 'Other';
+};
+
+// Extended keyword with category
+interface CategorizedKeyword extends RankedKeyword {
+  category: string;
+}
 
 const getPositionBadgeClass = (position: number): string => {
   if (position <= 3) return 'bg-emerald-100 text-emerald-800';
@@ -34,32 +69,81 @@ const getPositionBadgeClass = (position: number): string => {
   return 'bg-gray-100 text-gray-600';
 };
 
+const getCategoryBadgeClass = (category: string): string => {
+  // Generate consistent color based on category name
+  const colors = [
+    'bg-purple-100 text-purple-800',
+    'bg-blue-100 text-blue-800',
+    'bg-pink-100 text-pink-800',
+    'bg-indigo-100 text-indigo-800',
+    'bg-teal-100 text-teal-800',
+    'bg-cyan-100 text-cyan-800',
+    'bg-rose-100 text-rose-800',
+    'bg-violet-100 text-violet-800',
+    'bg-fuchsia-100 text-fuchsia-800',
+    'bg-sky-100 text-sky-800',
+  ];
+
+  // Simple hash of category name to pick a color
+  let hash = 0;
+  for (let i = 0; i < category.length; i++) {
+    hash = category.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  return colors[Math.abs(hash) % colors.length];
+};
+
 export const KeywordTable: React.FC<KeywordTableProps> = (props) => {
   const [sortKey, setSortKey] = useState<SortKey>('searchVolume');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
-  const [topicFilter, setTopicFilter] = useState<string>('');
+  const [selectedCategory, setSelectedCategory] = useState<string>('');
 
-  // Filter keywords by topic for SOV
-  const filteredKeywords = useMemo(() => {
-    if (props.type !== 'sov' || !topicFilter.trim()) {
-      return props.keywords;
+  // Categorize all keywords
+  const categorizedKeywords = useMemo(() => {
+    if (props.type !== 'sov') return [];
+
+    return (props.keywords as RankedKeyword[]).map(kw => ({
+      ...kw,
+      category: detectCategory(kw.keyword)
+    })) as CategorizedKeyword[];
+  }, [props.keywords, props.type]);
+
+  // Get unique categories with counts, sorted by keyword count
+  const categoryStats = useMemo(() => {
+    if (props.type !== 'sov') return [];
+
+    const counts = new Map<string, { count: number; volume: number; visibleVolume: number }>();
+
+    for (const kw of categorizedKeywords) {
+      const existing = counts.get(kw.category) || { count: 0, volume: 0, visibleVolume: 0 };
+      counts.set(kw.category, {
+        count: existing.count + 1,
+        volume: existing.volume + kw.searchVolume,
+        visibleVolume: existing.visibleVolume + (kw.visibleVolume || 0)
+      });
     }
 
-    const filterWords = topicFilter.toLowerCase().split(/\s+/).filter(w => w.length > 2);
-    if (filterWords.length === 0) return props.keywords;
+    return Array.from(counts.entries())
+      .map(([category, stats]) => ({
+        category,
+        ...stats,
+        sov: stats.volume > 0 ? Math.round((stats.visibleVolume / stats.volume) * 100 * 10) / 10 : 0
+      }))
+      .sort((a, b) => b.count - a.count);
+  }, [categorizedKeywords, props.type]);
 
-    return (props.keywords as RankedKeyword[]).filter(kw => {
-      const keywordLower = kw.keyword.toLowerCase();
-      // Match if keyword contains any of the filter words
-      return filterWords.some(word => keywordLower.includes(word));
-    });
-  }, [props.keywords, props.type, topicFilter]);
+  // Filter keywords by selected category
+  const filteredKeywords = useMemo(() => {
+    if (props.type !== 'sov') return props.keywords;
+    if (!selectedCategory) return categorizedKeywords;
+
+    return categorizedKeywords.filter(kw => kw.category === selectedCategory);
+  }, [categorizedKeywords, selectedCategory, props.keywords, props.type]);
 
   // Calculate filtered SOV stats
   const filteredSOVStats = useMemo(() => {
     if (props.type !== 'sov') return null;
 
-    const keywords = filteredKeywords as RankedKeyword[];
+    const keywords = filteredKeywords as CategorizedKeyword[];
     const totalVisibleVolume = keywords.reduce((sum, kw) => sum + (kw.visibleVolume || 0), 0);
     const totalMarketVolume = keywords.reduce((sum, kw) => sum + kw.searchVolume, 0);
     const filteredSOV = totalMarketVolume > 0
@@ -93,14 +177,15 @@ export const KeywordTable: React.FC<KeywordTableProps> = (props) => {
     let bVal: string | number | boolean;
 
     if (props.type === 'sov') {
-      const aRanked = a as RankedKeyword;
-      const bRanked = b as RankedKeyword;
+      const aRanked = a as CategorizedKeyword;
+      const bRanked = b as CategorizedKeyword;
       switch (sortKey) {
         case 'keyword': aVal = aRanked.keyword; bVal = bRanked.keyword; break;
         case 'searchVolume': aVal = aRanked.searchVolume; bVal = bRanked.searchVolume; break;
         case 'position': aVal = aRanked.position; bVal = bRanked.position; break;
         case 'ctr': aVal = aRanked.ctr || 0; bVal = bRanked.ctr || 0; break;
         case 'visibleVolume': aVal = aRanked.visibleVolume || 0; bVal = bRanked.visibleVolume || 0; break;
+        case 'category': aVal = aRanked.category; bVal = bRanked.category; break;
         default: aVal = aRanked.searchVolume; bVal = bRanked.searchVolume;
       }
     } else {
@@ -132,58 +217,59 @@ export const KeywordTable: React.FC<KeywordTableProps> = (props) => {
           <p className="text-sm text-gray-500 mt-1">Rankings weighted by CTR to calculate visible search volume</p>
         </div>
 
-        {/* Topic/Vertical Filter */}
+        {/* Category Filter */}
         <div className="px-6 py-4 bg-gray-50 border-b border-gray-200">
-          <div className="flex flex-col gap-3">
+          <div className="flex flex-col gap-4">
             <div className="flex items-center gap-2">
               <svg className="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
               </svg>
-              <span className="text-sm font-medium text-gray-700">Filter by Topic/Vertical</span>
-            </div>
-
-            <div className="flex flex-wrap items-center gap-2">
-              <input
-                type="text"
-                value={topicFilter}
-                onChange={(e) => setTopicFilter(e.target.value)}
-                placeholder="e.g., running shoes, natural cosmetics..."
-                className="flex-1 min-w-[200px] px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
-              />
-              {topicFilter && (
+              <span className="text-sm font-medium text-gray-700">Filter by Category/Topic</span>
+              {selectedCategory && (
                 <button
-                  onClick={() => setTopicFilter('')}
-                  className="px-3 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-100"
+                  onClick={() => setSelectedCategory('')}
+                  className="ml-2 px-2 py-1 text-xs text-gray-600 border border-gray-300 rounded hover:bg-gray-100"
                 >
-                  Clear
+                  Show All
                 </button>
               )}
             </div>
 
-            {/* Quick topic suggestions */}
+            {/* Category chips with stats */}
             <div className="flex flex-wrap gap-2">
-              <span className="text-xs text-gray-500">Suggestions:</span>
-              {SUGGESTED_TOPICS.slice(0, 5).map((topic) => (
+              {categoryStats.map(({ category, count, sov }) => (
                 <button
-                  key={topic}
-                  onClick={() => setTopicFilter(topic)}
-                  className={`px-2 py-1 text-xs rounded-full transition-colors ${
-                    topicFilter === topic
-                      ? 'bg-orange-500 text-white'
-                      : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                  key={category}
+                  onClick={() => setSelectedCategory(selectedCategory === category ? '' : category)}
+                  className={`px-3 py-1.5 text-sm rounded-lg transition-all flex items-center gap-2 ${
+                    selectedCategory === category
+                      ? 'bg-orange-500 text-white shadow-md'
+                      : 'bg-white border border-gray-300 text-gray-700 hover:border-orange-400 hover:bg-orange-50'
                   }`}
                 >
-                  {topic}
+                  <span>{category}</span>
+                  <span className={`text-xs px-1.5 py-0.5 rounded-full ${
+                    selectedCategory === category
+                      ? 'bg-orange-600'
+                      : 'bg-gray-100'
+                  }`}>
+                    {count}
+                  </span>
+                  <span className={`text-xs ${
+                    selectedCategory === category ? 'text-orange-100' : 'text-gray-400'
+                  }`}>
+                    ({sov}%)
+                  </span>
                 </button>
               ))}
             </div>
 
-            {/* Filtered stats */}
-            {topicFilter && filteredSOVStats && (
+            {/* Selected category stats */}
+            {selectedCategory && filteredSOVStats && (
               <div className="flex items-center gap-4 p-3 bg-orange-50 border border-orange-200 rounded-lg">
                 <div className="flex items-center gap-2">
-                  <span className="text-sm text-orange-700">Filtered SOV:</span>
-                  <span className="text-lg font-bold text-orange-600">{filteredSOVStats.filteredSOV}%</span>
+                  <span className="text-sm text-orange-700 font-medium">{selectedCategory} SOV:</span>
+                  <span className="text-xl font-bold text-orange-600">{filteredSOVStats.filteredSOV}%</span>
                 </div>
                 <div className="text-sm text-orange-600">
                   {filteredSOVStats.keywordCount} keywords |
@@ -204,6 +290,12 @@ export const KeywordTable: React.FC<KeywordTableProps> = (props) => {
                   className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
                 >
                   Keyword{getSortIndicator('keyword')}
+                </th>
+                <th
+                  onClick={() => handleSort('category')}
+                  className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                >
+                  Category{getSortIndicator('category')}
                 </th>
                 <th
                   onClick={() => handleSort('searchVolume')}
@@ -235,10 +327,18 @@ export const KeywordTable: React.FC<KeywordTableProps> = (props) => {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200">
-              {(sortedKeywords as RankedKeyword[]).map((kw, idx) => (
+              {(sortedKeywords as CategorizedKeyword[]).map((kw, idx) => (
                 <tr key={idx} className="hover:bg-gray-50">
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
                     {kw.keyword}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <button
+                      onClick={() => setSelectedCategory(selectedCategory === kw.category ? '' : kw.category)}
+                      className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium cursor-pointer hover:opacity-80 ${getCategoryBadgeClass(kw.category)}`}
+                    >
+                      {kw.category}
+                    </button>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600 text-right">
                     {kw.searchVolume.toLocaleString()}
@@ -254,7 +354,7 @@ export const KeywordTable: React.FC<KeywordTableProps> = (props) => {
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-emerald-600 text-right">
                     {kw.visibleVolume?.toLocaleString()}
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 max-w-xs truncate">
                     {kw.url}
                   </td>
                 </tr>
@@ -262,6 +362,19 @@ export const KeywordTable: React.FC<KeywordTableProps> = (props) => {
             </tbody>
           </table>
         </div>
+
+        {/* Summary row */}
+        {filteredSOVStats && (
+          <div className="px-6 py-3 bg-gray-50 border-t border-gray-200 flex justify-between text-sm">
+            <span className="text-gray-600">
+              Showing {filteredSOVStats.keywordCount} keywords
+              {selectedCategory && ` in "${selectedCategory}"`}
+            </span>
+            <span className="font-medium text-gray-900">
+              Total Visible Volume: {filteredSOVStats.totalVisibleVolume.toLocaleString()}
+            </span>
+          </div>
+        )}
       </div>
     );
   }

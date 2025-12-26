@@ -146,12 +146,13 @@ export async function getTrends(
   locationCode: number,
   languageCode: string,
   login: string,
-  password: string
+  password: string,
+  customCompetitors?: string[]
 ): Promise<TrendsData> {
   const response = await fetch(`${API_BASE}/trends`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ domain, locationCode, languageCode, login, password })
+    body: JSON.stringify({ domain, locationCode, languageCode, login, password, customCompetitors })
   });
   if (!response.ok) {
     const error = await response.json();

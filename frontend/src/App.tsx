@@ -21,6 +21,7 @@ function App() {
     domain: string;
     locationCode: number;
     languageCode: string;
+    customCompetitors?: string[];
   } | null>(null);
 
   // Custom metric overrides from table filters
@@ -134,7 +135,8 @@ function App() {
         lastFetchConfig.locationCode,
         lastFetchConfig.languageCode,
         lastFetchConfig.login,
-        lastFetchConfig.password
+        lastFetchConfig.password,
+        lastFetchConfig.customCompetitors // Pass custom competitors to trends API
       );
       setTrendsData(trends);
     } catch (err) {

@@ -58,19 +58,50 @@ function getVolumeForPeriod(monthlySearches: MonthlySearch[], monthsAgo: number)
   return sorted[0]?.search_volume || 0;
 }
 
-// Common competitor brands by industry
+// Common competitor brands by industry (must match brand-keywords.ts)
 const INDUSTRY_COMPETITORS: Record<string, string[]> = {
-  sportswear: ['nike', 'adidas', 'puma', 'reebok', 'under armour', 'new balance', 'asics'],
-  cosmetics: ['weleda', 'dr hauschka', 'alverde', 'lavera', 'sante', 'logona'],
-  fashion: ['zara', 'h&m', 'uniqlo', 'gap', 'mango', 'asos'],
-  tech: ['apple', 'samsung', 'google', 'microsoft', 'sony', 'huawei'],
+  // Tires / Wheels
+  tires: ['continental', 'michelin', 'goodyear', 'bridgestone', 'pirelli', 'dunlop', 'hankook', 'yokohama', 'firestone', 'falken', 'nokian', 'kumho', 'toyo'],
+
+  // Sportswear
+  sportswear: ['nike', 'adidas', 'puma', 'reebok', 'under armour', 'new balance', 'asics', 'fila', 'converse', 'vans'],
+
+  // Fashion
+  fashion: ['zara', 'h&m', 'uniqlo', 'gap', 'mango', 'asos', 'shein', 'primark'],
+
+  // Cosmetics
+  cosmetics: ['weleda', 'dr hauschka', 'alverde', 'lavera', 'sante', 'logona', 'primavera'],
+  beauty: ['loreal', 'maybelline', 'mac', 'nyx', 'revlon', 'clinique', 'estee lauder'],
+
+  // Tech
+  tech: ['apple', 'samsung', 'google', 'microsoft', 'sony', 'huawei', 'xiaomi'],
+
+  // Automotive
+  automotive: ['volkswagen', 'bmw', 'mercedes', 'audi', 'toyota', 'honda', 'ford', 'tesla'],
 };
 
 const BRAND_INDUSTRY_MAP: Record<string, string> = {
-  'nike': 'sportswear', 'adidas': 'sportswear', 'puma': 'sportswear',
+  // Tires
+  'continental': 'tires', 'michelin': 'tires', 'goodyear': 'tires', 'bridgestone': 'tires',
+  'pirelli': 'tires', 'dunlop': 'tires', 'hankook': 'tires', 'yokohama': 'tires',
+  'firestone': 'tires', 'falken': 'tires', 'nokian': 'tires', 'kumho': 'tires', 'toyo': 'tires',
+
+  // Sportswear
+  'nike': 'sportswear', 'adidas': 'sportswear', 'puma': 'sportswear', 'reebok': 'sportswear',
+  'under armour': 'sportswear', 'new balance': 'sportswear', 'asics': 'sportswear',
+
+  // Fashion
+  'zara': 'fashion', 'h&m': 'fashion', 'uniqlo': 'fashion', 'gap': 'fashion',
+
+  // Cosmetics
   'lavera': 'cosmetics', 'weleda': 'cosmetics', 'alverde': 'cosmetics',
-  'zara': 'fashion', 'h&m': 'fashion', 'uniqlo': 'fashion',
-  'apple': 'tech', 'samsung': 'tech', 'google': 'tech',
+  'loreal': 'beauty', 'maybelline': 'beauty',
+
+  // Tech
+  'apple': 'tech', 'samsung': 'tech', 'google': 'tech', 'microsoft': 'tech',
+
+  // Automotive
+  'volkswagen': 'automotive', 'bmw': 'automotive', 'mercedes': 'automotive', 'audi': 'automotive',
 };
 
 function extractBrandFromDomain(domain: string): string {
@@ -105,7 +136,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
-    const { domain, locationCode, languageCode, login, password } = req.body;
+    const { domain, locationCode, languageCode, login, password, customCompetitors } = req.body;
 
     if (!login || !password) {
       return res.status(400).json({ error: 'DataForSEO credentials required' });
@@ -114,7 +145,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const auth = Buffer.from(`${login}:${password}`).toString('base64');
     const brandName = extractBrandFromDomain(domain);
     const industry = detectIndustry(brandName);
-    const competitors = INDUSTRY_COMPETITORS[industry] || [];
+
+    // Use custom competitors if provided, otherwise use industry defaults
+    const competitors = customCompetitors && customCompetitors.length > 0
+      ? customCompetitors
+      : (INDUSTRY_COMPETITORS[industry] || []);
 
     // Fetch brand keywords with monthly data
     const brandKeywordsToFetch = [

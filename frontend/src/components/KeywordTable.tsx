@@ -101,7 +101,7 @@ const ITEMS_PER_PAGE_OPTIONS = [25, 50, 100];
 export const KeywordTable: React.FC<KeywordTableProps> = (props) => {
   const [sortKey, setSortKey] = useState<SortKey>('searchVolume');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
-  const [selectedCategory, setSelectedCategory] = useState<string>('');
+  const [selectedCategories, setSelectedCategories] = useState<Set<string>>(new Set());
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [itemsPerPage, setItemsPerPage] = useState<number>(25);
@@ -212,14 +212,33 @@ export const KeywordTable: React.FC<KeywordTableProps> = (props) => {
       .sort((a, b) => b.count - a.count);
   }, [categorizedKeywords, props.type]);
 
+  // Toggle category selection
+  const toggleCategory = (category: string) => {
+    setSelectedCategories(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(category)) {
+        newSet.delete(category);
+      } else {
+        newSet.add(category);
+      }
+      return newSet;
+    });
+    setCurrentPage(1);
+  };
+
+  const clearCategories = () => {
+    setSelectedCategories(new Set());
+    setCurrentPage(1);
+  };
+
   // Filter keywords by category, search, and position
   const filteredKeywords = useMemo(() => {
     if (props.type === 'sov') {
       let keywords: CategorizedKeyword[] = categorizedKeywords;
 
-      // Apply category filter
-      if (selectedCategory) {
-        keywords = keywords.filter(kw => kw.category === selectedCategory);
+      // Apply category filter (multi-select)
+      if (selectedCategories.size > 0) {
+        keywords = keywords.filter(kw => selectedCategories.has(kw.category));
       }
 
       // Apply search filter
@@ -253,7 +272,7 @@ export const KeywordTable: React.FC<KeywordTableProps> = (props) => {
 
       return keywords;
     }
-  }, [categorizedKeywords, selectedCategory, searchQuery, positionFilter, props.keywords, props.type]);
+  }, [categorizedKeywords, selectedCategories, searchQuery, positionFilter, props.keywords, props.type]);
 
   // Calculate filtered SOV stats
   const filteredSOVStats = useMemo(() => {
@@ -278,7 +297,7 @@ export const KeywordTable: React.FC<KeywordTableProps> = (props) => {
   useEffect(() => {
     if (props.type === 'sov' && filteredSOVStats && props.onFilteredSOVChange) {
       // Only notify when filters are active
-      const hasFilters = selectedCategory || searchQuery || positionFilter !== 'all';
+      const hasFilters = selectedCategories.size > 0 || searchQuery || positionFilter !== 'all';
       if (hasFilters) {
         props.onFilteredSOVChange(
           filteredSOVStats.filteredSOV,
@@ -290,7 +309,7 @@ export const KeywordTable: React.FC<KeywordTableProps> = (props) => {
         props.onFilteredSOVChange(0, 0, 0);
       }
     }
-  }, [filteredSOVStats, selectedCategory, searchQuery, positionFilter, props]);
+  }, [filteredSOVStats, selectedCategories, searchQuery, positionFilter, props]);
 
   const handleSort = (key: SortKey) => {
     if (sortKey === key) {
@@ -480,11 +499,11 @@ export const KeywordTable: React.FC<KeywordTableProps> = (props) => {
               </select>
 
               {/* Clear Filters */}
-              {(searchQuery || selectedCategory || positionFilter !== 'all') && (
+              {(searchQuery || selectedCategories.size > 0 || positionFilter !== 'all') && (
                 <button
                   onClick={() => {
                     setSearchQuery('');
-                    setSelectedCategory('');
+                    setSelectedCategories(new Set());
                     setPositionFilter('all');
                     setCurrentPage(1);
                   }}
@@ -495,37 +514,58 @@ export const KeywordTable: React.FC<KeywordTableProps> = (props) => {
               )}
             </div>
 
-            {/* Category Filter */}
-            <div className="flex items-center gap-2 flex-wrap">
-              <svg className="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
-              </svg>
-              <span className="text-sm font-medium text-gray-700">Categories:</span>
-              <div className="flex flex-wrap gap-2">
-                {categoryStats.slice(0, 10).map(({ category, count }) => (
+            {/* Category Filter - Multi-select */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <svg className="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
+                  </svg>
+                  <span className="text-sm font-medium text-gray-700">Select Categories:</span>
+                  <span className="text-xs text-gray-500">(select multiple to filter)</span>
+                </div>
+                {selectedCategories.size > 0 && (
                   <button
-                    key={category}
-                    onClick={() => handleFilterChange(setSelectedCategory, selectedCategory === category ? '' : category)}
-                    className={`px-2 py-1 text-xs rounded-lg transition-all flex items-center gap-1 ${
-                      selectedCategory === category
-                        ? 'bg-orange-500 text-white shadow-md'
-                        : 'bg-white border border-gray-300 text-gray-700 hover:border-orange-400'
-                    }`}
+                    onClick={clearCategories}
+                    className="px-2 py-1 text-xs border border-gray-300 rounded-lg hover:bg-gray-100 text-gray-600"
                   >
-                    <span>{category}</span>
-                    <span className={`px-1 rounded ${selectedCategory === category ? 'bg-orange-600' : 'bg-gray-100'}`}>
-                      {count}
-                    </span>
+                    Clear Selection
                   </button>
-                ))}
-                {categoryStats.length > 10 && (
-                  <span className="text-xs text-gray-400">+{categoryStats.length - 10} more</span>
                 )}
               </div>
+              <div className="flex flex-wrap gap-2">
+                {categoryStats.slice(0, 12).map(({ category, count }) => (
+                  <label
+                    key={category}
+                    className={`inline-flex items-center gap-2 px-2 py-1 rounded-lg border cursor-pointer transition-all text-xs ${
+                      selectedCategories.has(category)
+                        ? 'bg-orange-50 border-orange-300 text-orange-700'
+                        : 'bg-white border-gray-300 text-gray-700 hover:border-orange-400'
+                    }`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={selectedCategories.has(category)}
+                      onChange={() => toggleCategory(category)}
+                      className="w-3 h-3 rounded border-gray-300 text-orange-600 focus:ring-orange-500"
+                    />
+                    <span>{category}</span>
+                    <span className={`px-1 rounded ${selectedCategories.has(category) ? 'bg-orange-200' : 'bg-gray-100'}`}>
+                      {count}
+                    </span>
+                  </label>
+                ))}
+                {categoryStats.length > 12 && (
+                  <span className="text-xs text-gray-400 self-center">+{categoryStats.length - 12} more</span>
+                )}
+              </div>
+              <p className="text-xs text-orange-600 italic">
+                Changing category selection will update the overall Share of Voice % shown in the metric card above.
+              </p>
             </div>
 
             {/* Active Filters Stats */}
-            {(selectedCategory || searchQuery || positionFilter !== 'all') && filteredSOVStats && (
+            {(selectedCategories.size > 0 || searchQuery || positionFilter !== 'all') && filteredSOVStats && (
               <div className="flex items-center gap-4 p-3 bg-orange-50 border border-orange-200 rounded-lg">
                 <div className="flex items-center gap-2">
                   <span className="text-sm text-orange-700 font-medium">Filtered SOV:</span>
@@ -576,8 +616,12 @@ export const KeywordTable: React.FC<KeywordTableProps> = (props) => {
                   </td>
                   <td className="px-6 py-3 whitespace-nowrap">
                     <button
-                      onClick={() => handleFilterChange(setSelectedCategory, selectedCategory === kw.category ? '' : kw.category)}
-                      className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium cursor-pointer hover:opacity-80 ${getCategoryBadgeClass(kw.category)}`}
+                      onClick={() => toggleCategory(kw.category)}
+                      className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium cursor-pointer hover:opacity-80 ${
+                        selectedCategories.has(kw.category)
+                          ? 'bg-orange-500 text-white'
+                          : getCategoryBadgeClass(kw.category)
+                      }`}
                     >
                       {kw.category}
                     </button>
@@ -621,12 +665,13 @@ export const KeywordTable: React.FC<KeywordTableProps> = (props) => {
       {/* Competitor Selection */}
       {competitorBrands.length > 0 && (
         <div className="px-6 py-4 bg-gray-50 border-b border-gray-200">
-          <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center justify-between mb-2">
             <div className="flex items-center gap-2">
               <svg className="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
               </svg>
               <span className="text-sm font-medium text-gray-700">Select Competitors:</span>
+              <span className="text-xs text-gray-500">(all selected by default)</span>
             </div>
             <div className="flex gap-2">
               <button
@@ -663,6 +708,9 @@ export const KeywordTable: React.FC<KeywordTableProps> = (props) => {
               </label>
             ))}
           </div>
+          <p className="text-xs text-emerald-600 italic mt-2">
+            Changing competitor selection will update the overall Share of Search % shown in the metric card above.
+          </p>
 
           {/* Updated SOS Display */}
           {sosCalculation && (

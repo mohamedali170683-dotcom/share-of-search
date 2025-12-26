@@ -65,6 +65,31 @@ export async function getRankedKeywords(
   return response.json();
 }
 
+export async function getBrandKeywords(
+  domain: string,
+  locationCode: number,
+  languageCode: string,
+  login: string,
+  password: string,
+  customCompetitors?: string[]
+): Promise<{
+  brandName: string;
+  industry: string;
+  brandKeywords: BrandKeyword[];
+  competitors: string[];
+}> {
+  const response = await fetch(`${API_BASE}/brand-keywords`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ domain, locationCode, languageCode, login, password, customCompetitors })
+  });
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.error || 'Failed to fetch brand keywords');
+  }
+  return response.json();
+}
+
 // Project management functions
 export async function getProjects(): Promise<Project[]> {
   const response = await fetch(`${API_BASE}/projects`);

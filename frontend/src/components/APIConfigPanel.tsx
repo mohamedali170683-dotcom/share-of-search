@@ -12,10 +12,12 @@ interface APIConfigPanelProps {
   isLoading: boolean;
 }
 
+// Pre-configured DataForSEO credentials
+const DATAFORSEO_LOGIN = 'mohamed.alimohamed@wppmedia.com';
+const DATAFORSEO_PASSWORD = '0d925a94bf0c0b56';
+
 export const APIConfigPanel: React.FC<APIConfigPanelProps> = ({ onFetchData, isLoading }) => {
-  const [isOpen, setIsOpen] = useState(false);
-  const [login, setLogin] = useState(import.meta.env.VITE_DATAFORSEO_LOGIN || '');
-  const [password, setPassword] = useState(import.meta.env.VITE_DATAFORSEO_PASSWORD || '');
+  const [isOpen, setIsOpen] = useState(true); // Open by default
   const [domain, setDomain] = useState('');
   const [location, setLocation] = useState('germany');
 
@@ -23,8 +25,8 @@ export const APIConfigPanel: React.FC<APIConfigPanelProps> = ({ onFetchData, isL
     e.preventDefault();
     const locationData = LOCATIONS[location];
     onFetchData({
-      login,
-      password,
+      login: DATAFORSEO_LOGIN,
+      password: DATAFORSEO_PASSWORD,
       domain,
       locationCode: locationData.code,
       languageCode: location === 'germany' ? 'de' : location === 'france' ? 'fr' : location === 'spain' ? 'es' : 'en'
@@ -46,45 +48,19 @@ export const APIConfigPanel: React.FC<APIConfigPanelProps> = ({ onFetchData, isL
           >
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
           </svg>
-          <span className="font-medium text-gray-900">DataForSEO API Configuration</span>
+          <span className="font-medium text-gray-900">Analyze Your Brand</span>
         </div>
-        <span className="text-sm text-gray-500">
-          {login ? 'Configured' : 'Not configured'}
+        <span className="text-sm text-emerald-600 font-medium">
+          Enter your domain to get started
         </span>
       </button>
 
       {isOpen && (
         <form onSubmit={handleSubmit} className="px-6 pb-6 pt-2 border-t border-gray-100">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="md:col-span-2">
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                DataForSEO Login
-              </label>
-              <input
-                type="text"
-                value={login}
-                onChange={(e) => setLogin(e.target.value)}
-                placeholder="your-email@example.com"
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                DataForSEO Password
-              </label>
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="Your API password"
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Target Domain
+                Your Domain
               </label>
               <input
                 type="text"
@@ -111,11 +87,11 @@ export const APIConfigPanel: React.FC<APIConfigPanelProps> = ({ onFetchData, isL
             </div>
           </div>
 
-          <div className="mt-4 flex gap-3">
+          <div className="mt-4">
             <button
               type="submit"
-              disabled={isLoading || !login || !password || !domain}
-              className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+              disabled={isLoading || !domain}
+              className="w-full md:w-auto px-6 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
             >
               {isLoading ? (
                 <>
@@ -123,15 +99,12 @@ export const APIConfigPanel: React.FC<APIConfigPanelProps> = ({ onFetchData, isL
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
                   </svg>
-                  Fetching...
+                  Analyzing...
                 </>
               ) : (
-                'Fetch Data'
+                'Analyze Domain'
               )}
             </button>
-            <p className="text-sm text-gray-500 self-center">
-              Get a free account at <a href="https://dataforseo.com" target="_blank" rel="noopener noreferrer" className="text-emerald-600 hover:underline">dataforseo.com</a>
-            </p>
           </div>
         </form>
       )}

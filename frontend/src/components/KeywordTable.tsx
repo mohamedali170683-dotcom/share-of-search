@@ -485,7 +485,15 @@ export const KeywordTable: React.FC<KeywordTableProps> = (props) => {
   }, [filteredKeywords, sortKey, sortDirection, props.type]);
 
   // Pagination
-  const totalPages = Math.ceil(sortedKeywords.length / itemsPerPage);
+  const totalPages = Math.ceil(sortedKeywords.length / itemsPerPage) || 1;
+
+  // Ensure currentPage is valid when totalPages changes
+  useEffect(() => {
+    if (currentPage > totalPages) {
+      setCurrentPage(Math.max(1, totalPages));
+    }
+  }, [totalPages, currentPage]);
+
   const paginatedKeywords = sortedKeywords.slice(
     (currentPage - 1) * itemsPerPage,
     currentPage * itemsPerPage
@@ -499,20 +507,33 @@ export const KeywordTable: React.FC<KeywordTableProps> = (props) => {
 
   // Pagination component
   const Pagination = () => {
-    if (sortedKeywords.length <= ITEMS_PER_PAGE_OPTIONS[0]) return null;
+    if (totalPages <= 1) return null;
 
     const pageNumbers: (number | string)[] = [];
-    const maxVisiblePages = 5;
+    const maxVisiblePages = 7;
 
     if (totalPages <= maxVisiblePages) {
+      // Show all pages if total is small
       for (let i = 1; i <= totalPages; i++) pageNumbers.push(i);
     } else {
-      if (currentPage <= 3) {
-        pageNumbers.push(1, 2, 3, 4, '...', totalPages);
-      } else if (currentPage >= totalPages - 2) {
-        pageNumbers.push(1, '...', totalPages - 3, totalPages - 2, totalPages - 1, totalPages);
+      // Always show first page
+      pageNumbers.push(1);
+
+      if (currentPage <= 4) {
+        // Near the beginning
+        for (let i = 2; i <= 5; i++) pageNumbers.push(i);
+        pageNumbers.push('...');
+        pageNumbers.push(totalPages);
+      } else if (currentPage >= totalPages - 3) {
+        // Near the end
+        pageNumbers.push('...');
+        for (let i = totalPages - 4; i <= totalPages; i++) pageNumbers.push(i);
       } else {
-        pageNumbers.push(1, '...', currentPage - 1, currentPage, currentPage + 1, '...', totalPages);
+        // In the middle
+        pageNumbers.push('...');
+        for (let i = currentPage - 1; i <= currentPage + 1; i++) pageNumbers.push(i);
+        pageNumbers.push('...');
+        pageNumbers.push(totalPages);
       }
     }
 

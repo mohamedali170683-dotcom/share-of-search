@@ -207,6 +207,12 @@ export interface ContentGap {
   totalVolume: number;
   topMissingKeywords: string[];
   priority: 'high' | 'medium' | 'low';
+  // Enhanced fields
+  existingUrls: string[]; // URLs you already have for this category
+  weakKeywords: { keyword: string; position: number; volume: number; url: string }[];
+  reasoning: string; // Detailed explanation of why this is a gap
+  suggestedContentTypes: string[]; // Types of content to create
+  estimatedTrafficGain: number; // Estimated additional traffic if gap is filled
 }
 
 // Full Actionable Insights Data

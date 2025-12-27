@@ -296,10 +296,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
-    const { domain, locationCode, languageCode, limit = 1000, login, password } = req.body;
+    const { domain, locationCode, languageCode, limit = 1000 } = req.body;
+
+    // Use environment variables for API credentials
+    const login = process.env.DATAFORSEO_LOGIN;
+    const password = process.env.DATAFORSEO_PASSWORD;
 
     if (!login || !password) {
-      return res.status(400).json({ error: 'DataForSEO credentials required' });
+      return res.status(500).json({ error: 'DataForSEO credentials not configured on server' });
     }
 
     const auth = Buffer.from(`${login}:${password}`).toString('base64');

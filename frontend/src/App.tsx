@@ -5,10 +5,6 @@ import { calculateMetrics, getRankedKeywords, getBrandKeywords, getTrends, expor
 import { getProjects, saveProject, deleteProject } from './services/projectStorage';
 import type { TrendsData } from './services/api';
 
-// Hardcoded API credentials (in production, these would be in environment variables or backend)
-const API_LOGIN = 'ali.bahassan@gmail.com';
-const API_PASSWORD = '1e2dd597c9185a02';
-
 type ViewMode = 'dashboard' | 'analysis' | 'project';
 
 function App() {
@@ -86,16 +82,12 @@ function App() {
           config.domain,
           config.locationCode,
           config.languageCode,
-          100,
-          API_LOGIN,
-          API_PASSWORD
+          100
         ),
         getBrandKeywords(
           config.domain,
           config.locationCode,
           config.languageCode,
-          API_LOGIN,
-          API_PASSWORD,
           config.customCompetitors
         )
       ]);
@@ -184,8 +176,6 @@ function App() {
         currentDomain,
         currentLocation.code,
         currentLanguage,
-        API_LOGIN,
-        API_PASSWORD,
         actualCompetitors.length > 0 ? actualCompetitors : undefined
       );
       setTrendsData(trends);

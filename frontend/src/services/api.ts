@@ -49,14 +49,12 @@ export async function getRankedKeywords(
   domain: string,
   locationCode: number,
   languageCode: string,
-  limit: number,
-  login: string,
-  password: string
+  limit: number
 ): Promise<{ results: RankedKeyword[] }> {
   const response = await fetch(`${API_BASE}/ranked-keywords`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ domain, locationCode, languageCode, limit, login, password })
+    body: JSON.stringify({ domain, locationCode, languageCode, limit })
   });
   if (!response.ok) {
     const error = await response.json();
@@ -69,8 +67,6 @@ export async function getBrandKeywords(
   domain: string,
   locationCode: number,
   languageCode: string,
-  login: string,
-  password: string,
   customCompetitors?: string[]
 ): Promise<{
   brandName: string;
@@ -81,7 +77,7 @@ export async function getBrandKeywords(
   const response = await fetch(`${API_BASE}/brand-keywords`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ domain, locationCode, languageCode, login, password, customCompetitors })
+    body: JSON.stringify({ domain, locationCode, languageCode, customCompetitors })
   });
   if (!response.ok) {
     const error = await response.json();
@@ -145,14 +141,12 @@ export async function getTrends(
   domain: string,
   locationCode: number,
   languageCode: string,
-  login: string,
-  password: string,
   customCompetitors?: string[]
 ): Promise<TrendsData> {
   const response = await fetch(`${API_BASE}/trends`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ domain, locationCode, languageCode, login, password, customCompetitors })
+    body: JSON.stringify({ domain, locationCode, languageCode, customCompetitors })
   });
   if (!response.ok) {
     const error = await response.json();

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { MetricCard, KeywordTable, APIConfigPanel, TrendsPanel } from './components';
+import { MetricCard, KeywordTable, APIConfigPanel, TrendsPanel, MethodologyPage } from './components';
 import type { BrandKeyword, RankedKeyword, SOSResult, SOVResult, GrowthGapResult } from './types';
 import { getSampleData, calculateMetrics, getRankedKeywords, getBrandKeywords, getTrends, exportToCSV } from './services/api';
 import type { TrendsData } from './services/api';
@@ -15,6 +15,7 @@ function App() {
   const [brandName, setBrandName] = useState<string>('');
   const [trendsData, setTrendsData] = useState<TrendsData | null>(null);
   const [trendsLoading, setTrendsLoading] = useState(false);
+  const [showMethodology, setShowMethodology] = useState(false);
   const [lastFetchConfig, setLastFetchConfig] = useState<{
     login: string;
     password: string;
@@ -199,6 +200,15 @@ function App() {
             </div>
             <div className="flex items-center gap-3">
               <button
+                onClick={() => setShowMethodology(true)}
+                className="px-4 py-2 text-purple-600 border border-purple-300 rounded-lg hover:bg-purple-50 flex items-center gap-2"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+                </svg>
+                Methodology
+              </button>
+              <button
                 onClick={loadSampleData}
                 disabled={isLoading}
                 className="px-4 py-2 text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 flex items-center gap-2"
@@ -378,6 +388,9 @@ function App() {
           </p>
         </div>
       </footer>
+
+      {/* Methodology Modal */}
+      {showMethodology && <MethodologyPage onClose={() => setShowMethodology(false)} />}
     </div>
   );
 }

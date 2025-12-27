@@ -526,37 +526,37 @@ export const KeywordTable: React.FC<KeywordTableProps> = (props) => {
     }
   };
 
-  // Pagination component
-  const Pagination = () => {
-    if (totalPages <= 1) return null;
-
+  // Generate page numbers for pagination
+  const getPageNumbers = (): (number | string)[] => {
     const pageNumbers: (number | string)[] = [];
     const maxVisiblePages = 7;
 
     if (totalPages <= maxVisiblePages) {
-      // Show all pages if total is small
       for (let i = 1; i <= totalPages; i++) pageNumbers.push(i);
     } else {
-      // Always show first page
       pageNumbers.push(1);
-
       if (currentPage <= 4) {
-        // Near the beginning
         for (let i = 2; i <= 5; i++) pageNumbers.push(i);
         pageNumbers.push('...');
         pageNumbers.push(totalPages);
       } else if (currentPage >= totalPages - 3) {
-        // Near the end
         pageNumbers.push('...');
         for (let i = totalPages - 4; i <= totalPages; i++) pageNumbers.push(i);
       } else {
-        // In the middle
         pageNumbers.push('...');
         for (let i = currentPage - 1; i <= currentPage + 1; i++) pageNumbers.push(i);
         pageNumbers.push('...');
         pageNumbers.push(totalPages);
       }
     }
+    return pageNumbers;
+  };
+
+  // Pagination JSX - rendered inline to avoid React component recreation issues
+  const renderPagination = () => {
+    if (totalPages <= 1) return null;
+
+    const pageNumbers = getPageNumbers();
 
     return (
       <div className="flex items-center justify-between px-6 py-3 bg-gray-50 border-t border-gray-200">
@@ -569,7 +569,8 @@ export const KeywordTable: React.FC<KeywordTableProps> = (props) => {
             name="itemsPerPage"
             value={itemsPerPage}
             onChange={(e) => {
-              setItemsPerPage(Number(e.target.value));
+              const newValue = Number(e.target.value);
+              setItemsPerPage(newValue);
               setCurrentPage(1);
             }}
             className="text-sm border border-gray-300 rounded px-2 py-1"
@@ -932,7 +933,7 @@ export const KeywordTable: React.FC<KeywordTableProps> = (props) => {
           </table>
         </div>
 
-        <Pagination />
+        {renderPagination()}
       </div>
     );
   }

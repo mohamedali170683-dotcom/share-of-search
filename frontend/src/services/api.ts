@@ -2,7 +2,8 @@ import type {
   BrandKeyword,
   RankedKeyword,
   CalculateResponse,
-  SampleDataResponse
+  SampleDataResponse,
+  BrandContext
 } from '../types';
 
 // Use relative paths for Vercel deployment, absolute for local development
@@ -151,6 +152,29 @@ export async function getTrends(
   if (!response.ok) {
     const error = await response.json();
     throw new Error(error.error || 'Failed to fetch trends data');
+  }
+  return response.json();
+}
+
+// Brand Context - AI-powered analysis of brand industry and vertical
+export async function getBrandContext(params: {
+  domain: string;
+  brandName: string;
+  topKeywords: string[];
+  competitors: string[];
+  avgPosition: number;
+  keywordCount: number;
+  sosValue: number;
+  sovValue: number;
+}): Promise<BrandContext> {
+  const response = await fetch(`${API_BASE}/brand-context`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(params)
+  });
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.error || 'Failed to analyze brand context');
   }
   return response.json();
 }

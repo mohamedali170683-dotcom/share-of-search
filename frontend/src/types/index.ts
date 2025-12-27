@@ -16,6 +16,8 @@ export interface BrandContext {
   keyStrengths: string[];
   marketPosition: string;
   seoFocus: string[];
+  brandDescription: string;
+  insightContext: string;
 }
 
 export interface RankedKeyword {

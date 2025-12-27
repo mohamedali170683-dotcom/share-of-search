@@ -15,3 +15,4 @@ export { ActionListPanel } from './ActionListPanel';
 export { HiddenGemsPanel } from './HiddenGemsPanel';
 export { CannibalizationPanel } from './CannibalizationPanel';
 export { ContentGapsPanel } from './ContentGapsPanel';
+export { BrandContextPanel } from './BrandContextPanel';

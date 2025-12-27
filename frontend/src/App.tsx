@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
-import { MetricCard, KeywordTable, TrendsPanel, MethodologyPage, FAQ, ProjectCard, AnalysisForm, QuickWinsPanel, CategoryBreakdownPanel, CompetitorStrengthPanel, ActionListPanel, HiddenGemsPanel, CannibalizationPanel, ContentGapsPanel } from './components';
-import type { BrandKeyword, RankedKeyword, SOSResult, SOVResult, GrowthGapResult, Project, ActionableInsights } from './types';
-import { calculateMetrics, getRankedKeywords, getBrandKeywords, getTrends, exportToCSV } from './services/api';
+import { MetricCard, KeywordTable, TrendsPanel, MethodologyPage, FAQ, ProjectCard, AnalysisForm, QuickWinsPanel, CategoryBreakdownPanel, CompetitorStrengthPanel, ActionListPanel, HiddenGemsPanel, CannibalizationPanel, ContentGapsPanel, BrandContextPanel } from './components';
+import type { BrandKeyword, RankedKeyword, SOSResult, SOVResult, GrowthGapResult, Project, ActionableInsights, BrandContext } from './types';
+import { calculateMetrics, getRankedKeywords, getBrandKeywords, getTrends, exportToCSV, getBrandContext } from './services/api';
 import { getProjects, saveProject, deleteProject } from './services/projectStorage';
 import { useTheme } from './contexts/ThemeContext';
 import type { TrendsData } from './services/api';
@@ -31,6 +31,8 @@ function App() {
   const [trendsData, setTrendsData] = useState<TrendsData | null>(null);
   const [trendsLoading, setTrendsLoading] = useState(false);
   const [showMethodology, setShowMethodology] = useState(false);
+  const [brandContext, setBrandContext] = useState<BrandContext | null>(null);
+  const [brandContextLoading, setBrandContextLoading] = useState(false);
   const [currentDomain, setCurrentDomain] = useState<string>('');
   const [currentLocation, setCurrentLocation] = useState<{ code: number; name: string }>({ code: 2276, name: 'Germany' });
   const [currentLanguage, setCurrentLanguage] = useState<string>('de');
@@ -83,6 +85,7 @@ function App() {
       setIsLoading(true);
       setError(null);
       setTrendsData(null);
+      setBrandContext(null);
       setCustomSOS(null);
       setCustomSOV(null);
       setCurrentDomain(config.domain);
@@ -131,6 +134,33 @@ function App() {
       setCurrentProject(newProject);
       setProjects(getProjects());
       setViewMode('analysis');
+
+      // Fetch brand context in the background
+      setBrandContextLoading(true);
+      try {
+        const topKeywords = calcResults.sov.keywordBreakdown
+          .slice(0, 20)
+          .map(kw => kw.keyword);
+        const avgPosition = calcResults.sov.keywordBreakdown.length > 0
+          ? calcResults.sov.keywordBreakdown.reduce((sum, kw) => sum + kw.position, 0) / calcResults.sov.keywordBreakdown.length
+          : 10;
+
+        const context = await getBrandContext({
+          domain: config.domain,
+          brandName: brandData.brandName,
+          topKeywords,
+          competitors: brandData.competitors || [],
+          avgPosition,
+          keywordCount: calcResults.sov.keywordBreakdown.length,
+          sosValue: calcResults.sos.shareOfSearch,
+          sovValue: calcResults.sov.shareOfVoice
+        });
+        setBrandContext(context);
+      } catch (contextErr) {
+        console.error('Failed to fetch brand context:', contextErr);
+      } finally {
+        setBrandContextLoading(false);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to analyze domain');
     } finally {
@@ -540,6 +570,13 @@ function App() {
               } : undefined}
             />
           </div>
+
+          {/* Brand Context Panel */}
+          {(brandContext || brandContextLoading) && (
+            <div className="mb-6 sm:mb-8">
+              <BrandContextPanel context={brandContext} isLoading={brandContextLoading} />
+            </div>
+          )}
 
           {/* Trends Section */}
           {sosResult && sovResult && (

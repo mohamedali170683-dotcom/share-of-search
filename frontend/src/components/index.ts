@@ -6,3 +6,12 @@ export { MethodologyPage } from './MethodologyPage';
 export { FAQ } from './FAQ';
 export { ProjectCard } from './ProjectCard';
 export { AnalysisForm } from './AnalysisForm';
+
+// Actionable Insights Components
+export { QuickWinsPanel } from './QuickWinsPanel';
+export { CategoryBreakdownPanel } from './CategoryBreakdownPanel';
+export { CompetitorStrengthPanel } from './CompetitorStrengthPanel';
+export { ActionListPanel } from './ActionListPanel';
+export { HiddenGemsPanel } from './HiddenGemsPanel';
+export { CannibalizationPanel } from './CannibalizationPanel';
+export { ContentGapsPanel } from './ContentGapsPanel';

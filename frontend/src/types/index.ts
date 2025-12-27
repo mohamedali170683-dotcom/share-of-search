@@ -2,6 +2,20 @@ export interface BrandKeyword {
   keyword: string;
   searchVolume: number;
   isOwnBrand: boolean;
+  isDiscarded?: boolean; // User can discard keywords from calculations
+}
+
+// Brand Context - Understanding the brand's industry and vertical
+export interface BrandContext {
+  brandName: string;
+  industry: string;
+  vertical: string;
+  productCategories: string[];
+  targetAudience: string;
+  competitorContext: string;
+  keyStrengths: string[];
+  marketPosition: string;
+  seoFocus: string[];
 }
 
 export interface RankedKeyword {
@@ -13,6 +27,9 @@ export interface RankedKeyword {
   visibleVolume?: number;
   category?: string; // Category from DataForSEO API
   categoryIds?: number[]; // Raw category IDs from DataForSEO
+  keywordDifficulty?: number; // 0-100 scale (from DataForSEO)
+  trend?: number; // YoY volume change percentage
+  isDiscarded?: boolean; // User can discard keywords from calculations
 }
 
 export interface SOSResult {
@@ -68,3 +85,143 @@ export const LOCATIONS: Record<string, { code: number; name: string }> = {
   france: { code: 2250, name: 'France' },
   spain: { code: 2724, name: 'Spain' }
 };
+
+// ==========================================
+// ACTIONABLE INSIGHTS TYPES
+// ==========================================
+
+// Quick Win Opportunity - Position 4-20 keywords with improvement potential
+export interface QuickWinOpportunity {
+  keyword: string;
+  currentPosition: number;
+  targetPosition: number;
+  searchVolume: number;
+  currentClicks: number;
+  potentialClicks: number;
+  clickUplift: number;
+  upliftPercentage: number;
+  effort: 'low' | 'medium' | 'high';
+  url: string;
+  category?: string;
+  isDiscarded?: boolean; // User can dismiss irrelevant quick wins
+  reasoning?: string; // Detailed explanation of why this is a quick win
+}
+
+// Category SOV Breakdown
+export interface CategorySOV {
+  category: string;
+  yourSOV: number;
+  yourVisibleVolume: number;
+  totalCategoryVolume: number;
+  keywordCount: number;
+  avgPosition: number;
+  topKeywords: string[];
+  status: 'leading' | 'competitive' | 'trailing' | 'weak';
+}
+
+// Competitor Analysis for a category
+export interface CompetitorCategoryAnalysis {
+  competitor: string;
+  category: string;
+  estimatedSOV: number;
+  keywordsWon: number;
+  keywordsLost: number;
+}
+
+// Head-to-head keyword battle
+export interface KeywordBattle {
+  keyword: string;
+  searchVolume: number;
+  yourPosition: number | null;
+  competitorPosition: number;
+  winner: 'you' | 'competitor' | 'tie';
+  visibilityDifference: number;
+}
+
+// Competitor Strength Data
+export interface CompetitorStrength {
+  competitor: string;
+  estimatedSOV: number;
+  keywordsAnalyzed: number;
+  headToHead: {
+    youWin: number;
+    theyWin: number;
+    ties: number;
+  };
+  dominantCategories: string[];
+  topWinningKeywords: KeywordBattle[];
+  topLosingKeywords: KeywordBattle[];
+}
+
+// Prioritized Action Item
+export interface ActionItem {
+  id: string;
+  actionType: 'optimize' | 'create' | 'monitor' | 'investigate';
+  priority: number; // 1-100
+  title: string;
+  description: string;
+  keyword?: string;
+  category?: string;
+  impact: 'high' | 'medium' | 'low';
+  effort: 'low' | 'medium' | 'high';
+  estimatedUplift: number;
+  reasoning: string;
+  isDiscarded?: boolean; // User can dismiss actions
+  detailedSteps?: string[]; // Step-by-step implementation guide
+}
+
+// Hidden Gem - Low competition, high potential keyword
+export interface HiddenGem {
+  keyword: string;
+  searchVolume: number;
+  keywordDifficulty: number;
+  position: number | null;
+  url?: string;
+  category?: string;
+  opportunity: 'first-mover' | 'easy-win' | 'rising-trend';
+  potentialClicks: number;
+  reasoning: string;
+}
+
+// Cannibalization Issue - Multiple URLs competing for same keyword
+export interface CannibalizationIssue {
+  keyword: string;
+  searchVolume: number;
+  competingUrls: {
+    url: string;
+    position: number;
+    visibleVolume: number;
+  }[];
+  recommendation: 'consolidate' | 'differentiate' | 'redirect';
+  impactScore: number; // How much traffic is being lost
+}
+
+// Content Gap - Topics where competitors have coverage you don't
+export interface ContentGap {
+  topic: string;
+  category: string;
+  yourCoverage: number; // Number of pages
+  avgCompetitorCoverage: number;
+  totalVolume: number;
+  topMissingKeywords: string[];
+  priority: 'high' | 'medium' | 'low';
+}
+
+// Full Actionable Insights Data
+export interface ActionableInsights {
+  quickWins: QuickWinOpportunity[];
+  categoryBreakdown: CategorySOV[];
+  competitorStrengths: CompetitorStrength[];
+  actionList: ActionItem[];
+  hiddenGems: HiddenGem[];
+  cannibalizationIssues: CannibalizationIssue[];
+  contentGaps: ContentGap[];
+  summary: {
+    totalQuickWinPotential: number;
+    strongCategories: number;
+    weakCategories: number;
+    hiddenGemsCount: number;
+    cannibalizationCount: number;
+    topPriorityAction: string;
+  };
+}

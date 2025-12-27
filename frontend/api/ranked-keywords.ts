@@ -6,6 +6,8 @@ interface RankedKeywordItem {
     keyword_info: {
       search_volume: number;
       categories?: number[]; // Google Ads category IDs
+      keyword_difficulty?: number; // 0-100 scale
+      monthly_searches?: Array<{ year: number; month: number; search_volume: number }>;
     };
   };
   ranked_serp_element: {
@@ -336,15 +338,34 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     const items = data.tasks?.[0]?.result?.[0]?.items || [];
-    const results = items.map((item: RankedKeywordItem) => ({
-      keyword: item.keyword_data.keyword,
-      searchVolume: item.keyword_data.keyword_info.search_volume || 0,
-      position: item.ranked_serp_element.serp_item.rank_group,
-      url: item.ranked_serp_element.serp_item.relative_url,
-      // Include category from DataForSEO if available
-      category: getCategoryName(item.keyword_data.keyword_info.categories),
-      categoryIds: item.keyword_data.keyword_info.categories || []
-    }));
+    const results = items.map((item: RankedKeywordItem) => {
+      // Calculate YoY trend from monthly searches if available
+      let trend: number | undefined;
+      const monthlySearches = item.keyword_data.keyword_info.monthly_searches;
+      if (monthlySearches && monthlySearches.length >= 12) {
+        const recentMonths = monthlySearches.slice(0, 3);
+        const yearAgoMonths = monthlySearches.slice(9, 12);
+        const recentAvg = recentMonths.reduce((sum, m) => sum + m.search_volume, 0) / 3;
+        const yearAgoAvg = yearAgoMonths.reduce((sum, m) => sum + m.search_volume, 0) / 3;
+        if (yearAgoAvg > 0) {
+          trend = Math.round(((recentAvg - yearAgoAvg) / yearAgoAvg) * 100);
+        }
+      }
+
+      return {
+        keyword: item.keyword_data.keyword,
+        searchVolume: item.keyword_data.keyword_info.search_volume || 0,
+        position: item.ranked_serp_element.serp_item.rank_group,
+        url: item.ranked_serp_element.serp_item.relative_url,
+        // Include category from DataForSEO if available
+        category: getCategoryName(item.keyword_data.keyword_info.categories),
+        categoryIds: item.keyword_data.keyword_info.categories || [],
+        // Include keyword difficulty for Hidden Gems analysis
+        keywordDifficulty: item.keyword_data.keyword_info.keyword_difficulty,
+        // Include YoY trend for rising keyword detection
+        trend
+      };
+    });
 
     return res.status(200).json({ results });
   } catch (error) {

@@ -2,6 +2,20 @@ export interface BrandKeyword {
   keyword: string;
   searchVolume: number;
   isOwnBrand: boolean;
+  isDiscarded?: boolean; // User can discard keywords from calculations
+}
+
+// Brand Context - Understanding the brand's industry and vertical
+export interface BrandContext {
+  brandName: string;
+  industry: string;
+  vertical: string;
+  productCategories: string[];
+  targetAudience: string;
+  competitorContext: string;
+  keyStrengths: string[];
+  marketPosition: string;
+  seoFocus: string[];
 }
 
 export interface RankedKeyword {
@@ -15,6 +29,7 @@ export interface RankedKeyword {
   categoryIds?: number[]; // Raw category IDs from DataForSEO
   keywordDifficulty?: number; // 0-100 scale (from DataForSEO)
   trend?: number; // YoY volume change percentage
+  isDiscarded?: boolean; // User can discard keywords from calculations
 }
 
 export interface SOSResult {
@@ -88,6 +103,8 @@ export interface QuickWinOpportunity {
   effort: 'low' | 'medium' | 'high';
   url: string;
   category?: string;
+  isDiscarded?: boolean; // User can dismiss irrelevant quick wins
+  reasoning?: string; // Detailed explanation of why this is a quick win
 }
 
 // Category SOV Breakdown
@@ -149,6 +166,8 @@ export interface ActionItem {
   effort: 'low' | 'medium' | 'high';
   estimatedUplift: number;
   reasoning: string;
+  isDiscarded?: boolean; // User can dismiss actions
+  detailedSteps?: string[]; // Step-by-step implementation guide
 }
 
 // Hidden Gem - Low competition, high potential keyword

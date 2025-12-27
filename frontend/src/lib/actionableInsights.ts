@@ -41,22 +41,101 @@ function calculateEffort(currentPosition: number, targetPosition: number): 'low'
 
 /**
  * Detect category from keyword (fallback when not provided by API)
+ * Comprehensive patterns covering multiple industries
  */
 function detectCategory(keyword: string): string {
+  const kw = keyword.toLowerCase();
+
   const patterns: { category: string; regex: RegExp }[] = [
-    { category: 'Natural Cosmetics', regex: /natural|natur|bio|organic/i },
-    { category: 'Skincare', regex: /skin|haut|face|gesicht|cream|creme|serum|moistur/i },
-    { category: 'Makeup', regex: /makeup|lipstick|mascara|foundation|lippenstift/i },
-    { category: 'Hair Care', regex: /hair|haar|shampoo|conditioner/i },
-    { category: 'Body Care', regex: /body|körper|lotion|shower|dusch/i },
-    { category: 'Vegan', regex: /vegan|cruelty.?free|tierversuchsfrei/i },
-    { category: 'Anti-Aging', regex: /anti.?age|anti.?aging|wrinkle|falten/i },
+    // Automotive / Tires (check specific first)
+    { category: 'Winter Tires', regex: /winter.?reifen|winter.?tire|winter.?tyre|schnee.?reifen|snow.?tire/i },
+    { category: 'Summer Tires', regex: /sommer.?reifen|summer.?tire|summer.?tyre/i },
+    { category: 'All-Season Tires', regex: /allwetter|ganzjahres|all.?season|4.?season/i },
+    { category: 'SUV/Truck Tires', regex: /suv.?reifen|suv.?tire|truck.?tire|geländewagen|offroad/i },
+    { category: 'Performance Tires', regex: /sport.?reifen|performance|uhp|ultra.?high|racing/i },
+    { category: 'Tires', regex: /\breifen\b|\btire[s]?\b|\btyre[s]?\b|pneu|pneumatic/i },
+    { category: 'Wheels & Rims', regex: /felge|rim\b|wheel\b|alufelge|alloy/i },
+    { category: 'Tire Services', regex: /reifenwechsel|tire.?change|mounting|balancing|rotation/i },
+    { category: 'Automotive', regex: /\bauto\b|\bcar\b|fahrzeug|vehicle|kfz|pkw/i },
+
+    // Beauty & Personal Care
+    { category: 'Anti-Aging', regex: /anti.?age|anti.?aging|anti.?falten|wrinkle|retinol|collagen/i },
+    { category: 'Skincare', regex: /skincare|skin.?care|hautpflege|face.?cream|gesichtscreme|serum|moistur|cleanser/i },
+    { category: 'Makeup', regex: /makeup|make-up|lipstick|mascara|foundation|eyeshadow|lippenstift|rouge|blush|concealer/i },
+    { category: 'Hair Care', regex: /hair.?care|haarpflege|shampoo|conditioner|spülung|haarkur/i },
+    { category: 'Body Care', regex: /body.?care|körperpflege|body.?lotion|duschgel|shower|bodywash/i },
+    { category: 'Natural Cosmetics', regex: /natural.?cosmetic|natur.?kosmetik|bio.?cosmetic|organic.?beauty/i },
+    { category: 'Fragrances', regex: /perfume|parfum|fragrance|duft|eau.?de|cologne/i },
+    { category: 'Sun Care', regex: /sun.?care|sonnenschutz|sunscreen|spf|uv.?schutz|sonnencreme/i },
+
+    // Sports & Athletic
+    { category: 'Running', regex: /running|laufschuh|jogging|marathon|trail.?run/i },
+    { category: 'Football/Soccer', regex: /football|fußball|soccer|fussball/i },
+    { category: 'Training', regex: /training|workout|fitness|gym\b|exercise/i },
+    { category: 'Sneakers', regex: /sneaker|sportschuh|trainer\b|athletic.?shoe/i },
+    { category: 'Outdoor', regex: /outdoor|hiking|wandern|camping|trekking/i },
+    { category: 'Cycling', regex: /cycling|fahrrad|bike|bicycle|radfahren/i },
+
+    // Fashion
+    { category: 'Apparel', regex: /\bshirt\b|hoodie|jacket|jacke|pants|hose|shorts|dress|kleid/i },
+    { category: 'Footwear', regex: /\bshoe[s]?\b|schuh|boots|stiefel|sandal/i },
+    { category: 'Accessories', regex: /accessory|accessories|bag|tasche|wallet|belt|gürtel|hat|mütze/i },
+
+    // Technology
+    { category: 'Smartphones', regex: /smartphone|iphone|samsung.?galaxy|mobile.?phone|handy/i },
+    { category: 'Laptops', regex: /laptop|notebook|macbook|computer/i },
+    { category: 'Audio', regex: /headphone|kopfhörer|speaker|lautsprecher|earbuds|audio/i },
+    { category: 'Smart Home', regex: /smart.?home|alexa|google.?home|iot|connected/i },
+
+    // Sustainability
+    { category: 'Eco-Friendly', regex: /eco.?friendly|öko|nachhaltig|sustainab|umweltfreundlich|green/i },
+    { category: 'Vegan', regex: /\bvegan\b|tierversuchsfrei|cruelty.?free|plant.?based/i },
+
+    // Services
+    { category: 'Dealer Locator', regex: /händler|dealer|store.?locator|find.?a.?store|standort/i },
+    { category: 'Contact', regex: /kontakt|contact|customer.?service|kundenservice|support/i },
+    { category: 'Warranty', regex: /garantie|warranty|gewährleistung/i },
   ];
 
   for (const { category, regex } of patterns) {
-    if (regex.test(keyword)) return category;
+    if (regex.test(kw)) return category;
   }
-  return 'General';
+  return 'Other';
+}
+
+/**
+ * Generate detailed reasoning for why this is a quick win
+ */
+function generateQuickWinReasoning(
+  kw: RankedKeyword,
+  targetPosition: number,
+  clickUplift: number,
+  upliftPercentage: number
+): string {
+  const reasons: string[] = [];
+
+  // Position-based reasoning
+  if (kw.position >= 4 && kw.position <= 6) {
+    reasons.push(`Already on page 1 (#${kw.position}) - small optimization could push to top 3`);
+  } else if (kw.position >= 7 && kw.position <= 10) {
+    reasons.push(`Bottom of page 1 (#${kw.position}) - improving to top 5 dramatically increases visibility`);
+  } else if (kw.position >= 11 && kw.position <= 15) {
+    reasons.push(`Top of page 2 (#${kw.position}) - pushing to page 1 is crucial for traffic`);
+  } else {
+    reasons.push(`Position #${kw.position} has room for improvement with focused optimization`);
+  }
+
+  // Volume-based reasoning
+  if (kw.searchVolume >= 10000) {
+    reasons.push(`High-volume keyword (${kw.searchVolume.toLocaleString()} monthly searches)`);
+  } else if (kw.searchVolume >= 1000) {
+    reasons.push(`Good search volume with ${kw.searchVolume.toLocaleString()} monthly searches`);
+  }
+
+  // Uplift reasoning
+  reasons.push(`Moving to position #${targetPosition} could yield +${clickUplift.toLocaleString()} clicks (${upliftPercentage}% increase)`);
+
+  return reasons.join('. ') + '.';
 }
 
 /**
@@ -99,7 +178,8 @@ export function calculateQuickWins(
       upliftPercentage,
       effort: calculateEffort(kw.position, targetPosition),
       url: kw.url || '',
-      category: kw.category || detectCategory(kw.keyword)
+      category: kw.category || detectCategory(kw.keyword),
+      reasoning: generateQuickWinReasoning(kw, targetPosition, clickUplift, upliftPercentage)
     });
   }
 
@@ -451,7 +531,7 @@ export function detectCannibalization(
 
 /**
  * Analyze content gaps by category
- * Compares your coverage vs what the market opportunity suggests
+ * Identifies categories where you're underperforming and need more/better content
  */
 export function analyzeContentGaps(
   rankedKeywords: RankedKeyword[],
@@ -460,20 +540,40 @@ export function analyzeContentGaps(
   // Group ranked keywords by category
   const categoryData = new Map<string, {
     yourKeywords: RankedKeyword[];
+    uniqueUrls: Set<string>;
     totalVolume: number;
-    avgPosition: number;
+    positionSum: number;
+    weakKeywords: RankedKeyword[]; // Position > 10
+    page2Keywords: RankedKeyword[]; // Position 11-20
   }>();
 
   for (const kw of rankedKeywords) {
     const category = kw.category || detectCategory(kw.keyword);
+
+    // Skip the "Other" category as it's not actionable
+    if (category === 'Other') continue;
+
     const existing = categoryData.get(category) || {
       yourKeywords: [],
+      uniqueUrls: new Set<string>(),
       totalVolume: 0,
-      avgPosition: 0
+      positionSum: 0,
+      weakKeywords: [],
+      page2Keywords: []
     };
 
     existing.yourKeywords.push(kw);
+    if (kw.url) existing.uniqueUrls.add(kw.url);
     existing.totalVolume += kw.searchVolume;
+    existing.positionSum += kw.position;
+
+    if (kw.position > 10) {
+      existing.weakKeywords.push(kw);
+    }
+    if (kw.position >= 11 && kw.position <= 20) {
+      existing.page2Keywords.push(kw);
+    }
+
     categoryData.set(category, existing);
   }
 
@@ -481,33 +581,54 @@ export function analyzeContentGaps(
   const contentGaps: ContentGap[] = [];
 
   for (const [category, data] of categoryData) {
+    // Skip categories with very few keywords (not enough data)
+    if (data.yourKeywords.length < 3) continue;
 
-    // Estimate expected coverage based on category volume
-    const expectedCoverage = Math.ceil(data.totalVolume / 1000); // 1 page per 1000 volume
-    const yourCoverage = data.yourKeywords.length;
+    const avgPosition = data.positionSum / data.yourKeywords.length;
+    const yourPageCount = data.uniqueUrls.size; // Actual pages you have
+    const weakKeywordCount = data.weakKeywords.length;
+    const page2Count = data.page2Keywords.length;
 
-    // Only flag if significant gap exists
-    if (expectedCoverage <= yourCoverage * 1.5) continue;
+    // Calculate a "content opportunity score"
+    // Based on: high volume keywords where you rank poorly
+    const highVolumeWeakKeywords = data.weakKeywords
+      .filter(k => k.searchVolume >= 500)
+      .sort((a, b) => b.searchVolume - a.searchVolume);
 
-    // Find keywords where you're weakest (position > 15 or no ranking)
-    const weakKeywords = data.yourKeywords
-      .filter(k => k.position > 15)
-      .sort((a, b) => b.searchVolume - a.searchVolume)
+    // Realistic suggestion: 1 new page per 3-5 weak high-volume keywords
+    // Max suggestion: 10 new pages per category
+    const suggestedNewContent = Math.min(
+      10,
+      Math.ceil(highVolumeWeakKeywords.length / 3)
+    );
+
+    // Only flag if there's a meaningful gap
+    const hasGap = (
+      avgPosition > 8 || // Average position is page 2
+      weakKeywordCount > data.yourKeywords.length * 0.4 || // More than 40% weak
+      page2Count >= 5 // At least 5 keywords on page 2
+    );
+
+    if (!hasGap || suggestedNewContent === 0) continue;
+
+    // Get top missing keywords (highest volume, worst position)
+    const topMissingKeywords = highVolumeWeakKeywords
       .slice(0, 5)
       .map(k => k.keyword);
 
-    const gapSize = expectedCoverage - yourCoverage;
+    // Determine priority based on opportunity size
+    const opportunityVolume = highVolumeWeakKeywords.reduce((sum, k) => sum + k.searchVolume, 0);
     const priority: ContentGap['priority'] =
-      gapSize > 10 ? 'high' :
-      gapSize > 5 ? 'medium' : 'low';
+      opportunityVolume > 50000 ? 'high' :
+      opportunityVolume > 10000 ? 'medium' : 'low';
 
     contentGaps.push({
       topic: category,
       category,
-      yourCoverage,
-      avgCompetitorCoverage: expectedCoverage, // Estimated
+      yourCoverage: yourPageCount,
+      avgCompetitorCoverage: yourPageCount + suggestedNewContent, // Suggested total
       totalVolume: data.totalVolume,
-      topMissingKeywords: weakKeywords,
+      topMissingKeywords,
       priority
     });
   }

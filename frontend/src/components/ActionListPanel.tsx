@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import type { ActionItem } from '../types';
 
 interface ActionListPanelProps {
   actions: ActionItem[];
+  onDiscardChange?: (discardedIds: Set<string>) => void;
 }
 
 const getActionTypeConfig = (type: ActionItem['actionType']) => {
@@ -71,22 +72,75 @@ const getPriorityColor = (priority: number) => {
   return 'bg-gray-400';
 };
 
-export const ActionListPanel: React.FC<ActionListPanelProps> = ({ actions }) => {
+export const ActionListPanel: React.FC<ActionListPanelProps> = ({ actions, onDiscardChange }) => {
   const [filterType, setFilterType] = useState<'all' | ActionItem['actionType']>('all');
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [discardedIds, setDiscardedIds] = useState<Set<string>>(new Set());
+  const [showDiscarded, setShowDiscarded] = useState(false);
 
-  const filteredActions = actions.filter(
-    action => filterType === 'all' || action.actionType === filterType
-  );
-
-  const typeCounts = {
-    optimize: actions.filter(a => a.actionType === 'optimize').length,
-    create: actions.filter(a => a.actionType === 'create').length,
-    monitor: actions.filter(a => a.actionType === 'monitor').length,
-    investigate: actions.filter(a => a.actionType === 'investigate').length
+  // Toggle discard state for an action
+  const toggleDiscard = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setDiscardedIds(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(id)) {
+        newSet.delete(id);
+      } else {
+        newSet.add(id);
+      }
+      onDiscardChange?.(newSet);
+      return newSet;
+    });
   };
 
-  const totalEstimatedUplift = actions.reduce((sum, a) => sum + a.estimatedUplift, 0);
+  // Filter actions by type and discard status
+  const filteredActions = useMemo(() => {
+    return actions.filter(action => {
+      const matchesType = filterType === 'all' || action.actionType === filterType;
+      const isDiscarded = discardedIds.has(action.id);
+      return matchesType && (showDiscarded || !isDiscarded);
+    });
+  }, [actions, filterType, discardedIds, showDiscarded]);
+
+  const discardedCount = discardedIds.size;
+
+  // Export to CSV
+  const exportToCSV = () => {
+    const activeActions = actions.filter(a => !discardedIds.has(a.id));
+    const headers = ['Priority', 'Type', 'Impact', 'Effort', 'Title', 'Description', 'Keyword', 'Category', 'Est. Clicks', 'Reasoning'];
+    const rows = activeActions.map((a, idx) => [
+      idx + 1,
+      a.actionType,
+      a.impact,
+      a.effort,
+      `"${a.title.replace(/"/g, '""')}"`,
+      `"${a.description.replace(/"/g, '""')}"`,
+      a.keyword || '',
+      a.category || '',
+      a.estimatedUplift,
+      `"${a.reasoning.replace(/"/g, '""')}"`
+    ]);
+
+    const csv = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'action-list.csv';
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  // Count actions excluding discarded ones
+  const activeActions = actions.filter(a => !discardedIds.has(a.id));
+  const typeCounts = {
+    optimize: activeActions.filter(a => a.actionType === 'optimize').length,
+    create: activeActions.filter(a => a.actionType === 'create').length,
+    monitor: activeActions.filter(a => a.actionType === 'monitor').length,
+    investigate: activeActions.filter(a => a.actionType === 'investigate').length
+  };
+
+  const totalEstimatedUplift = activeActions.reduce((sum, a) => sum + a.estimatedUplift, 0);
 
   if (actions.length === 0) {
     return (
@@ -119,14 +173,50 @@ export const ActionListPanel: React.FC<ActionListPanelProps> = ({ actions }) => 
             </p>
           </div>
 
-          {/* Total Uplift */}
-          <div className="px-4 py-2 bg-indigo-50 dark:bg-indigo-900/20 rounded-lg text-center">
-            <div className="text-2xl font-bold text-indigo-600 dark:text-indigo-400">
-              +{totalEstimatedUplift.toLocaleString()}
+          {/* Actions */}
+          <div className="flex items-center gap-3">
+            {/* Total Uplift */}
+            <div className="px-4 py-2 bg-indigo-50 dark:bg-indigo-900/20 rounded-lg text-center">
+              <div className="text-2xl font-bold text-indigo-600 dark:text-indigo-400">
+                +{totalEstimatedUplift.toLocaleString()}
+              </div>
+              <div className="text-xs text-indigo-700 dark:text-indigo-300">total estimated clicks</div>
             </div>
-            <div className="text-xs text-indigo-700 dark:text-indigo-300">total estimated clicks</div>
+
+            {/* Export Button */}
+            <button
+              onClick={exportToCSV}
+              className="flex items-center gap-1 px-3 py-2 text-sm bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200"
+              title="Export to CSV"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+              </svg>
+              CSV
+            </button>
           </div>
         </div>
+
+        {/* Dismissed Toggle */}
+        {discardedCount > 0 && (
+          <div className="mt-3 flex items-center justify-between">
+            <button
+              onClick={() => setShowDiscarded(!showDiscarded)}
+              className="text-sm text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 flex items-center gap-1"
+            >
+              <svg className={`w-4 h-4 transition-transform ${showDiscarded ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              </svg>
+              {showDiscarded ? 'Hide' : 'Show'} {discardedCount} dismissed action{discardedCount !== 1 ? 's' : ''}
+            </button>
+            <button
+              onClick={() => setDiscardedIds(new Set())}
+              className="text-xs text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300"
+            >
+              Restore all
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Filter Bar */}
@@ -198,9 +288,10 @@ export const ActionListPanel: React.FC<ActionListPanelProps> = ({ actions }) => 
         {filteredActions.map((action, idx) => {
           const config = getActionTypeConfig(action.actionType);
           const isExpanded = expandedId === action.id;
+          const isDiscarded = discardedIds.has(action.id);
 
           return (
-            <div key={action.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50">
+            <div key={action.id} className={`hover:bg-gray-50 dark:hover:bg-gray-700/50 ${isDiscarded ? 'opacity-50' : ''}`}>
               {/* Main Row */}
               <div
                 className="px-6 py-4 cursor-pointer"
@@ -209,7 +300,7 @@ export const ActionListPanel: React.FC<ActionListPanelProps> = ({ actions }) => 
                 <div className="flex items-start gap-4">
                   {/* Priority Rank */}
                   <div className="flex-shrink-0 flex flex-col items-center">
-                    <div className={`w-8 h-8 rounded-full flex items-center justify-center text-white font-bold text-sm ${getPriorityColor(action.priority)}`}>
+                    <div className={`w-8 h-8 rounded-full flex items-center justify-center text-white font-bold text-sm ${isDiscarded ? 'bg-gray-400' : getPriorityColor(action.priority)}`}>
                       {idx + 1}
                     </div>
                     <div className="text-xs text-gray-400 mt-1">{action.priority}</div>
@@ -227,30 +318,39 @@ export const ActionListPanel: React.FC<ActionListPanelProps> = ({ actions }) => 
                       <span className={`px-2 py-0.5 rounded text-xs font-medium ${getEffortBadge(action.effort)}`}>
                         {action.effort} effort
                       </span>
+                      {isDiscarded && (
+                        <span className="px-2 py-0.5 rounded text-xs font-medium bg-gray-200 dark:bg-gray-600 text-gray-600 dark:text-gray-300">
+                          Dismissed
+                        </span>
+                      )}
                     </div>
 
-                    <h4 className="font-medium text-gray-900 dark:text-white">{action.title}</h4>
-                    <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">{action.description}</p>
+                    <h4 className={`font-medium ${isDiscarded ? 'text-gray-400 line-through' : 'text-gray-900 dark:text-white'}`}>
+                      {action.title}
+                    </h4>
+                    <p className={`text-sm mt-0.5 ${isDiscarded ? 'text-gray-400 line-through' : 'text-gray-500 dark:text-gray-400'}`}>
+                      {action.description}
+                    </p>
 
                     {(action.keyword || action.category) && (
                       <div className="flex gap-2 mt-2">
                         {action.keyword && (
-                          <span className="text-xs px-2 py-0.5 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 rounded">
-                            🔑 {action.keyword}
+                          <span className={`text-xs px-2 py-0.5 bg-gray-100 dark:bg-gray-700 rounded ${isDiscarded ? 'text-gray-400' : 'text-gray-600 dark:text-gray-300'}`}>
+                            {action.keyword}
                           </span>
                         )}
                         {action.category && (
-                          <span className="text-xs px-2 py-0.5 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 rounded">
-                            📁 {action.category}
+                          <span className={`text-xs px-2 py-0.5 bg-gray-100 dark:bg-gray-700 rounded ${isDiscarded ? 'text-gray-400' : 'text-gray-600 dark:text-gray-300'}`}>
+                            {action.category}
                           </span>
                         )}
                       </div>
                     )}
                   </div>
 
-                  {/* Uplift & Expand */}
+                  {/* Uplift, Discard & Expand */}
                   <div className="flex-shrink-0 flex items-center gap-3">
-                    {action.estimatedUplift > 0 && (
+                    {action.estimatedUplift > 0 && !isDiscarded && (
                       <div className="text-right">
                         <div className="text-lg font-bold text-emerald-600 dark:text-emerald-400">
                           +{action.estimatedUplift.toLocaleString()}
@@ -258,6 +358,26 @@ export const ActionListPanel: React.FC<ActionListPanelProps> = ({ actions }) => 
                         <div className="text-xs text-gray-500 dark:text-gray-400">clicks</div>
                       </div>
                     )}
+                    {/* Discard/Restore Button */}
+                    <button
+                      onClick={(e) => toggleDiscard(action.id, e)}
+                      className={`p-1.5 rounded-full transition-colors ${
+                        isDiscarded
+                          ? 'text-indigo-600 hover:bg-indigo-100 dark:hover:bg-indigo-900/30'
+                          : 'text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20'
+                      }`}
+                      title={isDiscarded ? 'Restore this action' : 'Dismiss this action'}
+                    >
+                      {isDiscarded ? (
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                        </svg>
+                      ) : (
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                      )}
+                    </button>
                     <svg
                       className={`w-5 h-5 text-gray-400 transition-transform ${isExpanded ? 'rotate-180' : ''}`}
                       fill="none"

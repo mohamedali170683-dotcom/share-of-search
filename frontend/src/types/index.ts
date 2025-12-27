@@ -13,6 +13,8 @@ export interface RankedKeyword {
   visibleVolume?: number;
   category?: string; // Category from DataForSEO API
   categoryIds?: number[]; // Raw category IDs from DataForSEO
+  keywordDifficulty?: number; // 0-100 scale (from DataForSEO)
+  trend?: number; // YoY volume change percentage
 }
 
 export interface SOSResult {
@@ -149,16 +151,58 @@ export interface ActionItem {
   reasoning: string;
 }
 
+// Hidden Gem - Low competition, high potential keyword
+export interface HiddenGem {
+  keyword: string;
+  searchVolume: number;
+  keywordDifficulty: number;
+  position: number | null;
+  url?: string;
+  category?: string;
+  opportunity: 'first-mover' | 'easy-win' | 'rising-trend';
+  potentialClicks: number;
+  reasoning: string;
+}
+
+// Cannibalization Issue - Multiple URLs competing for same keyword
+export interface CannibalizationIssue {
+  keyword: string;
+  searchVolume: number;
+  competingUrls: {
+    url: string;
+    position: number;
+    visibleVolume: number;
+  }[];
+  recommendation: 'consolidate' | 'differentiate' | 'redirect';
+  impactScore: number; // How much traffic is being lost
+}
+
+// Content Gap - Topics where competitors have coverage you don't
+export interface ContentGap {
+  topic: string;
+  category: string;
+  yourCoverage: number; // Number of pages
+  avgCompetitorCoverage: number;
+  totalVolume: number;
+  topMissingKeywords: string[];
+  priority: 'high' | 'medium' | 'low';
+}
+
 // Full Actionable Insights Data
 export interface ActionableInsights {
   quickWins: QuickWinOpportunity[];
   categoryBreakdown: CategorySOV[];
   competitorStrengths: CompetitorStrength[];
   actionList: ActionItem[];
+  hiddenGems: HiddenGem[];
+  cannibalizationIssues: CannibalizationIssue[];
+  contentGaps: ContentGap[];
   summary: {
     totalQuickWinPotential: number;
     strongCategories: number;
     weakCategories: number;
+    hiddenGemsCount: number;
+    cannibalizationCount: number;
     topPriorityAction: string;
   };
 }

@@ -6,7 +6,10 @@ import type {
   CompetitorStrength,
   ActionItem,
   ActionableInsights,
-  KeywordBattle
+  KeywordBattle,
+  HiddenGem,
+  CannibalizationIssue,
+  ContentGap
 } from '../types';
 import { getCTR } from './calculations';
 
@@ -289,6 +292,237 @@ export function calculateCompetitorStrength(
 }
 
 // ==========================================
+// HIDDEN GEMS DETECTION
+// ==========================================
+
+/**
+ * Determine opportunity type based on keyword characteristics
+ */
+function determineOpportunityType(
+  _kd: number, // Used for future enhancements
+  position: number | null,
+  trend?: number
+): HiddenGem['opportunity'] {
+  if (trend && trend > 20) return 'rising-trend';
+  if (position === null || position > 50) return 'first-mover';
+  return 'easy-win';
+}
+
+/**
+ * Find Hidden Gems - Low difficulty, high potential keywords
+ * These are keywords you can win with less effort
+ */
+export function calculateHiddenGems(
+  rankedKeywords: RankedKeyword[],
+  minVolume: number = 200,
+  maxKD: number = 40
+): HiddenGem[] {
+  const hiddenGems: HiddenGem[] = [];
+
+  for (const kw of rankedKeywords) {
+    // Only consider keywords with KD data
+    const kd = kw.keywordDifficulty;
+    if (kd === undefined) continue;
+
+    // Skip if difficulty is too high
+    if (kd > maxKD) continue;
+
+    // Skip low volume keywords
+    if (kw.searchVolume < minVolume) continue;
+
+    // Skip keywords where you're already ranking well (position 1-3)
+    if (kw.position <= 3) continue;
+
+    const opportunityType = determineOpportunityType(kd, kw.position, kw.trend);
+    const targetPosition = kd <= 20 ? 1 : kd <= 30 ? 3 : 5;
+    const potentialClicks = Math.round(kw.searchVolume * getCTR(targetPosition));
+
+    let reasoning = '';
+    if (opportunityType === 'rising-trend') {
+      reasoning = `Trending keyword (+${kw.trend}% YoY) with low competition (KD: ${kd})`;
+    } else if (opportunityType === 'first-mover') {
+      reasoning = `You're not ranking yet, but low competition (KD: ${kd}) makes this achievable`;
+    } else {
+      reasoning = `Currently #${kw.position}, easy to push to top 3 with KD of ${kd}`;
+    }
+
+    hiddenGems.push({
+      keyword: kw.keyword,
+      searchVolume: kw.searchVolume,
+      keywordDifficulty: kd,
+      position: kw.position,
+      url: kw.url,
+      category: kw.category || detectCategory(kw.keyword),
+      opportunity: opportunityType,
+      potentialClicks,
+      reasoning
+    });
+  }
+
+  // Sort by potential value (volume / difficulty ratio)
+  return hiddenGems
+    .sort((a, b) => {
+      const scoreA = a.searchVolume / (a.keywordDifficulty + 1);
+      const scoreB = b.searchVolume / (b.keywordDifficulty + 1);
+      return scoreB - scoreA;
+    })
+    .slice(0, 20); // Top 20 hidden gems
+}
+
+// ==========================================
+// CANNIBALIZATION DETECTION
+// ==========================================
+
+/**
+ * Determine recommendation for cannibalization issue
+ */
+function getCannibalizationRecommendation(
+  positionGap: number,
+  urlCount: number
+): CannibalizationIssue['recommendation'] {
+  if (urlCount > 3) return 'consolidate';
+  if (positionGap < 5) return 'differentiate';
+  return 'redirect';
+}
+
+/**
+ * Detect keyword cannibalization - Multiple URLs competing for same keyword
+ * This helps identify when your own pages are competing against each other
+ */
+export function detectCannibalization(
+  rankedKeywords: RankedKeyword[]
+): CannibalizationIssue[] {
+  // Group keywords by keyword text
+  const keywordMap = new Map<string, RankedKeyword[]>();
+
+  for (const kw of rankedKeywords) {
+    if (!kw.url) continue;
+
+    const key = kw.keyword.toLowerCase().trim();
+    const existing = keywordMap.get(key) || [];
+    existing.push(kw);
+    keywordMap.set(key, existing);
+  }
+
+  const issues: CannibalizationIssue[] = [];
+
+  for (const [keyword, rankings] of keywordMap) {
+    // Only flag if multiple URLs rank for same keyword
+    if (rankings.length < 2) continue;
+
+    // Get unique URLs
+    const uniqueUrls = [...new Set(rankings.map(r => r.url))];
+    if (uniqueUrls.length < 2) continue;
+
+    // Sort by position
+    const sorted = rankings.sort((a, b) => a.position - b.position);
+    const bestRanking = sorted[0];
+    const worstRanking = sorted[sorted.length - 1];
+    const positionGap = worstRanking.position - bestRanking.position;
+
+    // Calculate competing URLs data
+    const competingUrls = sorted.map(r => ({
+      url: r.url || '',
+      position: r.position,
+      visibleVolume: Math.round(r.searchVolume * getCTR(r.position))
+    }));
+
+    // Calculate impact score - how much visibility is being diluted
+    const totalPotential = bestRanking.searchVolume * getCTR(1);
+    const actualVisibility = competingUrls.reduce((sum, u) => sum + u.visibleVolume, 0);
+    const impactScore = Math.round(totalPotential - actualVisibility);
+
+    issues.push({
+      keyword,
+      searchVolume: bestRanking.searchVolume,
+      competingUrls,
+      recommendation: getCannibalizationRecommendation(positionGap, uniqueUrls.length),
+      impactScore: Math.max(0, impactScore)
+    });
+  }
+
+  // Sort by impact score (highest loss first)
+  return issues.sort((a, b) => b.impactScore - a.impactScore);
+}
+
+// ==========================================
+// CONTENT GAP ANALYSIS
+// ==========================================
+
+/**
+ * Analyze content gaps by category
+ * Compares your coverage vs what the market opportunity suggests
+ */
+export function analyzeContentGaps(
+  rankedKeywords: RankedKeyword[],
+  _brandKeywords: BrandKeyword[] // Reserved for future competitor coverage comparison
+): ContentGap[] {
+  // Group ranked keywords by category
+  const categoryData = new Map<string, {
+    yourKeywords: RankedKeyword[];
+    totalVolume: number;
+    avgPosition: number;
+  }>();
+
+  for (const kw of rankedKeywords) {
+    const category = kw.category || detectCategory(kw.keyword);
+    const existing = categoryData.get(category) || {
+      yourKeywords: [],
+      totalVolume: 0,
+      avgPosition: 0
+    };
+
+    existing.yourKeywords.push(kw);
+    existing.totalVolume += kw.searchVolume;
+    categoryData.set(category, existing);
+  }
+
+  // Calculate coverage metrics
+  const contentGaps: ContentGap[] = [];
+
+  for (const [category, data] of categoryData) {
+
+    // Estimate expected coverage based on category volume
+    const expectedCoverage = Math.ceil(data.totalVolume / 1000); // 1 page per 1000 volume
+    const yourCoverage = data.yourKeywords.length;
+
+    // Only flag if significant gap exists
+    if (expectedCoverage <= yourCoverage * 1.5) continue;
+
+    // Find keywords where you're weakest (position > 15 or no ranking)
+    const weakKeywords = data.yourKeywords
+      .filter(k => k.position > 15)
+      .sort((a, b) => b.searchVolume - a.searchVolume)
+      .slice(0, 5)
+      .map(k => k.keyword);
+
+    const gapSize = expectedCoverage - yourCoverage;
+    const priority: ContentGap['priority'] =
+      gapSize > 10 ? 'high' :
+      gapSize > 5 ? 'medium' : 'low';
+
+    contentGaps.push({
+      topic: category,
+      category,
+      yourCoverage,
+      avgCompetitorCoverage: expectedCoverage, // Estimated
+      totalVolume: data.totalVolume,
+      topMissingKeywords: weakKeywords,
+      priority
+    });
+  }
+
+  // Sort by priority and volume
+  return contentGaps.sort((a, b) => {
+    const priorityOrder = { high: 0, medium: 1, low: 2 };
+    if (priorityOrder[a.priority] !== priorityOrder[b.priority]) {
+      return priorityOrder[a.priority] - priorityOrder[b.priority];
+    }
+    return b.totalVolume - a.totalVolume;
+  });
+}
+
+// ==========================================
 // PRIORITIZED ACTION LIST
 // ==========================================
 
@@ -298,7 +532,9 @@ export function calculateCompetitorStrength(
 export function generateActionList(
   quickWins: QuickWinOpportunity[],
   categories: CategorySOV[],
-  competitors: CompetitorStrength[]
+  competitors: CompetitorStrength[],
+  hiddenGems: HiddenGem[] = [],
+  cannibalizationIssues: CannibalizationIssue[] = []
 ): ActionItem[] {
   const actions: ActionItem[] = [];
   let id = 1;
@@ -319,6 +555,44 @@ export function generateActionList(
       effort: qw.effort,
       estimatedUplift: qw.clickUplift,
       reasoning: `+${qw.clickUplift.toLocaleString()} clicks potential (${qw.upliftPercentage}% increase)`
+    });
+  }
+
+  // Add Hidden Gem actions (low competition opportunities)
+  for (const gem of hiddenGems.slice(0, 3)) {
+    actions.push({
+      id: `action-${id++}`,
+      actionType: 'create',
+      priority: Math.min(95, 70 + Math.round(gem.searchVolume / 500)),
+      title: `Target "${gem.keyword}" (Hidden Gem)`,
+      description: gem.reasoning,
+      keyword: gem.keyword,
+      category: gem.category,
+      impact: gem.searchVolume >= 1000 ? 'high' : gem.searchVolume >= 500 ? 'medium' : 'low',
+      effort: gem.keywordDifficulty <= 20 ? 'low' : gem.keywordDifficulty <= 35 ? 'medium' : 'high',
+      estimatedUplift: gem.potentialClicks,
+      reasoning: `KD: ${gem.keywordDifficulty}, Volume: ${gem.searchVolume.toLocaleString()}, Potential: ${gem.potentialClicks.toLocaleString()} clicks`
+    });
+  }
+
+  // Add Cannibalization fix actions
+  for (const issue of cannibalizationIssues.slice(0, 3)) {
+    if (issue.impactScore < 100) continue; // Skip minor issues
+
+    const actionVerb = issue.recommendation === 'consolidate' ? 'Consolidate' :
+                       issue.recommendation === 'redirect' ? 'Redirect' : 'Differentiate';
+
+    actions.push({
+      id: `action-${id++}`,
+      actionType: 'optimize',
+      priority: Math.min(90, 55 + Math.round(issue.impactScore / 100)),
+      title: `${actionVerb} pages for "${issue.keyword}"`,
+      description: `${issue.competingUrls.length} URLs competing - ${issue.recommendation}`,
+      keyword: issue.keyword,
+      impact: issue.impactScore >= 500 ? 'high' : issue.impactScore >= 200 ? 'medium' : 'low',
+      effort: issue.recommendation === 'redirect' ? 'low' : 'medium',
+      estimatedUplift: issue.impactScore,
+      reasoning: `Cannibalization losing ~${issue.impactScore.toLocaleString()} clicks. URLs: ${issue.competingUrls.map(u => u.url).join(', ').slice(0, 100)}...`
     });
   }
 
@@ -391,7 +665,10 @@ export function generateActionableInsights(
   const quickWins = calculateQuickWins(rankedKeywords);
   const categoryBreakdown = calculateCategorySOV(rankedKeywords);
   const competitorStrengths = calculateCompetitorStrength(brandKeywords, rankedKeywords);
-  const actionList = generateActionList(quickWins, categoryBreakdown, competitorStrengths);
+  const hiddenGems = calculateHiddenGems(rankedKeywords);
+  const cannibalizationIssues = detectCannibalization(rankedKeywords);
+  const contentGaps = analyzeContentGaps(rankedKeywords, brandKeywords);
+  const actionList = generateActionList(quickWins, categoryBreakdown, competitorStrengths, hiddenGems, cannibalizationIssues);
 
   const totalQuickWinPotential = quickWins.reduce((sum, q) => sum + q.clickUplift, 0);
   const strongCategories = categoryBreakdown.filter(c => c.status === 'leading' || c.status === 'competitive').length;
@@ -402,10 +679,15 @@ export function generateActionableInsights(
     categoryBreakdown,
     competitorStrengths,
     actionList,
+    hiddenGems,
+    cannibalizationIssues,
+    contentGaps,
     summary: {
       totalQuickWinPotential,
       strongCategories,
       weakCategories,
+      hiddenGemsCount: hiddenGems.length,
+      cannibalizationCount: cannibalizationIssues.length,
       topPriorityAction: actionList[0]?.title || 'No actions identified'
     }
   };

@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { MetricCard, KeywordTable, TrendsPanel, MethodologyPage, FAQ, ProjectCard, AnalysisForm, QuickWinsPanel, CategoryBreakdownPanel, CompetitorStrengthPanel, ActionListPanel } from './components';
+import { MetricCard, KeywordTable, TrendsPanel, MethodologyPage, FAQ, ProjectCard, AnalysisForm, QuickWinsPanel, CategoryBreakdownPanel, CompetitorStrengthPanel, ActionListPanel, HiddenGemsPanel, CannibalizationPanel, ContentGapsPanel } from './components';
 import type { BrandKeyword, RankedKeyword, SOSResult, SOVResult, GrowthGapResult, Project, ActionableInsights } from './types';
 import { calculateMetrics, getRankedKeywords, getBrandKeywords, getTrends, exportToCSV } from './services/api';
 import { getProjects, saveProject, deleteProject } from './services/projectStorage';
@@ -8,7 +8,7 @@ import type { TrendsData } from './services/api';
 import { generateActionableInsights } from './lib/actionableInsights';
 
 type ViewMode = 'dashboard' | 'analysis' | 'project';
-type AnalysisTab = 'overview' | 'quick-wins' | 'categories' | 'competitors' | 'actions';
+type AnalysisTab = 'overview' | 'quick-wins' | 'hidden-gems' | 'categories' | 'competitors' | 'cannibalization' | 'content-gaps' | 'actions';
 
 function App() {
   const { toggleTheme, isDark } = useTheme();
@@ -332,6 +332,16 @@ function App() {
       badge: actionableInsights?.quickWins.length
     },
     {
+      id: 'hidden-gems',
+      label: 'Hidden Gems',
+      icon: (
+        <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+          <path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z" />
+        </svg>
+      ),
+      badge: actionableInsights?.hiddenGems.length
+    },
+    {
       id: 'categories',
       label: 'Categories',
       icon: (
@@ -350,6 +360,26 @@ function App() {
         </svg>
       ),
       badge: actionableInsights?.competitorStrengths.length
+    },
+    {
+      id: 'cannibalization',
+      label: 'Cannibalization',
+      icon: (
+        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+        </svg>
+      ),
+      badge: actionableInsights?.cannibalizationIssues.length
+    },
+    {
+      id: 'content-gaps',
+      label: 'Content Gaps',
+      icon: (
+        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+        </svg>
+      ),
+      badge: actionableInsights?.contentGaps.length
     },
     {
       id: 'actions',
@@ -400,7 +430,7 @@ function App() {
             <div>
               <h3 className="font-semibold text-lg">Actionable Insights Available</h3>
               <p className="text-indigo-100 text-sm">
-                {actionableInsights.quickWins.length} quick wins • {actionableInsights.summary.weakCategories} categories need work • +{actionableInsights.summary.totalQuickWinPotential.toLocaleString()} clicks potential
+                {actionableInsights.quickWins.length} quick wins • {actionableInsights.hiddenGems.length} hidden gems • {actionableInsights.cannibalizationIssues.length} cannibalization issues • +{actionableInsights.summary.totalQuickWinPotential.toLocaleString()} clicks potential
               </p>
             </div>
             <button
@@ -567,6 +597,10 @@ function App() {
         <QuickWinsPanel quickWins={actionableInsights.quickWins} />
       )}
 
+      {analysisTab === 'hidden-gems' && actionableInsights && (
+        <HiddenGemsPanel hiddenGems={actionableInsights.hiddenGems} />
+      )}
+
       {analysisTab === 'categories' && actionableInsights && (
         <CategoryBreakdownPanel categories={actionableInsights.categoryBreakdown} />
       )}
@@ -576,6 +610,14 @@ function App() {
           competitors={actionableInsights.competitorStrengths}
           yourBrand={brandName}
         />
+      )}
+
+      {analysisTab === 'cannibalization' && actionableInsights && (
+        <CannibalizationPanel issues={actionableInsights.cannibalizationIssues} />
+      )}
+
+      {analysisTab === 'content-gaps' && actionableInsights && (
+        <ContentGapsPanel contentGaps={actionableInsights.contentGaps} />
       )}
 
       {analysisTab === 'actions' && actionableInsights && (

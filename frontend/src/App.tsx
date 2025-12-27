@@ -1,18 +1,21 @@
-import { useState, useEffect } from 'react';
-import { MetricCard, KeywordTable, TrendsPanel, MethodologyPage, FAQ, ProjectCard, AnalysisForm } from './components';
-import type { BrandKeyword, RankedKeyword, SOSResult, SOVResult, GrowthGapResult, Project } from './types';
+import { useState, useEffect, useMemo } from 'react';
+import { MetricCard, KeywordTable, TrendsPanel, MethodologyPage, FAQ, ProjectCard, AnalysisForm, QuickWinsPanel, CategoryBreakdownPanel, CompetitorStrengthPanel, ActionListPanel } from './components';
+import type { BrandKeyword, RankedKeyword, SOSResult, SOVResult, GrowthGapResult, Project, ActionableInsights } from './types';
 import { calculateMetrics, getRankedKeywords, getBrandKeywords, getTrends, exportToCSV } from './services/api';
 import { getProjects, saveProject, deleteProject } from './services/projectStorage';
 import { useTheme } from './contexts/ThemeContext';
 import type { TrendsData } from './services/api';
+import { generateActionableInsights } from './lib/actionableInsights';
 
 type ViewMode = 'dashboard' | 'analysis' | 'project';
+type AnalysisTab = 'overview' | 'quick-wins' | 'categories' | 'competitors' | 'actions';
 
 function App() {
   const { toggleTheme, isDark } = useTheme();
 
   // View state
   const [viewMode, setViewMode] = useState<ViewMode>('dashboard');
+  const [analysisTab, setAnalysisTab] = useState<AnalysisTab>('overview');
   const [projects, setProjects] = useState<Project[]>([]);
   const [, setCurrentProject] = useState<Project | null>(null);
 
@@ -61,6 +64,12 @@ function App() {
   const effectiveSOS = customSOS?.sos ?? sosResult?.shareOfSearch ?? 0;
   const effectiveSOV = customSOV?.sov ?? sovResult?.shareOfVoice ?? 0;
   const effectiveGap = Math.round((effectiveSOV - effectiveSOS) * 10) / 10;
+
+  // Generate actionable insights
+  const actionableInsights: ActionableInsights | null = useMemo(() => {
+    if (rankedKeywords.length === 0 || brandKeywords.length === 0) return null;
+    return generateActionableInsights(rankedKeywords, brandKeywords);
+  }, [rankedKeywords, brandKeywords]);
 
   // Handle new analysis
   const handleAnalyze = async (config: {
@@ -301,6 +310,59 @@ function App() {
     </main>
   );
 
+  // Tab configuration
+  const analysisTabs: { id: AnalysisTab; label: string; icon: React.ReactNode; badge?: number }[] = [
+    {
+      id: 'overview',
+      label: 'Overview',
+      icon: (
+        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+        </svg>
+      )
+    },
+    {
+      id: 'quick-wins',
+      label: 'Quick Wins',
+      icon: (
+        <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+          <path d="M11.3 1.046A1 1 0 0112 2v5h4a1 1 0 01.82 1.573l-7 10A1 1 0 018 18v-5H4a1 1 0 01-.82-1.573l7-10a1 1 0 011.12-.38z" />
+        </svg>
+      ),
+      badge: actionableInsights?.quickWins.length
+    },
+    {
+      id: 'categories',
+      label: 'Categories',
+      icon: (
+        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
+        </svg>
+      ),
+      badge: actionableInsights?.categoryBreakdown.length
+    },
+    {
+      id: 'competitors',
+      label: 'Competitors',
+      icon: (
+        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+        </svg>
+      ),
+      badge: actionableInsights?.competitorStrengths.length
+    },
+    {
+      id: 'actions',
+      label: 'Actions',
+      icon: (
+        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+        </svg>
+      ),
+      badge: actionableInsights?.actionList.length
+    }
+  ];
+
   // Render Analysis/Project View
   const renderAnalysis = () => (
     <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
@@ -331,121 +393,194 @@ function App() {
         </button>
       </div>
 
-      {/* Metric Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 mb-6 sm:mb-8">
-        <MetricCard
-          title={customSOS ? "Share of Search (Filtered)" : "Share of Search"}
-          value={sosResult ? `${customSOS?.sos ?? sosResult.shareOfSearch}%` : '—'}
-          subtitle={customSOS ? "Based on selected competitors" : "Brand awareness in search"}
-          borderColor="emerald"
-          tooltip="SOS = Your Brand Search Volume / Total Brand Search Volumes × 100"
-          details={sosResult ? [
-            { label: 'Your Brand Volume', value: (customSOS?.brandVolume ?? sosResult.brandVolume).toLocaleString() },
-            { label: 'Total Brand Volume', value: (customSOS?.totalVolume ?? sosResult.totalBrandVolume).toLocaleString() }
-          ] : undefined}
-          insight={sosResult ? {
-            summary: effectiveSOS >= 30
-              ? `Strong brand awareness! ${brandName || 'Your brand'} captures a significant portion of branded searches.`
-              : effectiveSOS >= 15
-              ? `Good brand presence. ${brandName || 'Your brand'} has moderate visibility among competitors.`
-              : `Room for growth. Consider brand marketing to increase awareness.`,
-            explanation: 'SOS measures how often people search for your brand compared to all brand searches in your industry.'
-          } : undefined}
-        />
-
-        <MetricCard
-          title={customSOV ? "Share of Voice (Filtered)" : "Share of Voice"}
-          value={sovResult ? `${customSOV?.sov ?? sovResult.shareOfVoice}%` : '—'}
-          subtitle={customSOV ? "Based on selected filters" : "Visibility-weighted market share"}
-          borderColor="orange"
-          tooltip="SOV = Sum(Keyword Volume × CTR at Position) / Total Market Volume × 100"
-          details={sovResult ? [
-            { label: 'Visible Volume', value: (customSOV?.visibleVolume ?? sovResult.visibleVolume).toLocaleString() },
-            { label: 'Total Market Volume', value: (customSOV?.totalVolume ?? sovResult.totalMarketVolume).toLocaleString() }
-          ] : undefined}
-          insight={sovResult ? {
-            summary: effectiveSOV >= 25
-              ? `Excellent visibility! Your site captures a large share of organic clicks.`
-              : effectiveSOV >= 10
-              ? `Decent organic presence. There's potential to improve rankings.`
-              : `Low visibility. Focus on SEO to rank higher for valuable keywords.`,
-            explanation: 'SOV shows your actual visibility in search results, weighted by click probability based on position.'
-          } : undefined}
-        />
-
-        <MetricCard
-          title={customSOS || customSOV ? "Growth Gap (Filtered)" : "Growth Gap"}
-          value={gapResult ? `${effectiveGap > 0 ? '+' : ''}${effectiveGap}pp` : '—'}
-          subtitle={customSOS || customSOV ? "Based on filtered metrics" : "SOV - SOS differential"}
-          borderColor={gapResult ? getGapColor(effectiveGap) : 'blue'}
-          tooltip="Gap = SOV - SOS. Positive gap indicates growth potential. Negative gap suggests missing opportunities."
-          interpretation={gapResult ? getGapInterpretation(
-            effectiveGap > 2 ? 'growth_potential' : effectiveGap < -2 ? 'missing_opportunities' : 'balanced'
-          ) : undefined}
-          insight={gapResult ? {
-            summary: effectiveGap > 2
-              ? `Growth Potential! Your visibility exceeds brand awareness - opportunity to convert searches into loyalty.`
-              : effectiveGap < -2
-              ? `Missing Opportunities. Your brand awareness exceeds visibility - focus on SEO improvements.`
-              : `Balanced performance. Brand awareness and visibility are well-aligned.`,
-            explanation: effectiveGap > 2
-              ? 'Invest in brand marketing to convert search visibility into lasting brand awareness.'
-              : effectiveGap < -2
-              ? 'Prioritize SEO to ensure customers who know your brand can find you organically.'
-              : 'Maintain your balanced approach while looking for opportunities to grow both metrics.'
-          } : undefined}
-        />
-      </div>
-
-      {/* Trends Section */}
-      {sosResult && sovResult && (
-        <div className="mb-6 sm:mb-8">
-          {!trendsData && !trendsLoading && (
-            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6 text-center">
-              <div className="flex flex-col items-center gap-4">
-                <svg className="w-12 h-12 text-purple-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
-                </svg>
-                <div>
-                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-1">Historical Trends Available</h3>
-                  <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
-                    See how your Share of Search and Share of Voice have changed over the past 12 months
-                  </p>
-                </div>
-                <button
-                  onClick={handleFetchTrends}
-                  className="px-6 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 flex items-center gap-2 transition-colors"
-                >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
-                  </svg>
-                  Load Historical Trends
-                </button>
-              </div>
+      {/* Insights Summary Banner */}
+      {actionableInsights && (
+        <div className="mb-6 p-4 bg-gradient-to-r from-indigo-500 to-purple-600 rounded-xl text-white">
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div>
+              <h3 className="font-semibold text-lg">Actionable Insights Available</h3>
+              <p className="text-indigo-100 text-sm">
+                {actionableInsights.quickWins.length} quick wins • {actionableInsights.summary.weakCategories} categories need work • +{actionableInsights.summary.totalQuickWinPotential.toLocaleString()} clicks potential
+              </p>
             </div>
-          )}
-          <TrendsPanel data={trendsData} isLoading={trendsLoading} />
+            <button
+              onClick={() => setAnalysisTab('actions')}
+              className="px-4 py-2 bg-white/20 hover:bg-white/30 rounded-lg text-sm font-medium transition-colors"
+            >
+              View Action Plan
+            </button>
+          </div>
         </div>
       )}
 
-      {/* Tables */}
-      <div className="space-y-6">
-        {brandKeywords.length > 0 && (
-          <KeywordTable
-            type="sos"
-            keywords={brandKeywords}
-            onSelectedCompetitorsChange={handleSOSChange}
-          />
-        )}
-
-        {sovResult && (
-          <KeywordTable
-            type="sov"
-            keywords={sovResult.keywordBreakdown}
-            onFilteredSOVChange={handleSOVChange}
-          />
-        )}
+      {/* Tab Navigation */}
+      <div className="mb-6 border-b border-gray-200 dark:border-gray-700 overflow-x-auto">
+        <nav className="flex gap-1 min-w-max">
+          {analysisTabs.map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => setAnalysisTab(tab.id)}
+              className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap flex items-center gap-2 ${
+                analysisTab === tab.id
+                  ? 'border-emerald-500 text-emerald-600 dark:text-emerald-400'
+                  : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:border-gray-300'
+              }`}
+            >
+              {tab.icon}
+              {tab.label}
+              {tab.badge !== undefined && tab.badge > 0 && (
+                <span className={`px-1.5 py-0.5 text-xs rounded-full ${
+                  analysisTab === tab.id
+                    ? 'bg-emerald-100 dark:bg-emerald-900/50 text-emerald-700 dark:text-emerald-300'
+                    : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300'
+                }`}>
+                  {tab.badge}
+                </span>
+              )}
+            </button>
+          ))}
+        </nav>
       </div>
+
+      {/* Tab Content */}
+      {analysisTab === 'overview' && (
+        <>
+          {/* Metric Cards */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 mb-6 sm:mb-8">
+            <MetricCard
+              title={customSOS ? "Share of Search (Filtered)" : "Share of Search"}
+              value={sosResult ? `${customSOS?.sos ?? sosResult.shareOfSearch}%` : '—'}
+              subtitle={customSOS ? "Based on selected competitors" : "Brand awareness in search"}
+              borderColor="emerald"
+              tooltip="SOS = Your Brand Search Volume / Total Brand Search Volumes × 100"
+              details={sosResult ? [
+                { label: 'Your Brand Volume', value: (customSOS?.brandVolume ?? sosResult.brandVolume).toLocaleString() },
+                { label: 'Total Brand Volume', value: (customSOS?.totalVolume ?? sosResult.totalBrandVolume).toLocaleString() }
+              ] : undefined}
+              insight={sosResult ? {
+                summary: effectiveSOS >= 30
+                  ? `Strong brand awareness! ${brandName || 'Your brand'} captures a significant portion of branded searches.`
+                  : effectiveSOS >= 15
+                  ? `Good brand presence. ${brandName || 'Your brand'} has moderate visibility among competitors.`
+                  : `Room for growth. Consider brand marketing to increase awareness.`,
+                explanation: 'SOS measures how often people search for your brand compared to all brand searches in your industry.'
+              } : undefined}
+            />
+
+            <MetricCard
+              title={customSOV ? "Share of Voice (Filtered)" : "Share of Voice"}
+              value={sovResult ? `${customSOV?.sov ?? sovResult.shareOfVoice}%` : '—'}
+              subtitle={customSOV ? "Based on selected filters" : "Visibility-weighted market share"}
+              borderColor="orange"
+              tooltip="SOV = Sum(Keyword Volume × CTR at Position) / Total Market Volume × 100"
+              details={sovResult ? [
+                { label: 'Visible Volume', value: (customSOV?.visibleVolume ?? sovResult.visibleVolume).toLocaleString() },
+                { label: 'Total Market Volume', value: (customSOV?.totalVolume ?? sovResult.totalMarketVolume).toLocaleString() }
+              ] : undefined}
+              insight={sovResult ? {
+                summary: effectiveSOV >= 25
+                  ? `Excellent visibility! Your site captures a large share of organic clicks.`
+                  : effectiveSOV >= 10
+                  ? `Decent organic presence. There's potential to improve rankings.`
+                  : `Low visibility. Focus on SEO to rank higher for valuable keywords.`,
+                explanation: 'SOV shows your actual visibility in search results, weighted by click probability based on position.'
+              } : undefined}
+            />
+
+            <MetricCard
+              title={customSOS || customSOV ? "Growth Gap (Filtered)" : "Growth Gap"}
+              value={gapResult ? `${effectiveGap > 0 ? '+' : ''}${effectiveGap}pp` : '—'}
+              subtitle={customSOS || customSOV ? "Based on filtered metrics" : "SOV - SOS differential"}
+              borderColor={gapResult ? getGapColor(effectiveGap) : 'blue'}
+              tooltip="Gap = SOV - SOS. Positive gap indicates growth potential. Negative gap suggests missing opportunities."
+              interpretation={gapResult ? getGapInterpretation(
+                effectiveGap > 2 ? 'growth_potential' : effectiveGap < -2 ? 'missing_opportunities' : 'balanced'
+              ) : undefined}
+              insight={gapResult ? {
+                summary: effectiveGap > 2
+                  ? `Growth Potential! Your visibility exceeds brand awareness - opportunity to convert searches into loyalty.`
+                  : effectiveGap < -2
+                  ? `Missing Opportunities. Your brand awareness exceeds visibility - focus on SEO improvements.`
+                  : `Balanced performance. Brand awareness and visibility are well-aligned.`,
+                explanation: effectiveGap > 2
+                  ? 'Invest in brand marketing to convert search visibility into lasting brand awareness.'
+                  : effectiveGap < -2
+                  ? 'Prioritize SEO to ensure customers who know your brand can find you organically.'
+                  : 'Maintain your balanced approach while looking for opportunities to grow both metrics.'
+              } : undefined}
+            />
+          </div>
+
+          {/* Trends Section */}
+          {sosResult && sovResult && (
+            <div className="mb-6 sm:mb-8">
+              {!trendsData && !trendsLoading && (
+                <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6 text-center">
+                  <div className="flex flex-col items-center gap-4">
+                    <svg className="w-12 h-12 text-purple-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+                    </svg>
+                    <div>
+                      <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-1">Historical Trends Available</h3>
+                      <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+                        See how your Share of Search and Share of Voice have changed over the past 12 months
+                      </p>
+                    </div>
+                    <button
+                      onClick={handleFetchTrends}
+                      className="px-6 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 flex items-center gap-2 transition-colors"
+                    >
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+                      </svg>
+                      Load Historical Trends
+                    </button>
+                  </div>
+                </div>
+              )}
+              <TrendsPanel data={trendsData} isLoading={trendsLoading} />
+            </div>
+          )}
+
+          {/* Tables */}
+          <div className="space-y-6">
+            {brandKeywords.length > 0 && (
+              <KeywordTable
+                type="sos"
+                keywords={brandKeywords}
+                onSelectedCompetitorsChange={handleSOSChange}
+              />
+            )}
+
+            {sovResult && (
+              <KeywordTable
+                type="sov"
+                keywords={sovResult.keywordBreakdown}
+                onFilteredSOVChange={handleSOVChange}
+              />
+            )}
+          </div>
+        </>
+      )}
+
+      {analysisTab === 'quick-wins' && actionableInsights && (
+        <QuickWinsPanel quickWins={actionableInsights.quickWins} />
+      )}
+
+      {analysisTab === 'categories' && actionableInsights && (
+        <CategoryBreakdownPanel categories={actionableInsights.categoryBreakdown} />
+      )}
+
+      {analysisTab === 'competitors' && actionableInsights && (
+        <CompetitorStrengthPanel
+          competitors={actionableInsights.competitorStrengths}
+          yourBrand={brandName}
+        />
+      )}
+
+      {analysisTab === 'actions' && actionableInsights && (
+        <ActionListPanel actions={actionableInsights.actionList} />
+      )}
     </main>
   );
 

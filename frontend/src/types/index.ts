@@ -68,3 +68,97 @@ export const LOCATIONS: Record<string, { code: number; name: string }> = {
   france: { code: 2250, name: 'France' },
   spain: { code: 2724, name: 'Spain' }
 };
+
+// ==========================================
+// ACTIONABLE INSIGHTS TYPES
+// ==========================================
+
+// Quick Win Opportunity - Position 4-20 keywords with improvement potential
+export interface QuickWinOpportunity {
+  keyword: string;
+  currentPosition: number;
+  targetPosition: number;
+  searchVolume: number;
+  currentClicks: number;
+  potentialClicks: number;
+  clickUplift: number;
+  upliftPercentage: number;
+  effort: 'low' | 'medium' | 'high';
+  url: string;
+  category?: string;
+}
+
+// Category SOV Breakdown
+export interface CategorySOV {
+  category: string;
+  yourSOV: number;
+  yourVisibleVolume: number;
+  totalCategoryVolume: number;
+  keywordCount: number;
+  avgPosition: number;
+  topKeywords: string[];
+  status: 'leading' | 'competitive' | 'trailing' | 'weak';
+}
+
+// Competitor Analysis for a category
+export interface CompetitorCategoryAnalysis {
+  competitor: string;
+  category: string;
+  estimatedSOV: number;
+  keywordsWon: number;
+  keywordsLost: number;
+}
+
+// Head-to-head keyword battle
+export interface KeywordBattle {
+  keyword: string;
+  searchVolume: number;
+  yourPosition: number | null;
+  competitorPosition: number;
+  winner: 'you' | 'competitor' | 'tie';
+  visibilityDifference: number;
+}
+
+// Competitor Strength Data
+export interface CompetitorStrength {
+  competitor: string;
+  estimatedSOV: number;
+  keywordsAnalyzed: number;
+  headToHead: {
+    youWin: number;
+    theyWin: number;
+    ties: number;
+  };
+  dominantCategories: string[];
+  topWinningKeywords: KeywordBattle[];
+  topLosingKeywords: KeywordBattle[];
+}
+
+// Prioritized Action Item
+export interface ActionItem {
+  id: string;
+  actionType: 'optimize' | 'create' | 'monitor' | 'investigate';
+  priority: number; // 1-100
+  title: string;
+  description: string;
+  keyword?: string;
+  category?: string;
+  impact: 'high' | 'medium' | 'low';
+  effort: 'low' | 'medium' | 'high';
+  estimatedUplift: number;
+  reasoning: string;
+}
+
+// Full Actionable Insights Data
+export interface ActionableInsights {
+  quickWins: QuickWinOpportunity[];
+  categoryBreakdown: CategorySOV[];
+  competitorStrengths: CompetitorStrength[];
+  actionList: ActionItem[];
+  summary: {
+    totalQuickWinPotential: number;
+    strongCategories: number;
+    weakCategories: number;
+    topPriorityAction: string;
+  };
+}

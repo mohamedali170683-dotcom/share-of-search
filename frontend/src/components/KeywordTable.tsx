@@ -565,6 +565,8 @@ export const KeywordTable: React.FC<KeywordTableProps> = (props) => {
             Showing {((currentPage - 1) * itemsPerPage) + 1}-{Math.min(currentPage * itemsPerPage, sortedKeywords.length)} of {sortedKeywords.length}
           </span>
           <select
+            id="sov-items-per-page"
+            name="itemsPerPage"
             value={itemsPerPage}
             onChange={(e) => {
               setItemsPerPage(Number(e.target.value));
@@ -640,6 +642,8 @@ export const KeywordTable: React.FC<KeywordTableProps> = (props) => {
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                   </svg>
                   <input
+                    id="sov-search-keywords"
+                    name="searchQuery"
                     type="text"
                     value={searchQuery}
                     onChange={(e) => handleFilterChange(setSearchQuery, e.target.value)}
@@ -651,6 +655,8 @@ export const KeywordTable: React.FC<KeywordTableProps> = (props) => {
 
               {/* Position Filter */}
               <select
+                id="sov-position-filter"
+                name="positionFilter"
                 value={positionFilter}
                 onChange={(e) => handleFilterChange(setPositionFilter, e.target.value)}
                 className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
@@ -737,9 +743,10 @@ export const KeywordTable: React.FC<KeywordTableProps> = (props) => {
                   )}
                 </div>
                 <div className="flex flex-wrap gap-2">
-                  {topicStats.slice(0, 15).map(({ topic, count, volume }) => (
+                  {topicStats.slice(0, 15).map(({ topic, count, volume }, idx) => (
                     <label
                       key={topic}
+                      htmlFor={`topic-${idx}`}
                       className={`inline-flex items-center gap-2 px-2 py-1 rounded-lg border cursor-pointer transition-all text-xs ${
                         selectedTopics.has(topic)
                           ? 'bg-purple-50 border-purple-300 text-purple-700'
@@ -748,6 +755,8 @@ export const KeywordTable: React.FC<KeywordTableProps> = (props) => {
                     >
                       <input
                         type="checkbox"
+                        id={`topic-${idx}`}
+                        name={`topic-${topic}`}
                         checked={selectedTopics.has(topic)}
                         onChange={() => toggleTopic(topic)}
                         className="w-3 h-3 rounded border-gray-300 text-purple-600 focus:ring-purple-500"
@@ -790,9 +799,10 @@ export const KeywordTable: React.FC<KeywordTableProps> = (props) => {
                   )}
                 </div>
                 <div className="flex flex-wrap gap-2">
-                  {categoryStats.slice(0, 12).map(({ category, count }) => (
+                  {categoryStats.slice(0, 12).map(({ category, count }, idx) => (
                     <label
                       key={category}
+                      htmlFor={`category-${idx}`}
                       className={`inline-flex items-center gap-2 px-2 py-1 rounded-lg border cursor-pointer transition-all text-xs ${
                         selectedCategories.has(category)
                           ? 'bg-orange-50 border-orange-300 text-orange-700'
@@ -801,6 +811,8 @@ export const KeywordTable: React.FC<KeywordTableProps> = (props) => {
                     >
                       <input
                         type="checkbox"
+                        id={`category-${idx}`}
+                        name={`category-${category}`}
                         checked={selectedCategories.has(category)}
                         onChange={() => toggleCategory(category)}
                         className="w-3 h-3 rounded border-gray-300 text-orange-600 focus:ring-orange-500"
@@ -960,9 +972,10 @@ export const KeywordTable: React.FC<KeywordTableProps> = (props) => {
             </div>
           </div>
           <div className="flex flex-wrap gap-2">
-            {competitorBrands.map((brand) => (
+            {competitorBrands.map((brand, idx) => (
               <label
                 key={brand}
+                htmlFor={`sos-competitor-${idx}`}
                 className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border cursor-pointer transition-all ${
                   selectedCompetitors.has(brand)
                     ? 'bg-emerald-50 border-emerald-300 text-emerald-700'
@@ -971,6 +984,8 @@ export const KeywordTable: React.FC<KeywordTableProps> = (props) => {
               >
                 <input
                   type="checkbox"
+                  id={`sos-competitor-${idx}`}
+                  name={`competitor-${brand}`}
                   checked={selectedCompetitors.has(brand)}
                   onChange={() => toggleCompetitor(brand)}
                   className="w-4 h-4 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
@@ -1033,6 +1048,9 @@ export const KeywordTable: React.FC<KeywordTableProps> = (props) => {
                   ) : (
                     <input
                       type="checkbox"
+                      id={`competitor-${idx}`}
+                      name={`competitor-${kw.keyword}`}
+                      aria-label={`Include ${kw.keyword} in calculation`}
                       checked={selectedCompetitors.has(kw.keyword)}
                       onChange={() => toggleCompetitor(kw.keyword)}
                       className="w-4 h-4 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"

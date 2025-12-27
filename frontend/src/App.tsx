@@ -213,8 +213,8 @@ function App() {
     return 'blue';
   };
 
-  // Theme Toggle Button
-  const ThemeToggle = () => (
+  // Theme Toggle Button - using render function to avoid React recreation on each render
+  const renderThemeToggle = () => (
     <button
       onClick={toggleTheme}
       className="p-2 rounded-lg bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
@@ -496,12 +496,12 @@ function App() {
                   Methodology
                 </span>
               </button>
-              <ThemeToggle />
+              {renderThemeToggle()}
             </nav>
 
             {/* Mobile Menu Button */}
             <div className="flex md:hidden items-center gap-2">
-              <ThemeToggle />
+              {renderThemeToggle()}
               <button
                 onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
                 className="p-2 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"

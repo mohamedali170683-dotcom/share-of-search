@@ -44,6 +44,23 @@ export interface SampleDataResponse {
   rankedKeywords: RankedKeyword[];
 }
 
+// Project/Analysis type for saved analyses
+export interface Project {
+  id: string;
+  domain: string;
+  brandName: string;
+  createdAt: string;
+  locationCode: number;
+  locationName: string;
+  languageCode: string;
+  competitors: string[];
+  sos: SOSResult;
+  sov: SOVResult;
+  gap: GrowthGapResult;
+  brandKeywords: BrandKeyword[];
+  rankedKeywords: RankedKeyword[];
+}
+
 export const LOCATIONS: Record<string, { code: number; name: string }> = {
   germany: { code: 2276, name: 'Germany' },
   usa: { code: 2840, name: 'United States' },

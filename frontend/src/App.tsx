@@ -1,10 +1,23 @@
 import { useState, useEffect } from 'react';
-import { MetricCard, KeywordTable, APIConfigPanel, TrendsPanel, MethodologyPage } from './components';
-import type { BrandKeyword, RankedKeyword, SOSResult, SOVResult, GrowthGapResult } from './types';
-import { getSampleData, calculateMetrics, getRankedKeywords, getBrandKeywords, getTrends, exportToCSV } from './services/api';
+import { MetricCard, KeywordTable, TrendsPanel, MethodologyPage, FAQ, ProjectCard, AnalysisForm } from './components';
+import type { BrandKeyword, RankedKeyword, SOSResult, SOVResult, GrowthGapResult, Project } from './types';
+import { calculateMetrics, getRankedKeywords, getBrandKeywords, getTrends, exportToCSV } from './services/api';
+import { getProjects, saveProject, deleteProject } from './services/projectStorage';
 import type { TrendsData } from './services/api';
 
+// Hardcoded API credentials (in production, these would be in environment variables or backend)
+const API_LOGIN = 'ali.bahassan@gmail.com';
+const API_PASSWORD = '1e2dd597c9185a02';
+
+type ViewMode = 'dashboard' | 'analysis' | 'project';
+
 function App() {
+  // View state
+  const [viewMode, setViewMode] = useState<ViewMode>('dashboard');
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [, setCurrentProject] = useState<Project | null>(null);
+
+  // Analysis state
   const [brandKeywords, setBrandKeywords] = useState<BrandKeyword[]>([]);
   const [rankedKeywords, setRankedKeywords] = useState<RankedKeyword[]>([]);
   const [sosResult, setSosResult] = useState<SOSResult | null>(null);
@@ -16,20 +29,19 @@ function App() {
   const [trendsData, setTrendsData] = useState<TrendsData | null>(null);
   const [trendsLoading, setTrendsLoading] = useState(false);
   const [showMethodology, setShowMethodology] = useState(false);
-  const [lastFetchConfig, setLastFetchConfig] = useState<{
-    login: string;
-    password: string;
-    domain: string;
-    locationCode: number;
-    languageCode: string;
-    customCompetitors?: string[];
-  } | null>(null);
-  // Store actual competitors from brand-keywords API for use in trends
+  const [currentDomain, setCurrentDomain] = useState<string>('');
+  const [currentLocation, setCurrentLocation] = useState<{ code: number; name: string }>({ code: 2276, name: 'Germany' });
+  const [currentLanguage, setCurrentLanguage] = useState<string>('de');
   const [actualCompetitors, setActualCompetitors] = useState<string[]>([]);
 
   // Custom metric overrides from table filters
   const [customSOS, setCustomSOS] = useState<{ sos: number; brandVolume: number; totalVolume: number } | null>(null);
   const [customSOV, setCustomSOV] = useState<{ sov: number; visibleVolume: number; totalVolume: number } | null>(null);
+
+  // Load projects on mount
+  useEffect(() => {
+    setProjects(getProjects());
+  }, []);
 
   // Handler for SOS changes from KeywordTable competitor selection
   const handleSOSChange = (_selectedBrands: string[], sos: number, brandVolume: number, totalVolume: number) => {
@@ -39,57 +51,34 @@ function App() {
   // Handler for SOV changes from KeywordTable category filter
   const handleSOVChange = (filteredSOV: number, visibleVolume: number, totalVolume: number) => {
     if (filteredSOV === 0 && visibleVolume === 0 && totalVolume === 0) {
-      // No filters active - reset to original
       setCustomSOV(null);
     } else {
       setCustomSOV({ sov: filteredSOV, visibleVolume, totalVolume });
     }
   };
 
-  // Calculate effective metrics (custom if set, otherwise original)
+  // Calculate effective metrics
   const effectiveSOS = customSOS?.sos ?? sosResult?.shareOfSearch ?? 0;
   const effectiveSOV = customSOV?.sov ?? sovResult?.shareOfVoice ?? 0;
   const effectiveGap = Math.round((effectiveSOV - effectiveSOS) * 10) / 10;
 
-  // Load sample data on mount
-  useEffect(() => {
-    loadSampleData();
-  }, []);
-
-  const loadSampleData = async () => {
-    try {
-      setIsLoading(true);
-      setError(null);
-      const data = await getSampleData();
-      setBrandKeywords(data.brandKeywords);
-
-      const results = await calculateMetrics(data.brandKeywords, data.rankedKeywords);
-      setSosResult(results.sos);
-      setSovResult(results.sov);
-      setGapResult(results.gap);
-      setRankedKeywords(results.sov.keywordBreakdown);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load sample data');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleFetchData = async (config: {
-    login: string;
-    password: string;
+  // Handle new analysis
+  const handleAnalyze = async (config: {
     domain: string;
     locationCode: number;
+    locationName: string;
     languageCode: string;
     customCompetitors?: string[];
   }) => {
     try {
       setIsLoading(true);
       setError(null);
-      setLastFetchConfig(config);
-      setTrendsData(null); // Reset trends when fetching new data
-      setCustomSOS(null); // Reset custom metrics when fetching new data
+      setTrendsData(null);
+      setCustomSOS(null);
       setCustomSOV(null);
+      setCurrentDomain(config.domain);
+      setCurrentLocation({ code: config.locationCode, name: config.locationName });
+      setCurrentLanguage(config.languageCode);
 
       // Fetch both ranked keywords and brand keywords in parallel
       const [rankedData, brandData] = await Promise.all([
@@ -98,63 +87,116 @@ function App() {
           config.locationCode,
           config.languageCode,
           100,
-          config.login,
-          config.password
+          API_LOGIN,
+          API_PASSWORD
         ),
         getBrandKeywords(
           config.domain,
           config.locationCode,
           config.languageCode,
-          config.login,
-          config.password,
-          config.customCompetitors // Pass custom competitors to API
+          API_LOGIN,
+          API_PASSWORD,
+          config.customCompetitors
         )
       ]);
 
-      // Update brand keywords with fresh data
       setBrandKeywords(brandData.brandKeywords);
       setBrandName(brandData.brandName);
-      // Store actual competitors for trends API - these are the competitors
-      // actually used in the analysis (either custom or auto-detected)
       setActualCompetitors(brandData.competitors || []);
 
-      // Calculate with the new data
+      // Calculate metrics
       const calcResults = await calculateMetrics(brandData.brandKeywords, rankedData.results);
       setSosResult(calcResults.sos);
       setSovResult(calcResults.sov);
       setGapResult(calcResults.gap);
       setRankedKeywords(calcResults.sov.keywordBreakdown);
+
+      // Save as project
+      const newProject = saveProject({
+        domain: config.domain,
+        brandName: brandData.brandName,
+        locationCode: config.locationCode,
+        locationName: config.locationName,
+        languageCode: config.languageCode,
+        competitors: brandData.competitors || [],
+        sos: calcResults.sos,
+        sov: calcResults.sov,
+        gap: calcResults.gap,
+        brandKeywords: brandData.brandKeywords,
+        rankedKeywords: calcResults.sov.keywordBreakdown
+      });
+
+      setCurrentProject(newProject);
+      setProjects(getProjects());
+      setViewMode('analysis');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to fetch data');
+      setError(err instanceof Error ? err.message : 'Failed to analyze domain');
     } finally {
       setIsLoading(false);
     }
   };
 
+  // View a saved project
+  const handleViewProject = (project: Project) => {
+    setCurrentProject(project);
+    setBrandKeywords(project.brandKeywords);
+    setRankedKeywords(project.rankedKeywords);
+    setSosResult(project.sos);
+    setSovResult(project.sov);
+    setGapResult(project.gap);
+    setBrandName(project.brandName);
+    setCurrentDomain(project.domain);
+    setCurrentLocation({ code: project.locationCode, name: project.locationName });
+    setCurrentLanguage(project.languageCode);
+    setActualCompetitors(project.competitors);
+    setTrendsData(null);
+    setCustomSOS(null);
+    setCustomSOV(null);
+    setViewMode('project');
+  };
+
+  // Delete a project
+  const handleDeleteProject = (projectId: string) => {
+    deleteProject(projectId);
+    setProjects(getProjects());
+  };
+
+  // Go back to dashboard
+  const handleBackToDashboard = () => {
+    setViewMode('dashboard');
+    setCurrentProject(null);
+    setSosResult(null);
+    setSovResult(null);
+    setGapResult(null);
+    setBrandKeywords([]);
+    setRankedKeywords([]);
+    setTrendsData(null);
+    setError(null);
+  };
+
+  // Fetch trends
   const handleFetchTrends = async () => {
-    if (!lastFetchConfig) return;
+    if (!currentDomain) return;
 
     try {
       setTrendsLoading(true);
-      // Use actualCompetitors (from brand-keywords API) so trends match main analysis
-      // These are the same competitors used to calculate the current SOS
       const trends = await getTrends(
-        lastFetchConfig.domain,
-        lastFetchConfig.locationCode,
-        lastFetchConfig.languageCode,
-        lastFetchConfig.login,
-        lastFetchConfig.password,
+        currentDomain,
+        currentLocation.code,
+        currentLanguage,
+        API_LOGIN,
+        API_PASSWORD,
         actualCompetitors.length > 0 ? actualCompetitors : undefined
       );
       setTrendsData(trends);
     } catch (err) {
       console.error('Failed to fetch trends:', err);
-      // Don't set error state - trends are optional
     } finally {
       setTrendsLoading(false);
     }
   };
 
+  // Export to CSV
   const handleExport = () => {
     if (sosResult && sovResult && gapResult) {
       exportToCSV(
@@ -184,20 +226,240 @@ function App() {
     return 'blue';
   };
 
+  // Render Dashboard View
+  const renderDashboard = () => (
+    <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      {/* Welcome Section */}
+      <div className="text-center mb-8">
+        <h2 className="text-3xl font-bold text-gray-900 mb-2">Welcome to SearchShare Pro</h2>
+        <p className="text-gray-600 max-w-2xl mx-auto">
+          Analyze your brand's Share of Search and Share of Voice to understand your market position
+          and identify growth opportunities.
+        </p>
+      </div>
+
+      {/* Error Alert */}
+      {error && (
+        <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg text-red-700">
+          <div className="flex items-center gap-2">
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            {error}
+          </div>
+        </div>
+      )}
+
+      <div className="grid lg:grid-cols-3 gap-8">
+        {/* Left Column - New Analysis Form */}
+        <div className="lg:col-span-1">
+          <AnalysisForm onAnalyze={handleAnalyze} isLoading={isLoading} />
+        </div>
+
+        {/* Right Column - Projects */}
+        <div className="lg:col-span-2">
+          <div className="mb-4 flex items-center justify-between">
+            <h3 className="text-lg font-semibold text-gray-900">Your Analyses</h3>
+            {projects.length > 0 && (
+              <span className="text-sm text-gray-500">{projects.length} project{projects.length !== 1 ? 's' : ''}</span>
+            )}
+          </div>
+
+          {projects.length === 0 ? (
+            <div className="bg-gray-50 rounded-xl border-2 border-dashed border-gray-300 p-12 text-center">
+              <svg className="w-12 h-12 text-gray-400 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+              </svg>
+              <h4 className="text-lg font-medium text-gray-900 mb-2">No analyses yet</h4>
+              <p className="text-gray-500">Enter a domain in the form to start your first analysis</p>
+            </div>
+          ) : (
+            <div className="grid sm:grid-cols-2 gap-4">
+              {projects.map(project => (
+                <ProjectCard
+                  key={project.id}
+                  project={project}
+                  onView={handleViewProject}
+                  onDelete={handleDeleteProject}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* FAQ Section */}
+      <div className="mt-12">
+        <FAQ />
+      </div>
+    </main>
+  );
+
+  // Render Analysis/Project View
+  const renderAnalysis = () => (
+    <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      {/* Back Button & Title */}
+      <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center gap-4">
+          <button
+            onClick={handleBackToDashboard}
+            className="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+            </svg>
+          </button>
+          <div>
+            <h2 className="text-xl font-bold text-gray-900">{currentDomain}</h2>
+            <p className="text-sm text-gray-500">{currentLocation.name} • {brandName}</p>
+          </div>
+        </div>
+        <button
+          onClick={handleExport}
+          className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 flex items-center gap-2"
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+          </svg>
+          Export CSV
+        </button>
+      </div>
+
+      {/* Metric Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+        <MetricCard
+          title={customSOS ? "Share of Search (Filtered)" : "Share of Search"}
+          value={sosResult ? `${customSOS?.sos ?? sosResult.shareOfSearch}%` : '—'}
+          subtitle={customSOS ? "Based on selected competitors" : "Brand awareness in search"}
+          borderColor="emerald"
+          tooltip="SOS = Your Brand Search Volume / Total Brand Search Volumes × 100"
+          details={sosResult ? [
+            { label: 'Your Brand Volume', value: (customSOS?.brandVolume ?? sosResult.brandVolume).toLocaleString() },
+            { label: 'Total Brand Volume', value: (customSOS?.totalVolume ?? sosResult.totalBrandVolume).toLocaleString() }
+          ] : undefined}
+          insight={sosResult ? {
+            summary: effectiveSOS >= 30
+              ? `Strong brand awareness! ${brandName || 'Your brand'} captures a significant portion of branded searches.`
+              : effectiveSOS >= 15
+              ? `Good brand presence. ${brandName || 'Your brand'} has moderate visibility among competitors.`
+              : `Room for growth. Consider brand marketing to increase awareness.`,
+            explanation: 'SOS measures how often people search for your brand compared to all brand searches in your industry.'
+          } : undefined}
+        />
+
+        <MetricCard
+          title={customSOV ? "Share of Voice (Filtered)" : "Share of Voice"}
+          value={sovResult ? `${customSOV?.sov ?? sovResult.shareOfVoice}%` : '—'}
+          subtitle={customSOV ? "Based on selected filters" : "Visibility-weighted market share"}
+          borderColor="orange"
+          tooltip="SOV = Sum(Keyword Volume × CTR at Position) / Total Market Volume × 100"
+          details={sovResult ? [
+            { label: 'Visible Volume', value: (customSOV?.visibleVolume ?? sovResult.visibleVolume).toLocaleString() },
+            { label: 'Total Market Volume', value: (customSOV?.totalVolume ?? sovResult.totalMarketVolume).toLocaleString() }
+          ] : undefined}
+          insight={sovResult ? {
+            summary: effectiveSOV >= 25
+              ? `Excellent visibility! Your site captures a large share of organic clicks.`
+              : effectiveSOV >= 10
+              ? `Decent organic presence. There's potential to improve rankings.`
+              : `Low visibility. Focus on SEO to rank higher for valuable keywords.`,
+            explanation: 'SOV shows your actual visibility in search results, weighted by click probability based on position.'
+          } : undefined}
+        />
+
+        <MetricCard
+          title={customSOS || customSOV ? "Growth Gap (Filtered)" : "Growth Gap"}
+          value={gapResult ? `${effectiveGap > 0 ? '+' : ''}${effectiveGap}pp` : '—'}
+          subtitle={customSOS || customSOV ? "Based on filtered metrics" : "SOV - SOS differential"}
+          borderColor={gapResult ? getGapColor(effectiveGap) : 'blue'}
+          tooltip="Gap = SOV - SOS. Positive gap indicates growth potential. Negative gap suggests missing opportunities."
+          interpretation={gapResult ? getGapInterpretation(
+            effectiveGap > 2 ? 'growth_potential' : effectiveGap < -2 ? 'missing_opportunities' : 'balanced'
+          ) : undefined}
+          insight={gapResult ? {
+            summary: effectiveGap > 2
+              ? `Growth Potential! Your visibility exceeds brand awareness - opportunity to convert searches into loyalty.`
+              : effectiveGap < -2
+              ? `Missing Opportunities. Your brand awareness exceeds visibility - focus on SEO improvements.`
+              : `Balanced performance. Brand awareness and visibility are well-aligned.`,
+            explanation: effectiveGap > 2
+              ? 'Invest in brand marketing to convert search visibility into lasting brand awareness.'
+              : effectiveGap < -2
+              ? 'Prioritize SEO to ensure customers who know your brand can find you organically.'
+              : 'Maintain your balanced approach while looking for opportunities to grow both metrics.'
+          } : undefined}
+        />
+      </div>
+
+      {/* Trends Section */}
+      {sosResult && sovResult && (
+        <div className="mb-8">
+          {!trendsData && !trendsLoading && (
+            <div className="bg-white rounded-xl shadow-sm p-6 text-center">
+              <div className="flex flex-col items-center gap-4">
+                <svg className="w-12 h-12 text-purple-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+                </svg>
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900 mb-1">Historical Trends Available</h3>
+                  <p className="text-sm text-gray-500 mb-4">
+                    See how your Share of Search and Share of Voice have changed over the past 12 months
+                  </p>
+                </div>
+                <button
+                  onClick={handleFetchTrends}
+                  className="px-6 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 flex items-center gap-2 transition-colors"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+                  </svg>
+                  Load Historical Trends
+                </button>
+              </div>
+            </div>
+          )}
+          <TrendsPanel data={trendsData} isLoading={trendsLoading} />
+        </div>
+      )}
+
+      {/* Tables */}
+      <div className="space-y-6">
+        {brandKeywords.length > 0 && (
+          <KeywordTable
+            type="sos"
+            keywords={brandKeywords}
+            onSelectedCompetitorsChange={handleSOSChange}
+          />
+        )}
+
+        {sovResult && (
+          <KeywordTable
+            type="sov"
+            keywords={sovResult.keywordBreakdown}
+            onFilteredSOVChange={handleSOVChange}
+          />
+        )}
+      </div>
+    </main>
+  );
+
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
       <header className="bg-white border-b border-gray-200">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
-            <div className="flex items-center gap-3">
+            <button
+              onClick={handleBackToDashboard}
+              className="flex items-center gap-3 hover:opacity-80 transition-opacity"
+            >
               <div className="w-8 h-8 bg-emerald-600 rounded-lg flex items-center justify-center">
                 <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
                 </svg>
               </div>
               <h1 className="text-xl font-bold text-gray-900">SearchShare Pro</h1>
-            </div>
+            </button>
             <div className="flex items-center gap-3">
               <button
                 onClick={() => setShowMethodology(true)}
@@ -208,177 +470,13 @@ function App() {
                 </svg>
                 Methodology
               </button>
-              <button
-                onClick={loadSampleData}
-                disabled={isLoading}
-                className="px-4 py-2 text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 flex items-center gap-2"
-              >
-                <svg className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                </svg>
-                Refresh
-              </button>
-              <button
-                onClick={handleExport}
-                disabled={!sosResult || !sovResult}
-                className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 disabled:opacity-50 flex items-center gap-2"
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                </svg>
-                Export CSV
-              </button>
             </div>
           </div>
         </div>
       </header>
 
       {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Error Alert */}
-        {error && (
-          <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg text-red-700">
-            <div className="flex items-center gap-2">
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-              {error}
-            </div>
-          </div>
-        )}
-
-        {/* API Configuration */}
-        <APIConfigPanel onFetchData={handleFetchData} isLoading={isLoading} />
-
-        {/* Metric Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-          <MetricCard
-            title={customSOS ? "Share of Search (Filtered)" : "Share of Search"}
-            value={sosResult ? `${customSOS?.sos ?? sosResult.shareOfSearch}%` : '—'}
-            subtitle={customSOS ? "Based on selected competitors" : "Brand awareness in search"}
-            borderColor="emerald"
-            tooltip="SOS = Your Brand Search Volume / Total Brand Search Volumes × 100. Measures brand awareness through search behavior."
-            details={sosResult ? [
-              { label: 'Your Brand Volume', value: (customSOS?.brandVolume ?? sosResult.brandVolume).toLocaleString() },
-              { label: 'Total Brand Volume', value: (customSOS?.totalVolume ?? sosResult.totalBrandVolume).toLocaleString() }
-            ] : undefined}
-            insight={sosResult ? {
-              summary: effectiveSOS >= 30
-                ? `Strong brand awareness! ${brandName || 'Your brand'} captures a significant portion of branded searches.`
-                : effectiveSOS >= 15
-                ? `Good brand presence. ${brandName || 'Your brand'} has moderate visibility among competitors.`
-                : `Room for growth. Consider brand marketing to increase awareness.`,
-              explanation: 'SOS measures how often people search for your brand compared to all brand searches in your industry.'
-            } : undefined}
-          />
-
-          <MetricCard
-            title={customSOV ? "Share of Voice (Filtered)" : "Share of Voice"}
-            value={sovResult ? `${customSOV?.sov ?? sovResult.shareOfVoice}%` : '—'}
-            subtitle={customSOV ? "Based on selected filters" : "Visibility-weighted market share"}
-            borderColor="orange"
-            tooltip="SOV = Sum(Keyword Volume × CTR at Position) / Total Market Volume × 100. Weights search volume by actual click probability based on ranking position."
-            details={sovResult ? [
-              { label: 'Visible Volume', value: (customSOV?.visibleVolume ?? sovResult.visibleVolume).toLocaleString() },
-              { label: 'Total Market Volume', value: (customSOV?.totalVolume ?? sovResult.totalMarketVolume).toLocaleString() }
-            ] : undefined}
-            insight={sovResult ? {
-              summary: effectiveSOV >= 25
-                ? `Excellent visibility! Your site captures a large share of organic clicks.`
-                : effectiveSOV >= 10
-                ? `Decent organic presence. There's potential to improve rankings.`
-                : `Low visibility. Focus on SEO to rank higher for valuable keywords.`,
-              explanation: 'SOV shows your actual visibility in search results, weighted by click probability based on position.'
-            } : undefined}
-          />
-
-          <MetricCard
-            title={customSOS || customSOV ? "Growth Gap (Filtered)" : "Growth Gap"}
-            value={gapResult ? `${effectiveGap > 0 ? '+' : ''}${effectiveGap}pp` : '—'}
-            subtitle={customSOS || customSOV ? "Based on filtered metrics" : "SOV - SOS differential"}
-            borderColor={gapResult ? getGapColor(effectiveGap) : 'blue'}
-            tooltip="Gap = SOV - SOS. Positive gap indicates growth potential (visibility exceeds awareness). Negative gap suggests missing market opportunities."
-            interpretation={gapResult ? getGapInterpretation(
-              effectiveGap > 2 ? 'growth_potential' : effectiveGap < -2 ? 'missing_opportunities' : 'balanced'
-            ) : undefined}
-            insight={gapResult ? {
-              summary: effectiveGap > 2
-                ? `Growth Potential! Your visibility exceeds brand awareness - opportunity to convert searches into loyalty.`
-                : effectiveGap < -2
-                ? `Missing Opportunities. Your brand awareness exceeds visibility - focus on SEO improvements.`
-                : `Balanced performance. Brand awareness and visibility are well-aligned.`,
-              explanation: effectiveGap > 2
-                ? 'Invest in brand marketing to convert search visibility into lasting brand awareness.'
-                : effectiveGap < -2
-                ? 'Prioritize SEO to ensure customers who know your brand can find you organically.'
-                : 'Maintain your balanced approach while looking for opportunities to grow both metrics.'
-            } : undefined}
-          />
-        </div>
-
-        {/* Trends Section */}
-        {sosResult && sovResult && lastFetchConfig && (
-          <div className="mb-8">
-            {!trendsData && !trendsLoading && (
-              <div className="bg-white rounded-xl shadow-sm p-6 text-center">
-                <div className="flex flex-col items-center gap-4">
-                  <svg className="w-12 h-12 text-purple-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
-                  </svg>
-                  <div>
-                    <h3 className="text-lg font-semibold text-gray-900 mb-1">Historical Trends Available</h3>
-                    <p className="text-sm text-gray-500 mb-4">
-                      See how your Share of Search and Share of Voice have changed over the past 12 months
-                    </p>
-                  </div>
-                  <button
-                    onClick={handleFetchTrends}
-                    className="px-6 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 flex items-center gap-2 transition-colors"
-                  >
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
-                    </svg>
-                    Load Historical Trends
-                  </button>
-                </div>
-              </div>
-            )}
-            <TrendsPanel data={trendsData} isLoading={trendsLoading} />
-          </div>
-        )}
-
-        {/* Tables */}
-        <div className="space-y-6">
-          {brandKeywords.length > 0 && (
-            <KeywordTable
-              type="sos"
-              keywords={brandKeywords}
-              onSelectedCompetitorsChange={handleSOSChange}
-            />
-          )}
-
-          {sovResult && (
-            <KeywordTable
-              type="sov"
-              keywords={sovResult.keywordBreakdown}
-              onFilteredSOVChange={handleSOVChange}
-            />
-          )}
-        </div>
-
-        {/* Loading Overlay */}
-        {isLoading && !sosResult && (
-          <div className="flex items-center justify-center py-12">
-            <div className="flex items-center gap-3 text-gray-500">
-              <svg className="animate-spin h-6 w-6" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-              </svg>
-              <span>Loading data...</span>
-            </div>
-          </div>
-        )}
-      </main>
+      {viewMode === 'dashboard' ? renderDashboard() : renderAnalysis()}
 
       {/* Footer */}
       <footer className="bg-white border-t border-gray-200 mt-12">

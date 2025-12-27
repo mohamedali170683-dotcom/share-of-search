@@ -413,21 +413,23 @@ export const KeywordTable: React.FC<KeywordTableProps> = (props) => {
 
   // Notify parent of SOV filter changes
   useEffect(() => {
-    if (props.type === 'sov' && filteredSOVStats && props.onFilteredSOVChange) {
-      // Only notify when filters are active
-      const hasFilters = selectedCategories.size > 0 || selectedTopics.size > 0 || searchQuery || positionFilter !== 'all';
-      if (hasFilters) {
-        props.onFilteredSOVChange(
-          filteredSOVStats.filteredSOV,
-          filteredSOVStats.totalVisibleVolume,
-          filteredSOVStats.totalMarketVolume
-        );
-      } else {
-        // Reset to original when no filters
-        props.onFilteredSOVChange(0, 0, 0);
-      }
+    if (props.type !== 'sov' || !filteredSOVStats) return;
+    if (!props.onFilteredSOVChange) return;
+
+    // Only notify when filters are active
+    const hasFilters = selectedCategories.size > 0 || selectedTopics.size > 0 || searchQuery || positionFilter !== 'all';
+    if (hasFilters) {
+      props.onFilteredSOVChange(
+        filteredSOVStats.filteredSOV,
+        filteredSOVStats.totalVisibleVolume,
+        filteredSOVStats.totalMarketVolume
+      );
+    } else {
+      // Reset to original when no filters
+      props.onFilteredSOVChange(0, 0, 0);
     }
-  }, [filteredSOVStats, selectedCategories, selectedTopics, searchQuery, positionFilter, props]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filteredSOVStats, selectedCategories.size, selectedTopics.size, searchQuery, positionFilter]);
 
   const handleSort = (key: SortKey) => {
     if (sortKey === key) {
@@ -505,6 +507,25 @@ export const KeywordTable: React.FC<KeywordTableProps> = (props) => {
     setCurrentPage(1);
   };
 
+  // Page navigation handlers
+  const goToPage = (page: number) => {
+    if (page >= 1 && page <= totalPages) {
+      setCurrentPage(page);
+    }
+  };
+
+  const goToPreviousPage = () => {
+    if (currentPage > 1) {
+      setCurrentPage(currentPage - 1);
+    }
+  };
+
+  const goToNextPage = () => {
+    if (currentPage < totalPages) {
+      setCurrentPage(currentPage + 1);
+    }
+  };
+
   // Pagination component
   const Pagination = () => {
     if (totalPages <= 1) return null;
@@ -559,7 +580,8 @@ export const KeywordTable: React.FC<KeywordTableProps> = (props) => {
 
         <div className="flex items-center gap-1">
           <button
-            onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+            type="button"
+            onClick={goToPreviousPage}
             disabled={currentPage === 1}
             className="px-3 py-1 text-sm border border-gray-300 rounded hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
           >
@@ -569,8 +591,9 @@ export const KeywordTable: React.FC<KeywordTableProps> = (props) => {
           {pageNumbers.map((page, idx) => (
             typeof page === 'number' ? (
               <button
-                key={idx}
-                onClick={() => setCurrentPage(page)}
+                type="button"
+                key={`page-${page}`}
+                onClick={() => goToPage(page)}
                 className={`px-3 py-1 text-sm border rounded ${
                   currentPage === page
                     ? 'bg-orange-500 text-white border-orange-500'
@@ -580,12 +603,13 @@ export const KeywordTable: React.FC<KeywordTableProps> = (props) => {
                 {page}
               </button>
             ) : (
-              <span key={idx} className="px-2 text-gray-400">...</span>
+              <span key={`ellipsis-${idx}`} className="px-2 text-gray-400">...</span>
             )
           ))}
 
           <button
-            onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+            type="button"
+            onClick={goToNextPage}
             disabled={currentPage === totalPages}
             className="px-3 py-1 text-sm border border-gray-300 rounded hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
           >

@@ -42,7 +42,7 @@ interface TrendsPanelProps {
 const COMPETITOR_COLORS = ['#8b5cf6', '#ec4899', '#06b6d4'];
 
 const TrendArrow: React.FC<{ value: number }> = ({ value }) => {
-  if (value === 0) return <span className="text-gray-400 text-sm">-</span>;
+  if (value === 0) return <span className="text-gray-400 dark:text-gray-500 dark:text-gray-400 text-sm">-</span>;
   return (
     <span className={`text-sm ${value > 0 ? 'text-emerald-500' : 'text-red-500'}`}>
       {value > 0 ? '↑' : '↓'}
@@ -53,7 +53,7 @@ const TrendArrow: React.FC<{ value: number }> = ({ value }) => {
 const ChangeValue: React.FC<{ value: number; label: string }> = ({ value, label }) => (
   <div className="flex items-center gap-1.5">
     <TrendArrow value={value} />
-    <span className={`text-sm font-medium ${value === 0 ? 'text-gray-500' : value > 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+    <span className={`text-sm font-medium ${value === 0 ? 'text-gray-500 dark:text-gray-400' : value > 0 ? 'text-emerald-600' : 'text-red-600'}`}>
       {value > 0 ? '+' : ''}{value}pp
     </span>
     <span className="text-sm text-gray-400">{label}</span>
@@ -199,11 +199,11 @@ const KeywordImpactSection: React.FC<{
     <div className="mt-6">
       <div className="flex items-center justify-between mb-4">
         <h5 className="text-sm font-semibold text-gray-700">Keyword Impact (12 months)</h5>
-        <div className="flex bg-gray-100 rounded-lg p-0.5">
+        <div className="flex bg-gray-100 dark:bg-gray-700 rounded-lg p-0.5">
           <button
             onClick={() => setActiveTab('generic')}
             className={`px-3 py-1.5 text-sm rounded-md transition-all ${
-              activeTab === 'generic' ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'
+              activeTab === 'generic' ? 'bg-white dark:bg-gray-600 shadow text-gray-900 dark:text-white' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
             }`}
           >
             Generic
@@ -211,7 +211,7 @@ const KeywordImpactSection: React.FC<{
           <button
             onClick={() => setActiveTab('branded')}
             className={`px-3 py-1.5 text-sm rounded-md transition-all ${
-              activeTab === 'branded' ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'
+              activeTab === 'branded' ? 'bg-white dark:bg-gray-600 shadow text-gray-900 dark:text-white' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
             }`}
           >
             Branded
@@ -230,7 +230,7 @@ const KeywordImpactSection: React.FC<{
             {currentData.gainers.length > 0 ? (
               <div className="space-y-2">
                 {currentData.gainers.map((item, idx) => (
-                  <div key={idx} className="flex items-center justify-between text-sm bg-white rounded-lg px-3 py-2">
+                  <div key={idx} className="flex items-center justify-between text-sm bg-white dark:bg-gray-700 rounded-lg px-3 py-2">
                     <div className="flex items-center gap-2 flex-1 min-w-0">
                       <span className="text-emerald-600 font-mono text-xs">#{item.position}</span>
                       <span className="truncate text-gray-700">{item.keyword}</span>
@@ -253,7 +253,7 @@ const KeywordImpactSection: React.FC<{
             {currentData.losers.length > 0 ? (
               <div className="space-y-2">
                 {currentData.losers.map((item, idx) => (
-                  <div key={idx} className="flex items-center justify-between text-sm bg-white rounded-lg px-3 py-2">
+                  <div key={idx} className="flex items-center justify-between text-sm bg-white dark:bg-gray-700 rounded-lg px-3 py-2">
                     <div className="flex items-center gap-2 flex-1 min-w-0">
                       <span className="text-red-600 font-mono text-xs">#{item.position}</span>
                       <span className="truncate text-gray-700">{item.keyword}</span>
@@ -268,7 +268,7 @@ const KeywordImpactSection: React.FC<{
           </div>
         </div>
       ) : (
-        <p className="text-sm text-gray-500 text-center py-3">No {activeTab} keyword data available</p>
+        <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-3">No {activeTab} keyword data available</p>
       )}
     </div>
   );
@@ -279,12 +279,12 @@ export const TrendsPanel: React.FC<TrendsPanelProps> = ({ data, isLoading }) => 
 
   if (isLoading) {
     return (
-      <div className="bg-white rounded-xl shadow-sm overflow-hidden mb-6">
-        <div className="px-4 py-3 border-b border-gray-200">
-          <h3 className="text-sm font-semibold text-gray-900">Historical Trends</h3>
+      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm overflow-hidden mb-6">
+        <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-700">
+          <h3 className="text-sm font-semibold text-gray-900 dark:text-white">Historical Trends</h3>
         </div>
         <div className="p-4 flex items-center justify-center">
-          <div className="flex items-center gap-2 text-gray-500 text-sm">
+          <div className="flex items-center gap-2 text-gray-500 dark:text-gray-400 text-sm">
             <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
               <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
               <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
@@ -309,14 +309,14 @@ export const TrendsPanel: React.FC<TrendsPanelProps> = ({ data, isLoading }) => 
   };
 
   return (
-    <div className="bg-white rounded-xl shadow-sm overflow-hidden mb-8">
-      <div className="px-6 py-4 border-b border-gray-200 bg-gradient-to-r from-purple-50 to-pink-50">
+    <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm overflow-hidden mb-8">
+      <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700 bg-gradient-to-r from-purple-50 to-pink-50">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <svg className="w-5 h-5 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
             </svg>
-            <h3 className="text-lg font-semibold text-gray-900">Historical Trends</h3>
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Historical Trends</h3>
             <span className="px-2 py-0.5 bg-purple-100 text-purple-700 text-xs rounded-full">12 months</span>
           </div>
         </div>
@@ -355,8 +355,8 @@ export const TrendsPanel: React.FC<TrendsPanelProps> = ({ data, isLoading }) => 
 
             {/* Competitor Toggle */}
             {data.competitorTrends && data.competitorTrends.length > 0 && (
-              <div className="p-3 bg-gray-50 rounded-lg border border-gray-200">
-                <div className="text-sm font-semibold text-gray-600 mb-2">Compare with:</div>
+              <div className="p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600">
+                <div className="text-sm font-semibold text-gray-600 dark:text-gray-300 dark:text-gray-400 mb-2">Compare with:</div>
                 <div className="space-y-2">
                   {data.competitorTrends.map((comp, idx) => (
                     <label key={comp.name} className="flex items-center gap-2 cursor-pointer">
@@ -371,7 +371,7 @@ export const TrendsPanel: React.FC<TrendsPanelProps> = ({ data, isLoading }) => 
                         className="w-3 h-3 rounded-full"
                         style={{ backgroundColor: COMPETITOR_COLORS[idx] }}
                       />
-                      <span className="text-sm text-gray-700">{comp.name}</span>
+                      <span className="text-sm text-gray-700 dark:text-gray-300">{comp.name}</span>
                     </label>
                   ))}
                 </div>
@@ -387,7 +387,7 @@ export const TrendsPanel: React.FC<TrendsPanelProps> = ({ data, isLoading }) => 
         <div className="mt-6 grid grid-cols-2 gap-4">
           <div className={`p-4 rounded-lg border ${
             data.changes.sos.vs12MonthsAgo > 2 ? 'bg-emerald-50 border-emerald-200 text-emerald-700' :
-            data.changes.sos.vs12MonthsAgo < -2 ? 'bg-red-50 border-red-200 text-red-700' : 'bg-gray-50 border-gray-200 text-gray-600'
+            data.changes.sos.vs12MonthsAgo < -2 ? 'bg-red-50 border-red-200 text-red-700' : 'bg-gray-50 border-gray-200 text-gray-600 dark:text-gray-300'
           }`}>
             <div className="text-sm font-medium">
               {data.changes.sos.vs12MonthsAgo > 2 ? 'Brand awareness is growing' :
@@ -400,7 +400,7 @@ export const TrendsPanel: React.FC<TrendsPanelProps> = ({ data, isLoading }) => 
           </div>
           <div className={`p-4 rounded-lg border ${
             data.changes.sov.vs12MonthsAgo > 2 ? 'bg-emerald-50 border-emerald-200 text-emerald-700' :
-            data.changes.sov.vs12MonthsAgo < -2 ? 'bg-red-50 border-red-200 text-red-700' : 'bg-gray-50 border-gray-200 text-gray-600'
+            data.changes.sov.vs12MonthsAgo < -2 ? 'bg-red-50 border-red-200 text-red-700' : 'bg-gray-50 border-gray-200 text-gray-600 dark:text-gray-300'
           }`}>
             <div className="text-sm font-medium">
               {data.changes.sov.vs12MonthsAgo > 2 ? 'SEO visibility is improving' :

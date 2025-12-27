@@ -117,23 +117,23 @@ const getParentTopics = (keywords: RankedKeyword[]): Map<string, string> => {
 };
 
 const getPositionBadgeClass = (position: number): string => {
-  if (position <= 3) return 'bg-emerald-100 text-emerald-800';
-  if (position <= 10) return 'bg-yellow-100 text-yellow-800';
-  return 'bg-gray-100 text-gray-600';
+  if (position <= 3) return 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/50 dark:text-emerald-300';
+  if (position <= 10) return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/50 dark:text-yellow-300';
+  return 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300';
 };
 
 const getCategoryBadgeClass = (category: string): string => {
   const colors = [
-    'bg-purple-100 text-purple-800',
-    'bg-blue-100 text-blue-800',
-    'bg-pink-100 text-pink-800',
-    'bg-indigo-100 text-indigo-800',
-    'bg-teal-100 text-teal-800',
-    'bg-cyan-100 text-cyan-800',
-    'bg-rose-100 text-rose-800',
-    'bg-violet-100 text-violet-800',
-    'bg-fuchsia-100 text-fuchsia-800',
-    'bg-sky-100 text-sky-800',
+    'bg-purple-100 text-purple-800 dark:bg-purple-900/50 dark:text-purple-300',
+    'bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-300',
+    'bg-pink-100 text-pink-800 dark:bg-pink-900/50 dark:text-pink-300',
+    'bg-indigo-100 text-indigo-800 dark:bg-indigo-900/50 dark:text-indigo-300',
+    'bg-teal-100 text-teal-800 dark:bg-teal-900/50 dark:text-teal-300',
+    'bg-cyan-100 text-cyan-800 dark:bg-cyan-900/50 dark:text-cyan-300',
+    'bg-rose-100 text-rose-800 dark:bg-rose-900/50 dark:text-rose-300',
+    'bg-violet-100 text-violet-800 dark:bg-violet-900/50 dark:text-violet-300',
+    'bg-fuchsia-100 text-fuchsia-800 dark:bg-fuchsia-900/50 dark:text-fuchsia-300',
+    'bg-sky-100 text-sky-800 dark:bg-sky-900/50 dark:text-sky-300',
   ];
 
   let hash = 0;
@@ -561,7 +561,7 @@ export const KeywordTable: React.FC<KeywordTableProps> = (props) => {
     return (
       <div className="flex items-center justify-between px-6 py-3 bg-gray-50 border-t border-gray-200">
         <div className="flex items-center gap-4">
-          <span className="text-sm text-gray-600">
+          <span className="text-sm text-gray-600 dark:text-gray-300">
             Showing {((currentPage - 1) * itemsPerPage) + 1}-{Math.min(currentPage * itemsPerPage, sortedKeywords.length)} of {sortedKeywords.length}
           </span>
           <select
@@ -586,7 +586,7 @@ export const KeywordTable: React.FC<KeywordTableProps> = (props) => {
             type="button"
             onClick={goToPreviousPage}
             disabled={currentPage === 1}
-            className="px-3 py-1 text-sm border border-gray-300 rounded hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="px-3 py-1 text-sm border border-gray-300 rounded hover:bg-gray-100 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             Previous
           </button>
@@ -600,13 +600,13 @@ export const KeywordTable: React.FC<KeywordTableProps> = (props) => {
                 className={`px-3 py-1 text-sm border rounded ${
                   currentPage === page
                     ? 'bg-orange-500 text-white border-orange-500'
-                    : 'border-gray-300 hover:bg-gray-100'
+                    : 'border-gray-300 hover:bg-gray-100 dark:hover:bg-gray-600'
                 }`}
               >
                 {page}
               </button>
             ) : (
-              <span key={`ellipsis-${idx}`} className="px-2 text-gray-400">...</span>
+              <span key={`ellipsis-${idx}`} className="px-2 text-gray-400 dark:text-gray-500">...</span>
             )
           ))}
 
@@ -614,7 +614,7 @@ export const KeywordTable: React.FC<KeywordTableProps> = (props) => {
             type="button"
             onClick={goToNextPage}
             disabled={currentPage === totalPages}
-            className="px-3 py-1 text-sm border border-gray-300 rounded hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="px-3 py-1 text-sm border border-gray-300 rounded hover:bg-gray-100 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             Next
           </button>
@@ -625,21 +625,21 @@ export const KeywordTable: React.FC<KeywordTableProps> = (props) => {
 
   if (props.type === 'sov') {
     return (
-      <div className="bg-white rounded-xl shadow-sm overflow-hidden">
-        <div className="px-6 py-4 border-b border-gray-200">
-          <h3 className="text-lg font-semibold text-gray-900">Share of Voice - Keyword Breakdown</h3>
-          <p className="text-sm text-gray-500 mt-1">Rankings weighted by CTR to calculate visible search volume</p>
+      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm overflow-hidden">
+        <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Share of Voice - Keyword Breakdown</h3>
+          <p className="text-sm text-gray-500 dark:text-gray-400 dark:text-gray-500 dark:text-gray-400 dark:text-gray-500 mt-1">Rankings weighted by CTR to calculate visible search volume</p>
         </div>
 
         {/* Filters Section */}
-        <div className="px-6 py-4 bg-gray-50 border-b border-gray-200">
+        <div className="px-6 py-4 bg-gray-50 dark:bg-gray-700/50 border-b border-gray-200 dark:border-gray-700">
           <div className="flex flex-col gap-4">
             {/* Search and Position Filter Row */}
             <div className="flex flex-wrap items-center gap-4">
               {/* Search Input */}
               <div className="flex-1 min-w-[200px]">
                 <div className="relative">
-                  <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                   </svg>
                   <input
@@ -649,7 +649,7 @@ export const KeywordTable: React.FC<KeywordTableProps> = (props) => {
                     value={searchQuery}
                     onChange={(e) => handleFilterChange(setSearchQuery, e.target.value)}
                     placeholder="Search keywords..."
-                    className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
+                    className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
                   />
                 </div>
               </div>
@@ -660,7 +660,7 @@ export const KeywordTable: React.FC<KeywordTableProps> = (props) => {
                 name="positionFilter"
                 value={positionFilter}
                 onChange={(e) => handleFilterChange(setPositionFilter, e.target.value)}
-                className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
+                className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
               >
                 <option value="all">All Positions</option>
                 <option value="top3">Top 3</option>
@@ -678,7 +678,7 @@ export const KeywordTable: React.FC<KeywordTableProps> = (props) => {
                     setPositionFilter('all');
                     setCurrentPage(1);
                   }}
-                  className="px-3 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-100"
+                  className="px-3 py-2 text-sm text-gray-600 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white hover:bg-gray-100 dark:hover:bg-gray-600"
                 >
                   Clear All Filters
                 </button>
@@ -697,7 +697,7 @@ export const KeywordTable: React.FC<KeywordTableProps> = (props) => {
                   className={`px-4 py-2 text-sm font-medium transition-colors ${
                     groupingMode === 'topic'
                       ? 'bg-purple-600 text-white'
-                      : 'bg-white text-gray-700 hover:bg-gray-50'
+                      : 'bg-white text-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50'
                   }`}
                 >
                   Parent Topic
@@ -710,7 +710,7 @@ export const KeywordTable: React.FC<KeywordTableProps> = (props) => {
                   className={`px-4 py-2 text-sm font-medium transition-colors border-l border-gray-300 ${
                     groupingMode === 'category'
                       ? 'bg-orange-600 text-white'
-                      : 'bg-white text-gray-700 hover:bg-gray-50'
+                      : 'bg-white text-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50'
                   }`}
                 >
                   Category
@@ -737,7 +737,7 @@ export const KeywordTable: React.FC<KeywordTableProps> = (props) => {
                   {selectedTopics.size > 0 && (
                     <button
                       onClick={clearTopics}
-                      className="px-2 py-1 text-xs border border-gray-300 rounded-lg hover:bg-gray-100 text-gray-600"
+                      className="px-2 py-1 text-xs border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white hover:bg-gray-100 dark:hover:bg-gray-600 text-gray-600"
                     >
                       Clear Selection
                     </button>
@@ -751,7 +751,7 @@ export const KeywordTable: React.FC<KeywordTableProps> = (props) => {
                       className={`inline-flex items-center gap-2 px-2 py-1 rounded-lg border cursor-pointer transition-all text-xs ${
                         selectedTopics.has(topic)
                           ? 'bg-purple-50 border-purple-300 text-purple-700'
-                          : 'bg-white border-gray-300 text-gray-700 hover:border-purple-400'
+                          : 'bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:border-purple-400'
                       }`}
                     >
                       <input
@@ -766,11 +766,11 @@ export const KeywordTable: React.FC<KeywordTableProps> = (props) => {
                       <span className={`px-1 rounded ${selectedTopics.has(topic) ? 'bg-purple-200' : 'bg-gray-100'}`}>
                         {count}
                       </span>
-                      <span className="text-gray-400">{(volume / 1000).toFixed(1)}k</span>
+                      <span className="text-gray-400 dark:text-gray-500">{(volume / 1000).toFixed(1)}k</span>
                     </label>
                   ))}
                   {topicStats.length > 15 && (
-                    <span className="text-xs text-gray-400 self-center">+{topicStats.length - 15} more topics</span>
+                    <span className="text-xs text-gray-400 dark:text-gray-500 self-center">+{topicStats.length - 15} more topics</span>
                   )}
                 </div>
                 <p className="text-xs text-purple-600 italic">
@@ -793,7 +793,7 @@ export const KeywordTable: React.FC<KeywordTableProps> = (props) => {
                   {selectedCategories.size > 0 && (
                     <button
                       onClick={clearCategories}
-                      className="px-2 py-1 text-xs border border-gray-300 rounded-lg hover:bg-gray-100 text-gray-600"
+                      className="px-2 py-1 text-xs border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white hover:bg-gray-100 dark:hover:bg-gray-600 text-gray-600"
                     >
                       Clear Selection
                     </button>
@@ -807,7 +807,7 @@ export const KeywordTable: React.FC<KeywordTableProps> = (props) => {
                       className={`inline-flex items-center gap-2 px-2 py-1 rounded-lg border cursor-pointer transition-all text-xs ${
                         selectedCategories.has(category)
                           ? 'bg-orange-50 border-orange-300 text-orange-700'
-                          : 'bg-white border-gray-300 text-gray-700 hover:border-orange-400'
+                          : 'bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:border-orange-400'
                       }`}
                     >
                       <input
@@ -825,7 +825,7 @@ export const KeywordTable: React.FC<KeywordTableProps> = (props) => {
                     </label>
                   ))}
                   {categoryStats.length > 12 && (
-                    <span className="text-xs text-gray-400 self-center">+{categoryStats.length - 12} more</span>
+                    <span className="text-xs text-gray-400 dark:text-gray-500 self-center">+{categoryStats.length - 12} more</span>
                   )}
                 </div>
                 <p className="text-xs text-orange-600 italic">
@@ -855,33 +855,33 @@ export const KeywordTable: React.FC<KeywordTableProps> = (props) => {
           <table className="w-full">
             <thead className="bg-gray-50">
               <tr>
-                <th onClick={() => handleSort('keyword')} className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100">
+                <th onClick={() => handleSort('keyword')} className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 dark:text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600">
                   Keyword{getSortIndicator('keyword')}
                 </th>
-                <th onClick={() => handleSort('category')} className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100">
+                <th onClick={() => handleSort('category')} className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 dark:text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600">
                   {groupingMode === 'topic' ? 'Parent Topic' : 'Category'}{getSortIndicator('category')}
                 </th>
-                <th onClick={() => handleSort('searchVolume')} className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100">
+                <th onClick={() => handleSort('searchVolume')} className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 dark:text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600">
                   Volume{getSortIndicator('searchVolume')}
                 </th>
-                <th onClick={() => handleSort('position')} className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100">
+                <th onClick={() => handleSort('position')} className="px-6 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400 dark:text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600">
                   Position{getSortIndicator('position')}
                 </th>
-                <th onClick={() => handleSort('ctr')} className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100">
+                <th onClick={() => handleSort('ctr')} className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 dark:text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600">
                   CTR %{getSortIndicator('ctr')}
                 </th>
-                <th onClick={() => handleSort('visibleVolume')} className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100">
+                <th onClick={() => handleSort('visibleVolume')} className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 dark:text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600">
                   Visible Vol.{getSortIndicator('visibleVolume')}
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 dark:text-gray-500 uppercase tracking-wider">
                   URL
                 </th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-200">
+            <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
               {(paginatedKeywords as CategorizedKeyword[]).map((kw, idx) => (
-                <tr key={idx} className="hover:bg-gray-50">
-                  <td className="px-6 py-3 whitespace-nowrap text-sm font-medium text-gray-900">
+                <tr key={idx} className="hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                  <td className="px-6 py-3 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">
                     {kw.keyword}
                   </td>
                   <td className="px-6 py-3 whitespace-nowrap">
@@ -910,7 +910,7 @@ export const KeywordTable: React.FC<KeywordTableProps> = (props) => {
                       </button>
                     )}
                   </td>
-                  <td className="px-6 py-3 whitespace-nowrap text-sm text-gray-600 text-right">
+                  <td className="px-6 py-3 whitespace-nowrap text-sm text-gray-600 dark:text-gray-300 text-right">
                     {kw.searchVolume.toLocaleString()}
                   </td>
                   <td className="px-6 py-3 whitespace-nowrap text-center">
@@ -918,13 +918,13 @@ export const KeywordTable: React.FC<KeywordTableProps> = (props) => {
                       #{kw.position}
                     </span>
                   </td>
-                  <td className="px-6 py-3 whitespace-nowrap text-sm text-gray-600 text-right">
+                  <td className="px-6 py-3 whitespace-nowrap text-sm text-gray-600 dark:text-gray-300 text-right">
                     {kw.ctr?.toFixed(1)}%
                   </td>
                   <td className="px-6 py-3 whitespace-nowrap text-sm font-medium text-emerald-600 text-right">
                     {kw.visibleVolume?.toLocaleString()}
                   </td>
-                  <td className="px-6 py-3 whitespace-nowrap text-sm text-gray-500 max-w-[200px] truncate" title={kw.url}>
+                  <td className="px-6 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400 dark:text-gray-500 max-w-[200px] truncate" title={kw.url}>
                     {kw.url}
                   </td>
                 </tr>
@@ -940,15 +940,15 @@ export const KeywordTable: React.FC<KeywordTableProps> = (props) => {
 
   // SOS Table
   return (
-    <div className="bg-white rounded-xl shadow-sm overflow-hidden">
-      <div className="px-6 py-4 border-b border-gray-200">
-        <h3 className="text-lg font-semibold text-gray-900">Share of Search - Brand Keywords</h3>
-        <p className="text-sm text-gray-500 mt-1">Brand search volumes compared to competitors. Select which competitors to include in the calculation.</p>
+    <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm overflow-hidden">
+      <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+        <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Share of Search - Brand Keywords</h3>
+        <p className="text-sm text-gray-500 dark:text-gray-400 dark:text-gray-500 dark:text-gray-400 dark:text-gray-500 mt-1">Brand search volumes compared to competitors. Select which competitors to include in the calculation.</p>
       </div>
 
       {/* Competitor Selection */}
       {competitorBrands.length > 0 && (
-        <div className="px-6 py-4 bg-gray-50 border-b border-gray-200">
+        <div className="px-6 py-4 bg-gray-50 dark:bg-gray-700/50 border-b border-gray-200 dark:border-gray-700">
           <div className="flex items-center justify-between mb-2">
             <div className="flex items-center gap-2">
               <svg className="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -960,13 +960,13 @@ export const KeywordTable: React.FC<KeywordTableProps> = (props) => {
             <div className="flex gap-2">
               <button
                 onClick={selectAllCompetitors}
-                className="px-3 py-1 text-xs border border-gray-300 rounded-lg hover:bg-gray-100 text-gray-600"
+                className="px-3 py-1 text-xs border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white hover:bg-gray-100 dark:hover:bg-gray-600 text-gray-600"
               >
                 Select All
               </button>
               <button
                 onClick={deselectAllCompetitors}
-                className="px-3 py-1 text-xs border border-gray-300 rounded-lg hover:bg-gray-100 text-gray-600"
+                className="px-3 py-1 text-xs border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white hover:bg-gray-100 dark:hover:bg-gray-600 text-gray-600"
               >
                 Deselect All
               </button>
@@ -980,7 +980,7 @@ export const KeywordTable: React.FC<KeywordTableProps> = (props) => {
                 className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border cursor-pointer transition-all ${
                   selectedCompetitors.has(brand)
                     ? 'bg-emerald-50 border-emerald-300 text-emerald-700'
-                    : 'bg-white border-gray-300 text-gray-500'
+                    : 'bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-500'
                 }`}
               >
                 <input
@@ -1022,23 +1022,23 @@ export const KeywordTable: React.FC<KeywordTableProps> = (props) => {
         <table className="w-full">
           <thead className="bg-gray-50">
             <tr>
-              <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider w-16">
+              <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400 dark:text-gray-500 uppercase tracking-wider w-16">
                 Include
               </th>
-              <th onClick={() => handleSort('keyword')} className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100">
+              <th onClick={() => handleSort('keyword')} className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 dark:text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600">
                 Keyword{getSortIndicator('keyword')}
               </th>
-              <th onClick={() => handleSort('searchVolume')} className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100">
+              <th onClick={() => handleSort('searchVolume')} className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 dark:text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600">
                 Search Volume{getSortIndicator('searchVolume')}
               </th>
-              <th onClick={() => handleSort('isOwnBrand')} className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100">
+              <th onClick={() => handleSort('isOwnBrand')} className="px-6 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400 dark:text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600">
                 Type{getSortIndicator('isOwnBrand')}
               </th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-200">
+          <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
             {(sortedKeywords as BrandKeyword[]).map((kw, idx) => (
-              <tr key={idx} className={`hover:bg-gray-50 ${!kw.isOwnBrand && !selectedCompetitors.has(kw.keyword) ? 'opacity-50' : ''}`}>
+              <tr key={idx} className={`hover:bg-gray-50 dark:hover:bg-gray-700/50 ${!kw.isOwnBrand && !selectedCompetitors.has(kw.keyword) ? 'opacity-50' : ''}`}>
                 <td className="px-6 py-4 text-center">
                   {kw.isOwnBrand ? (
                     <span className="text-emerald-500">
@@ -1058,10 +1058,10 @@ export const KeywordTable: React.FC<KeywordTableProps> = (props) => {
                     />
                   )}
                 </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">
                   {kw.keyword}
                 </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600 text-right">
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600 dark:text-gray-300 text-right">
                   {kw.searchVolume.toLocaleString()}
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-center">

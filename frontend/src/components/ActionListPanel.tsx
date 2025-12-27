@@ -73,10 +73,13 @@ const getPriorityColor = (priority: number) => {
 };
 
 export const ActionListPanel: React.FC<ActionListPanelProps> = ({ actions, onDiscardChange }) => {
-  const [filterType, setFilterType] = useState<'all' | ActionItem['actionType']>('all');
+  const [filterType, setFilterType] = useState<'all' | 'recommended' | ActionItem['actionType']>('all');
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [discardedIds, setDiscardedIds] = useState<Set<string>>(new Set());
   const [showDiscarded, setShowDiscarded] = useState(false);
+
+  // Count recommended actions
+  const recommendedCount = actions.filter(a => a.isRecommended && !discardedIds.has(a.id)).length;
 
   // Toggle discard state for an action
   const toggleDiscard = (id: string, e: React.MouseEvent) => {
@@ -96,8 +99,14 @@ export const ActionListPanel: React.FC<ActionListPanelProps> = ({ actions, onDis
   // Filter actions by type and discard status
   const filteredActions = useMemo(() => {
     return actions.filter(action => {
-      const matchesType = filterType === 'all' || action.actionType === filterType;
       const isDiscarded = discardedIds.has(action.id);
+      if (filterType === 'all') {
+        return showDiscarded || !isDiscarded;
+      }
+      if (filterType === 'recommended') {
+        return action.isRecommended && (showDiscarded || !isDiscarded);
+      }
+      const matchesType = action.actionType === filterType;
       return matchesType && (showDiscarded || !isDiscarded);
     });
   }, [actions, filterType, discardedIds, showDiscarded]);
@@ -232,6 +241,21 @@ export const ActionListPanel: React.FC<ActionListPanelProps> = ({ actions, onDis
           >
             All ({actions.length})
           </button>
+          {recommendedCount > 0 && (
+            <button
+              onClick={() => setFilterType('recommended')}
+              className={`px-3 py-1.5 rounded-full text-sm transition-colors flex items-center gap-1 ${
+                filterType === 'recommended'
+                  ? 'bg-indigo-500 text-white'
+                  : 'bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300'
+              }`}
+            >
+              <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+              </svg>
+              Recommended ({recommendedCount})
+            </button>
+          )}
           {typeCounts.optimize > 0 && (
             <button
               onClick={() => setFilterType('optimize')}
@@ -308,7 +332,15 @@ export const ActionListPanel: React.FC<ActionListPanelProps> = ({ actions, onDis
 
                   {/* Content */}
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1">
+                    <div className="flex items-center gap-2 mb-1 flex-wrap">
+                      {action.isRecommended && !isDiscarded && (
+                        <span className="px-2 py-0.5 rounded text-xs font-medium bg-indigo-100 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300 flex items-center gap-1" title={action.recommendedReason}>
+                          <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                          </svg>
+                          Recommended
+                        </span>
+                      )}
                       <span className={`px-2 py-0.5 rounded text-xs font-medium ${config.bgColor} ${config.color}`}>
                         {config.icon} {config.label}
                       </span>

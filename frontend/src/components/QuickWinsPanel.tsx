@@ -22,10 +22,13 @@ const getPositionBadgeClass = (position: number): string => {
 
 export const QuickWinsPanel: React.FC<QuickWinsPanelProps> = ({ quickWins, onDiscardChange }) => {
   const [filter, setFilter] = useState<'all' | 'low' | 'medium' | 'high'>('all');
-  const [sortBy, setSortBy] = useState<'uplift' | 'volume' | 'position'>('uplift');
+  const [sortBy, setSortBy] = useState<'uplift' | 'volume' | 'position' | 'recommended'>('uplift');
   const [expandedIdx, setExpandedIdx] = useState<number | null>(null);
   const [discardedKeywords, setDiscardedKeywords] = useState<Set<string>>(new Set());
   const [showDiscarded, setShowDiscarded] = useState(false);
+
+  // Count recommended items
+  const recommendedCount = quickWins.filter(qw => qw.isRecommended && !discardedKeywords.has(qw.keyword)).length;
 
   const toggleDiscard = (keyword: string) => {
     setDiscardedKeywords(prev => {
@@ -47,6 +50,11 @@ export const QuickWinsPanel: React.FC<QuickWinsPanelProps> = ({ quickWins, onDis
       switch (sortBy) {
         case 'volume': return b.searchVolume - a.searchVolume;
         case 'position': return a.currentPosition - b.currentPosition;
+        case 'recommended':
+          // Recommended first, then by uplift
+          if (a.isRecommended && !b.isRecommended) return -1;
+          if (!a.isRecommended && b.isRecommended) return 1;
+          return b.clickUplift - a.clickUplift;
         default: return b.clickUplift - a.clickUplift;
       }
     });
@@ -179,9 +187,12 @@ export const QuickWinsPanel: React.FC<QuickWinsPanelProps> = ({ quickWins, onDis
             <span className="text-sm text-gray-600 dark:text-gray-300">Sort:</span>
             <select
               value={sortBy}
-              onChange={(e) => setSortBy(e.target.value as 'uplift' | 'volume' | 'position')}
+              onChange={(e) => setSortBy(e.target.value as 'uplift' | 'volume' | 'position' | 'recommended')}
               className="px-3 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300"
             >
+              {recommendedCount > 0 && (
+                <option value="recommended">Recommended ({recommendedCount})</option>
+              )}
               <option value="uplift">Click Uplift</option>
               <option value="volume">Search Volume</option>
               <option value="position">Current Position</option>
@@ -237,6 +248,14 @@ export const QuickWinsPanel: React.FC<QuickWinsPanelProps> = ({ quickWins, onDis
                       <h4 className={`text-sm font-medium truncate ${isDiscarded ? 'line-through text-gray-500' : 'text-gray-900 dark:text-white'}`}>
                         {qw.keyword}
                       </h4>
+                      {qw.isRecommended && !isDiscarded && (
+                        <span className="px-2 py-0.5 text-xs rounded-full bg-indigo-100 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300 font-medium flex items-center gap-1" title={qw.recommendedReason}>
+                          <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                          </svg>
+                          Recommended
+                        </span>
+                      )}
                       {qw.category && (
                         <span className="px-2 py-0.5 text-xs rounded-full bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300">
                           {qw.category}

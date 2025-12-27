@@ -107,6 +107,8 @@ export interface QuickWinOpportunity {
   category?: string;
   isDiscarded?: boolean; // User can dismiss irrelevant quick wins
   reasoning?: string; // Detailed explanation of why this is a quick win
+  isRecommended?: boolean; // Flagged as recommended based on brand context
+  recommendedReason?: string; // Why this is recommended for the brand
 }
 
 // Category SOV Breakdown
@@ -170,6 +172,8 @@ export interface ActionItem {
   reasoning: string;
   isDiscarded?: boolean; // User can dismiss actions
   detailedSteps?: string[]; // Step-by-step implementation guide
+  isRecommended?: boolean; // Flagged as recommended based on brand context
+  recommendedReason?: string; // Why this is recommended for the brand
 }
 
 // Hidden Gem - Low competition, high potential keyword

@@ -9,9 +9,71 @@ import type {
   KeywordBattle,
   HiddenGem,
   CannibalizationIssue,
-  ContentGap
+  ContentGap,
+  BrandContext
 } from '../types';
 import { getCTR } from './calculations';
+
+// ==========================================
+// BRAND CONTEXT MATCHING
+// ==========================================
+
+/**
+ * Check if a keyword or category matches brand context (SEO focus, product categories, strengths)
+ * Returns match reason if found, undefined otherwise
+ */
+function matchesBrandContext(
+  keyword: string,
+  category: string | undefined,
+  context: BrandContext | undefined
+): { matches: boolean; reason?: string } {
+  if (!context) return { matches: false };
+
+  const kwLower = keyword.toLowerCase();
+  const catLower = (category || '').toLowerCase();
+
+  // Check SEO focus areas
+  for (const focus of context.seoFocus || []) {
+    const focusLower = focus.toLowerCase();
+    if (kwLower.includes(focusLower) || catLower.includes(focusLower)) {
+      return { matches: true, reason: `Aligns with your SEO focus: "${focus}"` };
+    }
+  }
+
+  // Check product categories
+  for (const prodCat of context.productCategories || []) {
+    const prodCatLower = prodCat.toLowerCase();
+    if (kwLower.includes(prodCatLower) || catLower.includes(prodCatLower)) {
+      return { matches: true, reason: `Matches your product category: "${prodCat}"` };
+    }
+  }
+
+  // Check key strengths
+  for (const strength of context.keyStrengths || []) {
+    const strengthLower = strength.toLowerCase();
+    if (kwLower.includes(strengthLower)) {
+      return { matches: true, reason: `Leverages your strength: "${strength}"` };
+    }
+  }
+
+  // Check industry/vertical match
+  if (context.industry) {
+    const industryLower = context.industry.toLowerCase();
+    if (catLower.includes(industryLower) || kwLower.includes(industryLower)) {
+      return { matches: true, reason: `Core to your ${context.industry} industry` };
+    }
+  }
+
+  // Check vertical match
+  if (context.vertical) {
+    const verticalLower = context.vertical.toLowerCase();
+    if (catLower.includes(verticalLower) || kwLower.includes(verticalLower)) {
+      return { matches: true, reason: `Fits your ${context.vertical} vertical` };
+    }
+  }
+
+  return { matches: false };
+}
 
 // ==========================================
 // QUICK WINS CALCULATION
@@ -144,7 +206,8 @@ function generateQuickWinReasoning(
  */
 export function calculateQuickWins(
   rankedKeywords: RankedKeyword[],
-  minVolume: number = 100
+  minVolume: number = 100,
+  brandContext?: BrandContext
 ): QuickWinOpportunity[] {
   const quickWins: QuickWinOpportunity[] = [];
 
@@ -167,6 +230,11 @@ export function calculateQuickWins(
     // Only include if there's meaningful uplift
     if (clickUplift < 50) continue;
 
+    const category = kw.category || detectCategory(kw.keyword);
+
+    // Check if this matches brand context for recommendation
+    const contextMatch = matchesBrandContext(kw.keyword, category, brandContext);
+
     quickWins.push({
       keyword: kw.keyword,
       currentPosition: kw.position,
@@ -178,8 +246,10 @@ export function calculateQuickWins(
       upliftPercentage,
       effort: calculateEffort(kw.position, targetPosition),
       url: kw.url || '',
-      category: kw.category || detectCategory(kw.keyword),
-      reasoning: generateQuickWinReasoning(kw, targetPosition, clickUplift, upliftPercentage)
+      category,
+      reasoning: generateQuickWinReasoning(kw, targetPosition, clickUplift, upliftPercentage),
+      isRecommended: contextMatch.matches,
+      recommendedReason: contextMatch.reason
     });
   }
 
@@ -785,7 +855,8 @@ export function generateActionList(
   categories: CategorySOV[],
   competitors: CompetitorStrength[],
   hiddenGems: HiddenGem[] = [],
-  cannibalizationIssues: CannibalizationIssue[] = []
+  cannibalizationIssues: CannibalizationIssue[] = [],
+  brandContext?: BrandContext
 ): ActionItem[] {
   const actions: ActionItem[] = [];
   let id = 1;
@@ -805,12 +876,15 @@ export function generateActionList(
       impact: impactScore,
       effort: qw.effort,
       estimatedUplift: qw.clickUplift,
-      reasoning: `+${qw.clickUplift.toLocaleString()} clicks potential (${qw.upliftPercentage}% increase)`
+      reasoning: `+${qw.clickUplift.toLocaleString()} clicks potential (${qw.upliftPercentage}% increase)`,
+      isRecommended: qw.isRecommended,
+      recommendedReason: qw.recommendedReason
     });
   }
 
   // Add Hidden Gem actions (low competition opportunities)
   for (const gem of hiddenGems.slice(0, 3)) {
+    const gemContextMatch = matchesBrandContext(gem.keyword, gem.category, brandContext);
     actions.push({
       id: `action-${id++}`,
       actionType: 'create',
@@ -822,7 +896,9 @@ export function generateActionList(
       impact: gem.searchVolume >= 1000 ? 'high' : gem.searchVolume >= 500 ? 'medium' : 'low',
       effort: gem.keywordDifficulty <= 20 ? 'low' : gem.keywordDifficulty <= 35 ? 'medium' : 'high',
       estimatedUplift: gem.potentialClicks,
-      reasoning: `KD: ${gem.keywordDifficulty}, Volume: ${gem.searchVolume.toLocaleString()}, Potential: ${gem.potentialClicks.toLocaleString()} clicks`
+      reasoning: `KD: ${gem.keywordDifficulty}, Volume: ${gem.searchVolume.toLocaleString()}, Potential: ${gem.potentialClicks.toLocaleString()} clicks`,
+      isRecommended: gemContextMatch.matches,
+      recommendedReason: gemContextMatch.reason
     });
   }
 
@@ -833,6 +909,7 @@ export function generateActionList(
     const actionVerb = issue.recommendation === 'consolidate' ? 'Consolidate' :
                        issue.recommendation === 'redirect' ? 'Redirect' : 'Differentiate';
 
+    const cannibContextMatch = matchesBrandContext(issue.keyword, undefined, brandContext);
     actions.push({
       id: `action-${id++}`,
       actionType: 'optimize',
@@ -843,13 +920,16 @@ export function generateActionList(
       impact: issue.impactScore >= 500 ? 'high' : issue.impactScore >= 200 ? 'medium' : 'low',
       effort: issue.recommendation === 'redirect' ? 'low' : 'medium',
       estimatedUplift: issue.impactScore,
-      reasoning: `Cannibalization losing ~${issue.impactScore.toLocaleString()} clicks. URLs: ${issue.competingUrls.map(u => u.url).join(', ').slice(0, 100)}...`
+      reasoning: `Cannibalization losing ~${issue.impactScore.toLocaleString()} clicks. URLs: ${issue.competingUrls.map(u => u.url).join(', ').slice(0, 100)}...`,
+      isRecommended: cannibContextMatch.matches,
+      recommendedReason: cannibContextMatch.reason
     });
   }
 
   // Add category improvement actions
   const weakCategories = categories.filter(c => c.status === 'weak' || c.status === 'trailing');
   for (const cat of weakCategories.slice(0, 3)) {
+    const catContextMatch = matchesBrandContext('', cat.category, brandContext);
     actions.push({
       id: `action-${id++}`,
       actionType: 'create',
@@ -860,13 +940,24 @@ export function generateActionList(
       impact: cat.totalCategoryVolume > 10000 ? 'high' : 'medium',
       effort: 'high',
       estimatedUplift: Math.round(cat.totalCategoryVolume * 0.1),
-      reasoning: `${cat.keywordCount} keywords, ${cat.totalCategoryVolume.toLocaleString()} monthly searches. Current SOV: ${cat.yourSOV}%`
+      reasoning: `${cat.keywordCount} keywords, ${cat.totalCategoryVolume.toLocaleString()} monthly searches. Current SOV: ${cat.yourSOV}%`,
+      isRecommended: catContextMatch.matches,
+      recommendedReason: catContextMatch.reason
     });
   }
 
   // Add competitive response actions
   for (const comp of competitors.slice(0, 2)) {
     if (comp.headToHead.theyWin > comp.headToHead.youWin) {
+      // Check if any dominant category matches brand context
+      let compContextMatch: { matches: boolean; reason?: string } = { matches: false };
+      for (const domCat of comp.dominantCategories) {
+        const match = matchesBrandContext('', domCat, brandContext);
+        if (match.matches) {
+          compContextMatch = match;
+          break;
+        }
+      }
       actions.push({
         id: `action-${id++}`,
         actionType: 'investigate',
@@ -876,7 +967,9 @@ export function generateActionList(
         impact: 'medium',
         effort: 'low',
         estimatedUplift: 0,
-        reasoning: `${comp.competitor} dominates: ${comp.dominantCategories.join(', ') || 'multiple categories'}`
+        reasoning: `${comp.competitor} dominates: ${comp.dominantCategories.join(', ') || 'multiple categories'}`,
+        isRecommended: compContextMatch.matches,
+        recommendedReason: compContextMatch.reason
       });
     }
   }
@@ -884,6 +977,7 @@ export function generateActionList(
   // Add monitoring actions for leading categories
   const leadingCategories = categories.filter(c => c.status === 'leading');
   for (const cat of leadingCategories.slice(0, 2)) {
+    const leadContextMatch = matchesBrandContext('', cat.category, brandContext);
     actions.push({
       id: `action-${id++}`,
       actionType: 'monitor',
@@ -894,7 +988,9 @@ export function generateActionList(
       impact: 'low',
       effort: 'low',
       estimatedUplift: 0,
-      reasoning: `You lead with ${cat.yourSOV}% SOV, avg position #${cat.avgPosition}`
+      reasoning: `You lead with ${cat.yourSOV}% SOV, avg position #${cat.avgPosition}`,
+      isRecommended: leadContextMatch.matches,
+      recommendedReason: leadContextMatch.reason
     });
   }
 
@@ -911,15 +1007,16 @@ export function generateActionList(
  */
 export function generateActionableInsights(
   rankedKeywords: RankedKeyword[],
-  brandKeywords: BrandKeyword[]
+  brandKeywords: BrandKeyword[],
+  brandContext?: BrandContext
 ): ActionableInsights {
-  const quickWins = calculateQuickWins(rankedKeywords);
+  const quickWins = calculateQuickWins(rankedKeywords, 100, brandContext);
   const categoryBreakdown = calculateCategorySOV(rankedKeywords);
   const competitorStrengths = calculateCompetitorStrength(brandKeywords, rankedKeywords);
   const hiddenGems = calculateHiddenGems(rankedKeywords);
   const cannibalizationIssues = detectCannibalization(rankedKeywords);
   const contentGaps = analyzeContentGaps(rankedKeywords, brandKeywords);
-  const actionList = generateActionList(quickWins, categoryBreakdown, competitorStrengths, hiddenGems, cannibalizationIssues);
+  const actionList = generateActionList(quickWins, categoryBreakdown, competitorStrengths, hiddenGems, cannibalizationIssues, brandContext);
 
   const totalQuickWinPotential = quickWins.reduce((sum, q) => sum + q.clickUplift, 0);
   const strongCategories = categoryBreakdown.filter(c => c.status === 'leading' || c.status === 'competitive').length;

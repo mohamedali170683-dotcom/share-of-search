@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { MetricCard, KeywordTable, TrendsPanel, MethodologyPage, FAQ, ProjectCard, AnalysisForm, QuickWinsPanel, CategoryBreakdownPanel, CompetitorStrengthPanel, ActionListPanel, HiddenGemsPanel, CannibalizationPanel, ContentGapsPanel } from './components';
-import type { BrandKeyword, RankedKeyword, SOSResult, SOVResult, GrowthGapResult, Project, ActionableInsights } from './types';
-import { calculateMetrics, getRankedKeywords, getBrandKeywords, getTrends, exportToCSV } from './services/api';
+import type { BrandKeyword, RankedKeyword, SOSResult, SOVResult, GrowthGapResult, Project, ActionableInsights, BrandContext } from './types';
+import { calculateMetrics, getRankedKeywords, getBrandKeywords, getTrends, exportToCSV, getBrandContext } from './services/api';
 import { getProjects, saveProject, deleteProject } from './services/projectStorage';
 import { useTheme } from './contexts/ThemeContext';
 import type { TrendsData } from './services/api';
@@ -36,6 +36,7 @@ function App() {
   const [currentLanguage, setCurrentLanguage] = useState<string>('de');
   const [actualCompetitors, setActualCompetitors] = useState<string[]>([]);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [brandContext, setBrandContext] = useState<BrandContext | undefined>(undefined);
 
   // Custom metric overrides from table filters
   const [customSOS, setCustomSOS] = useState<{ sos: number; brandVolume: number; totalVolume: number } | null>(null);
@@ -65,11 +66,11 @@ function App() {
   const effectiveSOV = customSOV?.sov ?? sovResult?.shareOfVoice ?? 0;
   const effectiveGap = Math.round((effectiveSOV - effectiveSOS) * 10) / 10;
 
-  // Generate actionable insights
+  // Generate actionable insights (with brand context for recommendations)
   const actionableInsights: ActionableInsights | null = useMemo(() => {
     if (rankedKeywords.length === 0 || brandKeywords.length === 0) return null;
-    return generateActionableInsights(rankedKeywords, brandKeywords);
-  }, [rankedKeywords, brandKeywords]);
+    return generateActionableInsights(rankedKeywords, brandKeywords, brandContext);
+  }, [rankedKeywords, brandKeywords, brandContext]);
 
   // Handle new analysis
   const handleAnalyze = async (config: {
@@ -88,6 +89,7 @@ function App() {
       setCurrentDomain(config.domain);
       setCurrentLocation({ code: config.locationCode, name: config.locationName });
       setCurrentLanguage(config.languageCode);
+      setBrandContext(undefined);
 
       const [rankedData, brandData] = await Promise.all([
         getRankedKeywords(
@@ -109,6 +111,26 @@ function App() {
       setActualCompetitors(brandData.competitors || []);
 
       const calcResults = await calculateMetrics(brandData.brandKeywords, rankedData.results);
+
+      // Fetch brand context for personalized recommendations (non-blocking)
+      const topKeywords = rankedData.results
+        .sort((a: RankedKeyword, b: RankedKeyword) => b.searchVolume - a.searchVolume)
+        .slice(0, 10)
+        .map((k: RankedKeyword) => k.keyword);
+      const avgPos = rankedData.results.reduce((sum: number, k: RankedKeyword) => sum + k.position, 0) / rankedData.results.length;
+
+      getBrandContext({
+        domain: config.domain,
+        brandName: brandData.brandName,
+        topKeywords,
+        competitors: brandData.competitors || [],
+        avgPosition: Math.round(avgPos * 10) / 10,
+        keywordCount: rankedData.results.length,
+        sosValue: calcResults.sos.shareOfSearch,
+        sovValue: calcResults.sov.shareOfVoice
+      })
+        .then(context => setBrandContext(context))
+        .catch(() => {}); // Silently fail - recommendations will work without context
       setSosResult(calcResults.sos);
       setSovResult(calcResults.sov);
       setGapResult(calcResults.gap);

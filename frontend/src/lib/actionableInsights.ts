@@ -10,7 +10,11 @@ import type {
   HiddenGem,
   CannibalizationIssue,
   ContentGap,
-  BrandContext
+  BrandContext,
+  FunnelStageAnalysis,
+  IntentOpportunity,
+  SearchIntent,
+  FunnelStage
 } from '../types';
 import { getCTR } from './calculations';
 
@@ -1190,6 +1194,318 @@ export function generateActionList(
 }
 
 // ==========================================
+// FUNNEL-BASED INTENT ANALYSIS
+// ==========================================
+
+/**
+ * Get funnel stage label and description
+ */
+function getFunnelStageInfo(stage: FunnelStage): { label: string; description: string } {
+  switch (stage) {
+    case 'awareness':
+      return {
+        label: 'Awareness Stage',
+        description: 'Users are researching, learning, or discovering. Focus on brand visibility and educational content.'
+      };
+    case 'consideration':
+      return {
+        label: 'Consideration Stage',
+        description: 'Users are comparing options and evaluating. Focus on differentiation and value propositions.'
+      };
+    case 'decision':
+      return {
+        label: 'Decision Stage',
+        description: 'Users are ready to buy or convert. Focus on conversion optimization and clear CTAs.'
+      };
+  }
+}
+
+/**
+ * Assess strategic value of a keyword based on brand context and intent
+ * This considers cases like "kfz mechatroniker" for Continental - informational but strategically valuable
+ */
+function assessStrategicValue(
+  kw: RankedKeyword,
+  brandContext?: BrandContext
+): { value: 'high' | 'medium' | 'low'; reasoning: string } {
+  const funnelStage = kw.searchIntent?.funnelStage || 'awareness';
+  const kwLower = kw.keyword.toLowerCase();
+
+  // Default reasoning
+  let reasoning = '';
+  let value: 'high' | 'medium' | 'low' = 'medium';
+
+  // Decision stage keywords are always high value (ready to buy)
+  if (funnelStage === 'decision') {
+    value = 'high';
+    reasoning = 'High-intent keyword with purchase readiness';
+    return { value, reasoning };
+  }
+
+  // Check for strategic awareness keywords
+  if (funnelStage === 'awareness' && brandContext) {
+    // Check if keyword relates to future customers/workforce (e.g., ausbildung, career)
+    const futureCustomerPatterns = [
+      /ausbildung|training|apprentice|intern/i,
+      /karriere|career|job|beruf/i,
+      /studium|student|university/i,
+      /lernen|learn|education/i
+    ];
+
+    const isWorkforceRelated = futureCustomerPatterns.some(p => p.test(kwLower));
+
+    if (isWorkforceRelated && kw.url?.includes('ausbildung') || kw.url?.includes('karriere') || kw.url?.includes('career')) {
+      value = 'high';
+      reasoning = `Strategic awareness: Builds brand recognition with future professionals in ${brandContext.industry}`;
+      return { value, reasoning };
+    }
+
+    // Check if related to brand's core expertise
+    const coreTerms = [
+      ...(brandContext.seoFocus || []),
+      ...(brandContext.productCategories || []),
+      ...(brandContext.keyStrengths || [])
+    ].map(t => t.toLowerCase());
+
+    const matchesCoreTerm = coreTerms.some(term => kwLower.includes(term) || term.includes(kwLower.split(' ')[0]));
+
+    if (matchesCoreTerm) {
+      value = 'medium';
+      reasoning = `Awareness opportunity: Educational content about ${brandContext.vertical || brandContext.industry}`;
+      return { value, reasoning };
+    }
+  }
+
+  // Consideration stage - comparing options
+  if (funnelStage === 'consideration') {
+    const comparisonPatterns = [
+      /vergleich|comparison|vs|versus/i,
+      /test|review|bewertung/i,
+      /beste|best|top|ranking/i,
+      /alternative|option/i
+    ];
+
+    const isComparison = comparisonPatterns.some(p => p.test(kwLower));
+
+    if (isComparison) {
+      value = 'high';
+      reasoning = 'Active comparison stage - users evaluating options';
+      return { value, reasoning };
+    }
+
+    value = 'medium';
+    reasoning = 'Commercial intent - users researching before purchase';
+    return { value, reasoning };
+  }
+
+  // Default for awareness
+  if (kw.searchVolume >= 1000) {
+    value = 'medium';
+    reasoning = 'High-volume awareness opportunity for brand visibility';
+  } else {
+    value = 'low';
+    reasoning = 'Informational content opportunity';
+  }
+
+  return { value, reasoning };
+}
+
+/**
+ * Generate strategic insights for a funnel stage
+ */
+function generateFunnelStageInsights(
+  stage: FunnelStage,
+  keywords: RankedKeyword[],
+  brandContext?: BrandContext
+): string[] {
+  const insights: string[] = [];
+  const stageKeywords = keywords.filter(kw =>
+    kw.searchIntent?.funnelStage === stage ||
+    (!kw.searchIntent && stage === 'awareness')
+  );
+
+  if (stageKeywords.length === 0) {
+    return [`No ${stage} stage keywords detected. Consider creating content for this stage.`];
+  }
+
+  const avgPosition = stageKeywords.reduce((sum, kw) => sum + kw.position, 0) / stageKeywords.length;
+  const totalVolume = stageKeywords.reduce((sum, kw) => sum + kw.searchVolume, 0);
+  const topPositions = stageKeywords.filter(kw => kw.position <= 3).length;
+  const page1Count = stageKeywords.filter(kw => kw.position <= 10).length;
+
+  switch (stage) {
+    case 'awareness':
+      insights.push(`You have ${stageKeywords.length} awareness keywords with ${totalVolume.toLocaleString()} total monthly searches`);
+      if (avgPosition > 10) {
+        insights.push(`Average position #${avgPosition.toFixed(1)} suggests room for improved visibility in educational content`);
+      }
+      if (brandContext) {
+        insights.push(`Focus on creating authoritative content about ${brandContext.industry} topics to build brand trust`);
+      }
+      break;
+
+    case 'consideration':
+      insights.push(`${stageKeywords.length} commercial keywords detected - users actively comparing options`);
+      if (page1Count < stageKeywords.length * 0.5) {
+        insights.push('Less than 50% of consideration keywords are on page 1 - prioritize comparison content');
+      }
+      insights.push('Create comparison guides and "best of" content to capture users in the evaluation phase');
+      break;
+
+    case 'decision':
+      insights.push(`${stageKeywords.length} high-intent transactional keywords with ${totalVolume.toLocaleString()} monthly searches`);
+      if (topPositions < stageKeywords.length * 0.3) {
+        insights.push('Less than 30% in top 3 positions - optimize product/service pages for conversions');
+      }
+      insights.push('Ensure landing pages have clear CTAs and streamlined purchase paths');
+      break;
+  }
+
+  return insights;
+}
+
+/**
+ * Analyze keywords by funnel stage
+ */
+export function analyzeFunnelStages(
+  rankedKeywords: RankedKeyword[],
+  brandContext?: BrandContext
+): FunnelStageAnalysis[] {
+  const stages: FunnelStage[] = ['awareness', 'consideration', 'decision'];
+  const analyses: FunnelStageAnalysis[] = [];
+
+  for (const stage of stages) {
+    const stageInfo = getFunnelStageInfo(stage);
+
+    // Filter keywords for this stage
+    const stageKeywords = rankedKeywords.filter(kw => {
+      if (kw.searchIntent?.funnelStage) {
+        return kw.searchIntent.funnelStage === stage;
+      }
+      // Default to awareness for keywords without intent data
+      return stage === 'awareness';
+    });
+
+    if (stageKeywords.length === 0 && stage !== 'awareness') {
+      continue; // Skip empty stages except awareness (which gets defaults)
+    }
+
+    const totalVolume = stageKeywords.reduce((sum, kw) => sum + kw.searchVolume, 0);
+    const avgPosition = stageKeywords.length > 0
+      ? stageKeywords.reduce((sum, kw) => sum + kw.position, 0) / stageKeywords.length
+      : 0;
+
+    const visibleVolume = stageKeywords.reduce(
+      (sum, kw) => sum + (kw.searchVolume * getCTR(kw.position)),
+      0
+    );
+
+    const sov = totalVolume > 0 ? Math.round((visibleVolume / totalVolume) * 100 * 10) / 10 : 0;
+
+    // Top keywords by volume
+    const topKeywords = stageKeywords
+      .sort((a, b) => b.searchVolume - a.searchVolume)
+      .slice(0, 5)
+      .map(kw => ({
+        keyword: kw.keyword,
+        searchVolume: kw.searchVolume,
+        position: kw.position,
+        intent: kw.searchIntent?.mainIntent || 'informational' as SearchIntent,
+        url: kw.url
+      }));
+
+    // Opportunities: keywords where we can improve
+    const opportunities = stageKeywords
+      .filter(kw => kw.position > 3 && kw.searchVolume >= 100)
+      .sort((a, b) => b.searchVolume - a.searchVolume)
+      .slice(0, 5)
+      .map(kw => {
+        const strategic = assessStrategicValue(kw, brandContext);
+        return {
+          keyword: kw.keyword,
+          searchVolume: kw.searchVolume,
+          position: kw.position,
+          intent: kw.searchIntent?.mainIntent || 'informational' as SearchIntent,
+          potentialClicks: Math.round(kw.searchVolume * getCTR(3)),
+          strategicValue: strategic.reasoning
+        };
+      });
+
+    // Generate insights
+    const strategicInsights = generateFunnelStageInsights(stage, rankedKeywords, brandContext);
+
+    analyses.push({
+      stage,
+      stageLabel: stageInfo.label,
+      description: stageInfo.description,
+      keywordCount: stageKeywords.length,
+      totalVolume,
+      avgPosition: Math.round(avgPosition * 10) / 10,
+      visibleVolume: Math.round(visibleVolume),
+      sov,
+      topKeywords,
+      opportunities,
+      strategicInsights
+    });
+  }
+
+  return analyses;
+}
+
+/**
+ * Identify intent-based opportunities with strategic value assessment
+ */
+export function analyzeIntentOpportunities(
+  rankedKeywords: RankedKeyword[],
+  brandContext?: BrandContext
+): IntentOpportunity[] {
+  const opportunities: IntentOpportunity[] = [];
+
+  for (const kw of rankedKeywords) {
+    // Skip keywords already ranking well
+    if (kw.position <= 3) continue;
+
+    // Skip low volume keywords
+    if (kw.searchVolume < 100) continue;
+
+    const intent = kw.searchIntent?.mainIntent || 'informational';
+    const funnelStage = kw.searchIntent?.funnelStage || 'awareness';
+    const intentProbability = kw.searchIntent?.probability || 0.5;
+
+    const strategic = assessStrategicValue(kw, brandContext);
+
+    // Check if this matches brand context for labeling
+    const category = kw.category || detectCategory(kw.keyword);
+    const contextMatch = matchesBrandContext(kw.keyword, category, brandContext);
+
+    opportunities.push({
+      keyword: kw.keyword,
+      searchVolume: kw.searchVolume,
+      position: kw.position,
+      intent,
+      intentProbability,
+      funnelStage,
+      category,
+      url: kw.url,
+      strategicValue: strategic.value,
+      strategicReasoning: strategic.reasoning,
+      brandRelevance: contextMatch.matches ? contextMatch.reason : undefined
+    });
+  }
+
+  // Sort by strategic value, then by volume
+  return opportunities
+    .sort((a, b) => {
+      const valueOrder = { high: 0, medium: 1, low: 2 };
+      if (valueOrder[a.strategicValue] !== valueOrder[b.strategicValue]) {
+        return valueOrder[a.strategicValue] - valueOrder[b.strategicValue];
+      }
+      return b.searchVolume - a.searchVolume;
+    })
+    .slice(0, 50); // Top 50 opportunities
+}
+
+// ==========================================
 // MAIN FUNCTION
 // ==========================================
 
@@ -1215,9 +1531,27 @@ export function generateActionableInsights(
   const contentGaps = analyzeContentGaps(relevantKeywords, brandKeywords, brandContext);
   const actionList = generateActionList(quickWins, categoryBreakdown, competitorStrengths, hiddenGems, cannibalizationIssues, brandContext);
 
+  // Funnel-based intent analysis
+  const funnelAnalysis = analyzeFunnelStages(relevantKeywords, brandContext);
+  const intentOpportunities = analyzeIntentOpportunities(relevantKeywords, brandContext);
+
   const totalQuickWinPotential = quickWins.reduce((sum, q) => sum + q.clickUplift, 0);
   const strongCategories = categoryBreakdown.filter(c => c.status === 'leading' || c.status === 'competitive').length;
   const weakCategories = categoryBreakdown.filter(c => c.status === 'weak' || c.status === 'trailing').length;
+
+  // Calculate funnel breakdown
+  const funnelBreakdown = {
+    awareness: { count: 0, volume: 0 },
+    consideration: { count: 0, volume: 0 },
+    decision: { count: 0, volume: 0 }
+  };
+
+  for (const stage of funnelAnalysis) {
+    funnelBreakdown[stage.stage] = {
+      count: stage.keywordCount,
+      volume: stage.totalVolume
+    };
+  }
 
   return {
     quickWins,
@@ -1227,13 +1561,16 @@ export function generateActionableInsights(
     hiddenGems,
     cannibalizationIssues,
     contentGaps,
+    funnelAnalysis,
+    intentOpportunities,
     summary: {
       totalQuickWinPotential,
       strongCategories,
       weakCategories,
       hiddenGemsCount: hiddenGems.length,
       cannibalizationCount: cannibalizationIssues.length,
-      topPriorityAction: actionList[0]?.title || 'No actions identified'
+      topPriorityAction: actionList[0]?.title || 'No actions identified',
+      funnelBreakdown
     }
   };
 }

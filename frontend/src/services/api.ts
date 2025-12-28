@@ -3,7 +3,9 @@ import type {
   RankedKeyword,
   CalculateResponse,
   SampleDataResponse,
-  BrandContext
+  BrandContext,
+  SearchIntent,
+  FunnelStage
 } from '../types';
 
 // Use relative paths for Vercel deployment, absolute for local development
@@ -82,6 +84,67 @@ export async function getKeywordDifficulty(
   }
   const data = await response.json();
   return data.difficultyMap || {};
+}
+
+// Search intent info from DataForSEO
+export interface SearchIntentData {
+  mainIntent: SearchIntent;
+  probability: number;
+  foreignIntents?: Array<{ intent: string; probability: number }>;
+  funnelStage: FunnelStage;
+}
+
+// Map intent to funnel stage
+function intentToFunnelStage(intent: SearchIntent): FunnelStage {
+  switch (intent) {
+    case 'informational':
+      return 'awareness';
+    case 'navigational':
+      return 'awareness'; // Brand awareness
+    case 'commercial':
+      return 'consideration';
+    case 'transactional':
+      return 'decision';
+    default:
+      return 'awareness';
+  }
+}
+
+// Fetch search intent for a list of keywords
+export async function getSearchIntent(
+  keywords: string[],
+  locationCode: number,
+  languageCode: string
+): Promise<Record<string, SearchIntentData>> {
+  const response = await fetch(`${API_BASE}/search-intent`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ keywords, locationCode, languageCode })
+  });
+  if (!response.ok) {
+    // Silently return empty if intent fetch fails (graceful degradation)
+    console.warn('Failed to fetch search intent data');
+    return {};
+  }
+  const data = await response.json();
+
+  // Convert API response to our format with funnel stage
+  const intentMap: Record<string, SearchIntentData> = {};
+  const rawMap = data.intentMap || {};
+
+  for (const [keyword, info] of Object.entries(rawMap)) {
+    const intentInfo = info as {
+      mainIntent: SearchIntent;
+      probability: number;
+      foreignIntents?: Array<{ intent: string; probability: number }>;
+    };
+    intentMap[keyword] = {
+      ...intentInfo,
+      funnelStage: intentToFunnelStage(intentInfo.mainIntent)
+    };
+  }
+
+  return intentMap;
 }
 
 export async function getBrandKeywords(

@@ -20,6 +20,20 @@ export interface BrandContext {
   insightContext: string;
 }
 
+// Search Intent Types
+export type SearchIntent = 'informational' | 'navigational' | 'commercial' | 'transactional';
+
+// Marketing Funnel Stage
+export type FunnelStage = 'awareness' | 'consideration' | 'decision';
+
+// Search Intent Info
+export interface SearchIntentInfo {
+  mainIntent: SearchIntent;
+  probability: number;
+  foreignIntents?: Array<{ intent: string; probability: number }>;
+  funnelStage: FunnelStage;
+}
+
 export interface RankedKeyword {
   keyword: string;
   searchVolume: number;
@@ -32,6 +46,7 @@ export interface RankedKeyword {
   keywordDifficulty?: number; // 0-100 scale (from DataForSEO)
   trend?: number; // YoY volume change percentage
   isDiscarded?: boolean; // User can discard keywords from calculations
+  searchIntent?: SearchIntentInfo; // Search intent classification
 }
 
 export interface SOSResult {
@@ -219,6 +234,49 @@ export interface ContentGap {
   estimatedTrafficGain: number; // Estimated additional traffic if gap is filled
 }
 
+// Funnel Stage Analysis - Opportunities grouped by buyer journey stage
+export interface FunnelStageAnalysis {
+  stage: FunnelStage;
+  stageLabel: string;
+  description: string;
+  keywordCount: number;
+  totalVolume: number;
+  avgPosition: number;
+  visibleVolume: number;
+  sov: number;
+  topKeywords: Array<{
+    keyword: string;
+    searchVolume: number;
+    position: number;
+    intent: SearchIntent;
+    url?: string;
+  }>;
+  opportunities: Array<{
+    keyword: string;
+    searchVolume: number;
+    position: number;
+    intent: SearchIntent;
+    potentialClicks: number;
+    strategicValue: string;
+  }>;
+  strategicInsights: string[];
+}
+
+// Intent-Based Opportunity Analysis
+export interface IntentOpportunity {
+  keyword: string;
+  searchVolume: number;
+  position: number;
+  intent: SearchIntent;
+  intentProbability: number;
+  funnelStage: FunnelStage;
+  category?: string;
+  url?: string;
+  strategicValue: 'high' | 'medium' | 'low';
+  strategicReasoning: string;
+  brandRelevance?: string;
+}
+
 // Full Actionable Insights Data
 export interface ActionableInsights {
   quickWins: QuickWinOpportunity[];
@@ -228,6 +286,8 @@ export interface ActionableInsights {
   hiddenGems: HiddenGem[];
   cannibalizationIssues: CannibalizationIssue[];
   contentGaps: ContentGap[];
+  funnelAnalysis?: FunnelStageAnalysis[];
+  intentOpportunities?: IntentOpportunity[];
   summary: {
     totalQuickWinPotential: number;
     strongCategories: number;
@@ -235,5 +295,10 @@ export interface ActionableInsights {
     hiddenGemsCount: number;
     cannibalizationCount: number;
     topPriorityAction: string;
+    funnelBreakdown?: {
+      awareness: { count: number; volume: number };
+      consideration: { count: number; volume: number };
+      decision: { count: number; volume: number };
+    };
   };
 }

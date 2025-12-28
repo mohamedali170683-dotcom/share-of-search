@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { MetricCard, KeywordTable, TrendsPanel, MethodologyPage, FAQ, ProjectCard, AnalysisForm, QuickWinsPanel, CategoryBreakdownPanel, CompetitorStrengthPanel, ActionListPanel, HiddenGemsPanel, CannibalizationPanel, ContentGapsPanel } from './components';
+import { MetricCard, KeywordTable, TrendsPanel, MethodologyPage, FAQ, ProjectCard, AnalysisForm, QuickWinsPanel, CategoryBreakdownPanel, CompetitorStrengthPanel, ActionListPanel, HiddenGemsPanel, CannibalizationPanel, ContentGapsPanel, FunnelAnalysisPanel } from './components';
 import type { BrandKeyword, RankedKeyword, SOSResult, SOVResult, GrowthGapResult, Project, ActionableInsights, BrandContext } from './types';
 import { calculateMetrics, getRankedKeywords, getBrandKeywords, getTrends, exportToCSV, getBrandContext } from './services/api';
 import { getProjects, saveProject, deleteProject } from './services/projectStorage';
@@ -8,7 +8,7 @@ import type { TrendsData } from './services/api';
 import { generateActionableInsights } from './lib/actionableInsights';
 
 type ViewMode = 'dashboard' | 'analysis' | 'project';
-type AnalysisTab = 'overview' | 'quick-wins' | 'hidden-gems' | 'categories' | 'competitors' | 'cannibalization' | 'content-gaps' | 'actions';
+type AnalysisTab = 'overview' | 'quick-wins' | 'hidden-gems' | 'buyer-journey' | 'categories' | 'competitors' | 'cannibalization' | 'content-gaps' | 'actions';
 
 function App() {
   const { toggleTheme, isDark } = useTheme();
@@ -364,6 +364,16 @@ function App() {
       badge: actionableInsights?.hiddenGems.length
     },
     {
+      id: 'buyer-journey',
+      label: 'Buyer Journey',
+      icon: (
+        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+        </svg>
+      ),
+      badge: actionableInsights?.intentOpportunities?.filter(o => o.strategicValue === 'high').length
+    },
+    {
       id: 'categories',
       label: 'Categories',
       icon: (
@@ -621,6 +631,13 @@ function App() {
 
       {analysisTab === 'hidden-gems' && actionableInsights && (
         <HiddenGemsPanel hiddenGems={actionableInsights.hiddenGems} />
+      )}
+
+      {analysisTab === 'buyer-journey' && actionableInsights && (
+        <FunnelAnalysisPanel
+          funnelAnalysis={actionableInsights.funnelAnalysis || []}
+          intentOpportunities={actionableInsights.intentOpportunities || []}
+        />
       )}
 
       {analysisTab === 'categories' && actionableInsights && (

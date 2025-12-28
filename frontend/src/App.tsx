@@ -1,14 +1,14 @@
 import { useState, useEffect, useMemo } from 'react';
-import { MetricCard, KeywordTable, TrendsPanel, MethodologyPage, FAQ, ProjectCard, AnalysisForm, QuickWinsPanel, CategoryBreakdownPanel, CompetitorStrengthPanel, ActionListPanel, HiddenGemsPanel, CannibalizationPanel, ContentGapsPanel, FunnelAnalysisPanel } from './components';
+import { MetricCard, KeywordTable, TrendsPanel, MethodologyPage, FAQ, ProjectCard, AnalysisForm, QuickWinsPanel, CategoryBreakdownPanel, CompetitorStrengthPanel, ActionListPanel, HiddenGemsPanel, CannibalizationPanel, ContentGapsPanel } from './components';
 import type { BrandKeyword, RankedKeyword, SOSResult, SOVResult, GrowthGapResult, Project, ActionableInsights, BrandContext } from './types';
-import { calculateMetrics, getRankedKeywords, getBrandKeywords, getTrends, exportToCSV, getBrandContext } from './services/api';
+import { calculateMetrics, getRankedKeywords, getBrandKeywords, getTrends, exportToCSV, getBrandContext, getSearchIntent } from './services/api';
 import { getProjects, saveProject, deleteProject } from './services/projectStorage';
 import { useTheme } from './contexts/ThemeContext';
 import type { TrendsData } from './services/api';
 import { generateActionableInsights } from './lib/actionableInsights';
 
 type ViewMode = 'dashboard' | 'analysis' | 'project';
-type AnalysisTab = 'overview' | 'quick-wins' | 'hidden-gems' | 'buyer-journey' | 'categories' | 'competitors' | 'cannibalization' | 'content-gaps' | 'actions';
+type AnalysisTab = 'overview' | 'opportunities' | 'categories' | 'competitors' | 'actions';
 
 function App() {
   const { toggleTheme, isDark } = useTheme();
@@ -109,6 +109,23 @@ function App() {
       setBrandKeywords(brandData.brandKeywords);
       setBrandName(brandData.brandName);
       setActualCompetitors(brandData.competitors || []);
+
+      // Fetch search intent for keywords (non-blocking, enriches data)
+      const keywordsList = rankedData.results.map((k: RankedKeyword) => k.keyword);
+      getSearchIntent(keywordsList, config.locationCode, config.languageCode)
+        .then(intentMap => {
+          // Merge intent data into ranked keywords
+          const enrichedKeywords = rankedData.results.map((kw: RankedKeyword) => {
+            const intent = intentMap[kw.keyword.toLowerCase()];
+            if (intent) {
+              return { ...kw, searchIntent: intent };
+            }
+            return kw;
+          });
+          // Update ranked keywords with intent data (triggers re-render of insights)
+          setRankedKeywords(enrichedKeywords);
+        })
+        .catch(() => {}); // Silently fail - analysis works without intent
 
       const calcResults = await calculateMetrics(brandData.brandKeywords, rankedData.results);
 
@@ -332,7 +349,11 @@ function App() {
     </main>
   );
 
-  // Tab configuration
+  // Simplified tab configuration - consolidates related views
+  const totalOpportunities = (actionableInsights?.quickWins.length || 0) +
+    (actionableInsights?.hiddenGems.length || 0) +
+    (actionableInsights?.contentGaps.length || 0);
+
   const analysisTabs: { id: AnalysisTab; label: string; icon: React.ReactNode; badge?: number }[] = [
     {
       id: 'overview',
@@ -344,34 +365,14 @@ function App() {
       )
     },
     {
-      id: 'quick-wins',
-      label: 'Quick Wins',
+      id: 'opportunities',
+      label: 'Opportunities',
       icon: (
         <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
           <path d="M11.3 1.046A1 1 0 0112 2v5h4a1 1 0 01.82 1.573l-7 10A1 1 0 018 18v-5H4a1 1 0 01-.82-1.573l7-10a1 1 0 011.12-.38z" />
         </svg>
       ),
-      badge: actionableInsights?.quickWins.length
-    },
-    {
-      id: 'hidden-gems',
-      label: 'Hidden Gems',
-      icon: (
-        <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
-          <path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z" />
-        </svg>
-      ),
-      badge: actionableInsights?.hiddenGems.length
-    },
-    {
-      id: 'buyer-journey',
-      label: 'Buyer Journey',
-      icon: (
-        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-        </svg>
-      ),
-      badge: actionableInsights?.intentOpportunities?.filter(o => o.strategicValue === 'high').length
+      badge: totalOpportunities
     },
     {
       id: 'categories',
@@ -392,26 +393,6 @@ function App() {
         </svg>
       ),
       badge: actionableInsights?.competitorStrengths.length
-    },
-    {
-      id: 'cannibalization',
-      label: 'Cannibalization',
-      icon: (
-        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-        </svg>
-      ),
-      badge: actionableInsights?.cannibalizationIssues.length
-    },
-    {
-      id: 'content-gaps',
-      label: 'Content Gaps',
-      icon: (
-        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-        </svg>
-      ),
-      badge: actionableInsights?.contentGaps.length
     },
     {
       id: 'actions',
@@ -625,19 +606,22 @@ function App() {
         </>
       )}
 
-      {analysisTab === 'quick-wins' && actionableInsights && (
-        <QuickWinsPanel quickWins={actionableInsights.quickWins} />
-      )}
+      {analysisTab === 'opportunities' && actionableInsights && (
+        <div className="space-y-6">
+          {/* Quick Wins Section */}
+          <QuickWinsPanel quickWins={actionableInsights.quickWins} />
 
-      {analysisTab === 'hidden-gems' && actionableInsights && (
-        <HiddenGemsPanel hiddenGems={actionableInsights.hiddenGems} />
-      )}
+          {/* Hidden Gems Section */}
+          <HiddenGemsPanel hiddenGems={actionableInsights.hiddenGems} />
 
-      {analysisTab === 'buyer-journey' && actionableInsights && (
-        <FunnelAnalysisPanel
-          funnelAnalysis={actionableInsights.funnelAnalysis || []}
-          intentOpportunities={actionableInsights.intentOpportunities || []}
-        />
+          {/* Content Gaps Section */}
+          <ContentGapsPanel contentGaps={actionableInsights.contentGaps} />
+
+          {/* Cannibalization Issues (if any) */}
+          {actionableInsights.cannibalizationIssues.length > 0 && (
+            <CannibalizationPanel issues={actionableInsights.cannibalizationIssues} />
+          )}
+        </div>
       )}
 
       {analysisTab === 'categories' && actionableInsights && (
@@ -649,14 +633,6 @@ function App() {
           competitors={actionableInsights.competitorStrengths}
           yourBrand={brandName}
         />
-      )}
-
-      {analysisTab === 'cannibalization' && actionableInsights && (
-        <CannibalizationPanel issues={actionableInsights.cannibalizationIssues} />
-      )}
-
-      {analysisTab === 'content-gaps' && actionableInsights && (
-        <ContentGapsPanel contentGaps={actionableInsights.contentGaps} />
       )}
 
       {analysisTab === 'actions' && actionableInsights && (

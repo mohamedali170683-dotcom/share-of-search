@@ -1,5 +1,40 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import type { BrandKeyword, RankedKeyword } from '../types';
+import type { BrandKeyword, RankedKeyword, SearchIntent, FunnelStage } from '../types';
+
+// Intent badge configuration
+const getIntentBadgeClass = (intent?: SearchIntent): string => {
+  switch (intent) {
+    case 'informational':
+      return 'bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300';
+    case 'navigational':
+      return 'bg-purple-100 text-purple-700 dark:bg-purple-900/50 dark:text-purple-300';
+    case 'commercial':
+      return 'bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-300';
+    case 'transactional':
+      return 'bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-300';
+    default:
+      return 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400';
+  }
+};
+
+const getIntentLabel = (intent?: SearchIntent): string => {
+  switch (intent) {
+    case 'informational': return 'Info';
+    case 'navigational': return 'Nav';
+    case 'commercial': return 'Comm';
+    case 'transactional': return 'Trans';
+    default: return '—';
+  }
+};
+
+const getFunnelLabel = (stage?: FunnelStage): string => {
+  switch (stage) {
+    case 'awareness': return 'Awareness';
+    case 'consideration': return 'Consider';
+    case 'decision': return 'Decision';
+    default: return '—';
+  }
+};
 
 interface SOVTableProps {
   type: 'sov';
@@ -157,6 +192,7 @@ export const KeywordTable: React.FC<KeywordTableProps> = (props) => {
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [itemsPerPage, setItemsPerPage] = useState<number>(25);
   const [positionFilter, setPositionFilter] = useState<string>('all');
+  const [intentFilter, setIntentFilter] = useState<string>('all');
   const [selectedCompetitors, setSelectedCompetitors] = useState<Set<string>>(new Set());
   const [competitorsInitialized, setCompetitorsInitialized] = useState(false);
 
@@ -378,6 +414,24 @@ export const KeywordTable: React.FC<KeywordTableProps> = (props) => {
         });
       }
 
+      // Apply intent filter
+      if (intentFilter !== 'all') {
+        keywords = keywords.filter(kw => {
+          const intent = kw.searchIntent?.mainIntent;
+          const funnel = kw.searchIntent?.funnelStage;
+          switch (intentFilter) {
+            case 'informational': return intent === 'informational';
+            case 'navigational': return intent === 'navigational';
+            case 'commercial': return intent === 'commercial';
+            case 'transactional': return intent === 'transactional';
+            case 'awareness': return funnel === 'awareness';
+            case 'consideration': return funnel === 'consideration';
+            case 'decision': return funnel === 'decision';
+            default: return true;
+          }
+        });
+      }
+
       return keywords;
     } else {
       let keywords: BrandKeyword[] = props.keywords as BrandKeyword[];
@@ -390,7 +444,7 @@ export const KeywordTable: React.FC<KeywordTableProps> = (props) => {
 
       return keywords;
     }
-  }, [categorizedKeywords, selectedCategories, selectedTopics, groupingMode, searchQuery, positionFilter, props.keywords, props.type]);
+  }, [categorizedKeywords, selectedCategories, selectedTopics, groupingMode, searchQuery, positionFilter, intentFilter, props.keywords, props.type]);
 
   // Calculate filtered SOV stats
   const filteredSOVStats = useMemo(() => {
@@ -417,7 +471,7 @@ export const KeywordTable: React.FC<KeywordTableProps> = (props) => {
     if (!props.onFilteredSOVChange) return;
 
     // Only notify when filters are active
-    const hasFilters = selectedCategories.size > 0 || selectedTopics.size > 0 || searchQuery || positionFilter !== 'all';
+    const hasFilters = selectedCategories.size > 0 || selectedTopics.size > 0 || searchQuery || positionFilter !== 'all' || intentFilter !== 'all';
     if (hasFilters) {
       props.onFilteredSOVChange(
         filteredSOVStats.filteredSOV,
@@ -429,7 +483,7 @@ export const KeywordTable: React.FC<KeywordTableProps> = (props) => {
       props.onFilteredSOVChange(0, 0, 0);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filteredSOVStats, selectedCategories.size, selectedTopics.size, searchQuery, positionFilter]);
+  }, [filteredSOVStats, selectedCategories.size, selectedTopics.size, searchQuery, positionFilter, intentFilter]);
 
   const handleSort = (key: SortKey) => {
     if (sortKey === key) {
@@ -668,14 +722,37 @@ export const KeywordTable: React.FC<KeywordTableProps> = (props) => {
                 <option value="page2">Page 2 (11-20)</option>
               </select>
 
+              {/* Intent / Funnel Filter */}
+              <select
+                id="sov-intent-filter"
+                name="intentFilter"
+                value={intentFilter}
+                onChange={(e) => handleFilterChange(setIntentFilter, e.target.value)}
+                className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              >
+                <option value="all">All Intents</option>
+                <optgroup label="Search Intent">
+                  <option value="informational">Informational</option>
+                  <option value="navigational">Navigational</option>
+                  <option value="commercial">Commercial</option>
+                  <option value="transactional">Transactional</option>
+                </optgroup>
+                <optgroup label="Funnel Stage">
+                  <option value="awareness">Awareness</option>
+                  <option value="consideration">Consideration</option>
+                  <option value="decision">Decision</option>
+                </optgroup>
+              </select>
+
               {/* Clear Filters */}
-              {(searchQuery || selectedCategories.size > 0 || selectedTopics.size > 0 || positionFilter !== 'all') && (
+              {(searchQuery || selectedCategories.size > 0 || selectedTopics.size > 0 || positionFilter !== 'all' || intentFilter !== 'all') && (
                 <button
                   onClick={() => {
                     setSearchQuery('');
                     setSelectedCategories(new Set());
                     setSelectedTopics(new Set());
                     setPositionFilter('all');
+                    setIntentFilter('all');
                     setCurrentPage(1);
                   }}
                   className="px-3 py-2 text-sm text-gray-600 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white hover:bg-gray-100 dark:hover:bg-gray-600"
@@ -835,7 +912,7 @@ export const KeywordTable: React.FC<KeywordTableProps> = (props) => {
             )}
 
             {/* Active Filters Stats */}
-            {(selectedCategories.size > 0 || selectedTopics.size > 0 || searchQuery || positionFilter !== 'all') && filteredSOVStats && (
+            {(selectedCategories.size > 0 || selectedTopics.size > 0 || searchQuery || positionFilter !== 'all' || intentFilter !== 'all') && filteredSOVStats && (
               <div className="flex items-center gap-4 p-3 bg-orange-50 border border-orange-200 rounded-lg">
                 <div className="flex items-center gap-2">
                   <span className="text-sm text-orange-700 font-medium">Filtered SOV:</span>
@@ -872,6 +949,9 @@ export const KeywordTable: React.FC<KeywordTableProps> = (props) => {
                 </th>
                 <th onClick={() => handleSort('visibleVolume')} className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 dark:text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600">
                   Visible Vol.{getSortIndicator('visibleVolume')}
+                </th>
+                <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400 dark:text-gray-500 uppercase tracking-wider">
+                  Intent
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 dark:text-gray-500 uppercase tracking-wider">
                   URL
@@ -923,6 +1003,18 @@ export const KeywordTable: React.FC<KeywordTableProps> = (props) => {
                   </td>
                   <td className="px-6 py-3 whitespace-nowrap text-sm font-medium text-emerald-600 text-right">
                     {kw.visibleVolume?.toLocaleString()}
+                  </td>
+                  <td className="px-6 py-3 whitespace-nowrap text-center">
+                    {kw.searchIntent ? (
+                      <div className="flex flex-col items-center gap-0.5">
+                        <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium ${getIntentBadgeClass(kw.searchIntent.mainIntent)}`}>
+                          {getIntentLabel(kw.searchIntent.mainIntent)}
+                        </span>
+                        <span className="text-xs text-gray-400">{getFunnelLabel(kw.searchIntent.funnelStage)}</span>
+                      </div>
+                    ) : (
+                      <span className="text-gray-400">—</span>
+                    )}
                   </td>
                   <td className="px-6 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400 dark:text-gray-500 max-w-[200px] truncate" title={kw.url}>
                     {kw.url}

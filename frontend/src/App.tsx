@@ -80,6 +80,7 @@ function App() {
     locationCode: number;
     locationName: string;
     languageCode: string;
+    keywordLimit?: number;
     customCompetitors?: string[];
   }) => {
     try {

@@ -1207,7 +1207,7 @@ export function generateActionList(
       impact: impactScore,
       effort: qw.effort,
       estimatedUplift: qw.clickUplift,
-      reasoning: qw.reasoning, // Use enhanced reasoning from QuickWin
+      reasoning: qw.reasoning || `+${qw.clickUplift.toLocaleString()} clicks potential (${qw.upliftPercentage}% increase)`, // Use enhanced reasoning from QuickWin
       isRecommended: qw.isRecommended,
       recommendedReason: qw.recommendedReason,
       searchIntent: qw.searchIntent

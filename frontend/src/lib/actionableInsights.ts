@@ -302,13 +302,95 @@ function detectCategory(keyword: string): string {
 }
 
 /**
- * Generate detailed reasoning for why this is a quick win
+ * Generate strategic reasoning for funnel stage and business context
+ */
+function generateFunnelStageReasoning(
+  keyword: string,
+  funnelStage: 'awareness' | 'consideration' | 'decision' | undefined,
+  brandContext?: BrandContext
+): string {
+  if (!funnelStage || !brandContext) return '';
+
+  const { brandName, industry, productCategories, targetAudience } = brandContext;
+  const productFocus = productCategories.slice(0, 2).join(' and ');
+
+  switch (funnelStage) {
+    case 'awareness':
+      return `**Strategic Value:** This is an awareness-stage keyword where potential ${targetAudience} discover brands during their research phase. ` +
+        `Even though "${keyword}" may not directly relate to ${productFocus}, visibility here builds brand recognition with future customers. ` +
+        `Users researching this topic today could become ${brandName} customers when they're ready to make a purchase decision.`;
+
+    case 'consideration':
+      return `**Strategic Value:** This is a consideration-stage keyword where users are actively comparing options in ${industry}. ` +
+        `Ranking well here positions ${brandName} as a top contender when users evaluate ${productFocus}. ` +
+        `Strong visibility at this stage significantly influences purchase decisions.`;
+
+    case 'decision':
+      return `**Strategic Value:** This is a decision-stage keyword with high purchase intent. ` +
+        `Users searching this are ready to buy or take action. ` +
+        `Improving visibility here directly impacts conversions and revenue for ${brandName}.`;
+
+    default:
+      return '';
+  }
+}
+
+/**
+ * Generate contextual business relevance for keyword
+ */
+function generateBusinessRelevance(
+  keyword: string,
+  category: string | undefined,
+  brandContext?: BrandContext
+): string {
+  if (!brandContext) return '';
+
+  const { brandName, industry, productCategories, targetAudience, vertical } = brandContext;
+  const keywordLower = keyword.toLowerCase();
+
+  // Check for direct product match
+  const isDirectProduct = productCategories.some(cat =>
+    keywordLower.includes(cat.toLowerCase()) ||
+    cat.toLowerCase().includes(keywordLower.split(' ')[0])
+  );
+
+  if (isDirectProduct) {
+    return `**Business Fit:** Directly relates to ${brandName}'s core ${vertical} offerings.`;
+  }
+
+  // Check for industry relevance
+  if (keywordLower.includes(industry.toLowerCase()) ||
+      industry.toLowerCase().split(' ').some(w => keywordLower.includes(w))) {
+    return `**Business Fit:** Relevant to ${brandName}'s position in the ${industry} market.`;
+  }
+
+  // Check for audience/demographic relevance
+  if (targetAudience && (
+    keywordLower.includes('generation') ||
+    keywordLower.includes('demographic') ||
+    keywordLower.includes('customer') ||
+    keywordLower.includes('buyer')
+  )) {
+    return `**Business Fit:** Targets ${targetAudience} - building brand awareness with your key demographic creates long-term value.`;
+  }
+
+  // Generic relevant category
+  if (category) {
+    return `**Business Fit:** Part of the "${category}" conversation where ${brandName} can establish authority and capture mindshare.`;
+  }
+
+  return `**Business Fit:** Opportunity to expand ${brandName}'s visibility beyond core products and reach new audiences.`;
+}
+
+/**
+ * Generate detailed reasoning for why this is a quick win - ENHANCED with business context
  */
 function generateQuickWinReasoning(
   kw: RankedKeyword,
   targetPosition: number,
   clickUplift: number,
-  upliftPercentage: number
+  upliftPercentage: number,
+  brandContext?: BrandContext
 ): string {
   const reasons: string[] = [];
 
@@ -333,7 +415,34 @@ function generateQuickWinReasoning(
   // Uplift reasoning
   reasons.push(`Moving to position #${targetPosition} could yield +${clickUplift.toLocaleString()} clicks (${upliftPercentage}% increase)`);
 
-  return reasons.join('. ') + '.';
+  // Base reasoning
+  let fullReasoning = reasons.join('. ') + '.';
+
+  // Add funnel stage strategic value
+  if (kw.searchIntent?.funnelStage && brandContext) {
+    const funnelReasoning = generateFunnelStageReasoning(
+      kw.keyword,
+      kw.searchIntent.funnelStage,
+      brandContext
+    );
+    if (funnelReasoning) {
+      fullReasoning += '\n\n' + funnelReasoning;
+    }
+  }
+
+  // Add business relevance context
+  if (brandContext) {
+    const businessRelevance = generateBusinessRelevance(
+      kw.keyword,
+      kw.category,
+      brandContext
+    );
+    if (businessRelevance) {
+      fullReasoning += '\n\n' + businessRelevance;
+    }
+  }
+
+  return fullReasoning;
 }
 
 /**
@@ -383,7 +492,7 @@ export function calculateQuickWins(
       effort: calculateEffort(kw.position, targetPosition),
       url: kw.url || '',
       category,
-      reasoning: generateQuickWinReasoning(kw, targetPosition, clickUplift, upliftPercentage),
+      reasoning: generateQuickWinReasoning(kw, targetPosition, clickUplift, upliftPercentage, brandContext),
       isRecommended: contextMatch.matches,
       recommendedReason: contextMatch.reason,
       searchIntent: kw.searchIntent
@@ -724,6 +833,30 @@ export function calculateHiddenGems(
       reasoning += `. ${contextMatch.reason}`;
     }
 
+    // Add funnel stage strategic value
+    if (kw.searchIntent?.funnelStage && brandContext) {
+      const funnelReasoning = generateFunnelStageReasoning(
+        kw.keyword,
+        kw.searchIntent.funnelStage,
+        brandContext
+      );
+      if (funnelReasoning) {
+        reasoning += '\n\n' + funnelReasoning;
+      }
+    }
+
+    // Add business relevance
+    if (brandContext) {
+      const businessRelevance = generateBusinessRelevance(
+        kw.keyword,
+        category,
+        brandContext
+      );
+      if (businessRelevance) {
+        reasoning += '\n\n' + businessRelevance;
+      }
+    }
+
     hiddenGems.push({
       keyword: kw.keyword,
       searchVolume: kw.searchVolume,
@@ -1062,6 +1195,7 @@ export function generateActionList(
   for (const qw of quickWins.slice(0, 5)) {
     const impactScore = qw.clickUplift >= 500 ? 'high' : qw.clickUplift >= 200 ? 'medium' : 'low';
 
+    // Use the enhanced reasoning from the QuickWin (already includes strategic context)
     actions.push({
       id: `action-${id++}`,
       actionType: 'optimize',
@@ -1073,7 +1207,7 @@ export function generateActionList(
       impact: impactScore,
       effort: qw.effort,
       estimatedUplift: qw.clickUplift,
-      reasoning: `+${qw.clickUplift.toLocaleString()} clicks potential (${qw.upliftPercentage}% increase)`,
+      reasoning: qw.reasoning, // Use enhanced reasoning from QuickWin
       isRecommended: qw.isRecommended,
       recommendedReason: qw.recommendedReason,
       searchIntent: qw.searchIntent
@@ -1083,18 +1217,19 @@ export function generateActionList(
   // Add Hidden Gem actions (low competition opportunities)
   for (const gem of hiddenGems.slice(0, 3)) {
     const gemContextMatch = matchesBrandContext(gem.keyword, gem.category, brandContext);
+    // Use enhanced reasoning from HiddenGem (already includes strategic context)
     actions.push({
       id: `action-${id++}`,
       actionType: 'create',
       priority: Math.min(95, 70 + Math.round(gem.searchVolume / 500)),
       title: `Target "${gem.keyword}" (Hidden Gem)`,
-      description: gem.reasoning,
+      description: `Low competition opportunity: KD ${gem.keywordDifficulty}, ${gem.potentialClicks.toLocaleString()} potential clicks`,
       keyword: gem.keyword,
       category: gem.category,
       impact: gem.searchVolume >= 1000 ? 'high' : gem.searchVolume >= 500 ? 'medium' : 'low',
       effort: gem.keywordDifficulty <= 20 ? 'low' : gem.keywordDifficulty <= 35 ? 'medium' : 'high',
       estimatedUplift: gem.potentialClicks,
-      reasoning: `KD: ${gem.keywordDifficulty}, Volume: ${gem.searchVolume.toLocaleString()}, Potential: ${gem.potentialClicks.toLocaleString()} clicks`,
+      reasoning: gem.reasoning, // Use enhanced reasoning from HiddenGem
       isRecommended: gemContextMatch.matches,
       recommendedReason: gemContextMatch.reason,
       searchIntent: gem.searchIntent

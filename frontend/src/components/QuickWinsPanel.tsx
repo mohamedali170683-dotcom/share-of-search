@@ -490,17 +490,39 @@ export const QuickWinsPanel: React.FC<QuickWinsPanelProps> = ({ quickWins, onDis
               {isExpanded && qw.reasoning && (
                 <div className="px-6 pb-4 ml-12">
                   <div className="p-4 bg-amber-50 dark:bg-amber-900/20 rounded-lg border border-amber-200 dark:border-amber-800">
-                    <h5 className="text-sm font-medium text-amber-800 dark:text-amber-200 mb-2 flex items-center gap-2">
+                    <h5 className="text-sm font-medium text-amber-800 dark:text-amber-200 mb-3 flex items-center gap-2">
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                       </svg>
                       Why This Is a Quick Win
                     </h5>
-                    <p className="text-sm text-amber-700 dark:text-amber-300">
-                      {qw.reasoning}
-                    </p>
 
-                    <div className="mt-3 pt-3 border-t border-amber-200 dark:border-amber-700">
+                    {/* Render multi-section reasoning */}
+                    <div className="space-y-3">
+                      {qw.reasoning.split('\n\n').map((section, sectionIdx) => {
+                        // Check if section has a bold header (e.g., **Strategic Value:**)
+                        const boldMatch = section.match(/^\*\*(.+?):\*\*\s*(.*)$/s);
+                        if (boldMatch) {
+                          return (
+                            <div key={sectionIdx} className="bg-amber-100/50 dark:bg-amber-800/30 rounded p-3">
+                              <h6 className="text-xs font-semibold text-amber-900 dark:text-amber-100 mb-1">
+                                {boldMatch[1]}
+                              </h6>
+                              <p className="text-sm text-amber-700 dark:text-amber-300">
+                                {boldMatch[2]}
+                              </p>
+                            </div>
+                          );
+                        }
+                        return (
+                          <p key={sectionIdx} className="text-sm text-amber-700 dark:text-amber-300">
+                            {section}
+                          </p>
+                        );
+                      })}
+                    </div>
+
+                    <div className="mt-4 pt-3 border-t border-amber-200 dark:border-amber-700">
                       <h6 className="text-xs font-medium text-amber-800 dark:text-amber-200 mb-2">Suggested Actions:</h6>
                       <ul className="text-xs text-amber-700 dark:text-amber-300 space-y-1">
                         {qw.currentPosition >= 4 && qw.currentPosition <= 10 && (

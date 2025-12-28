@@ -548,8 +548,31 @@ export const ActionListPanel: React.FC<ActionListPanelProps> = ({ actions, onDis
               {isExpanded && (
                 <div className="px-6 pb-4 pt-0 ml-12">
                   <div className={`p-4 rounded-lg ${config.bgColor} border ${config.borderColor}`}>
-                    <h5 className={`font-medium ${config.color} mb-2`}>Why This Matters</h5>
-                    <p className="text-sm text-gray-700 dark:text-gray-300">{action.reasoning}</p>
+                    <h5 className={`font-medium ${config.color} mb-3`}>Why This Matters</h5>
+                    {/* Render multi-section reasoning */}
+                    <div className="space-y-3">
+                      {action.reasoning.split('\n\n').map((section, sectionIdx) => {
+                        // Check if section has a bold header (e.g., **Strategic Value:**)
+                        const boldMatch = section.match(/^\*\*(.+?):\*\*\s*(.*)$/s);
+                        if (boldMatch) {
+                          return (
+                            <div key={sectionIdx} className="bg-white/50 dark:bg-gray-800/50 rounded p-3">
+                              <h6 className="text-xs font-semibold text-gray-900 dark:text-gray-100 mb-1">
+                                {boldMatch[1]}
+                              </h6>
+                              <p className="text-sm text-gray-700 dark:text-gray-300">
+                                {boldMatch[2]}
+                              </p>
+                            </div>
+                          );
+                        }
+                        return (
+                          <p key={sectionIdx} className="text-sm text-gray-700 dark:text-gray-300">
+                            {section}
+                          </p>
+                        );
+                      })}
+                    </div>
 
                     <div className="mt-4 flex gap-4">
                       <div className="flex items-center gap-2 text-sm">

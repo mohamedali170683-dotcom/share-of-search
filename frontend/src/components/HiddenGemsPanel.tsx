@@ -402,9 +402,30 @@ export const HiddenGemsPanel: React.FC<HiddenGemsPanelProps> = ({ hiddenGems }) 
                       <h4 className="font-medium text-gray-900 dark:text-white truncate">
                         {gem.keyword}
                       </h4>
-                      <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                        {gem.reasoning}
-                      </p>
+                      {/* Render multi-section reasoning */}
+                      <div className="mt-2 space-y-2">
+                        {gem.reasoning.split('\n\n').map((section, sectionIdx) => {
+                          // Check if section has a bold header (e.g., **Strategic Value:**)
+                          const boldMatch = section.match(/^\*\*(.+?):\*\*\s*(.*)$/s);
+                          if (boldMatch) {
+                            return (
+                              <div key={sectionIdx} className="bg-yellow-100/50 dark:bg-yellow-800/20 rounded p-2">
+                                <span className="text-xs font-semibold text-yellow-900 dark:text-yellow-100">
+                                  {boldMatch[1]}:
+                                </span>
+                                <span className="text-xs text-yellow-800 dark:text-yellow-200 ml-1">
+                                  {boldMatch[2]}
+                                </span>
+                              </div>
+                            );
+                          }
+                          return (
+                            <p key={sectionIdx} className="text-sm text-gray-500 dark:text-gray-400">
+                              {section}
+                            </p>
+                          );
+                        })}
+                      </div>
                     </div>
                   </div>
 

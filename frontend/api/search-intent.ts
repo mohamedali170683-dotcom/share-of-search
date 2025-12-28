@@ -63,10 +63,24 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // Log full response for debugging
     console.log('[search-intent] DataForSEO response status:', data.status_code, data.status_message);
     console.log('[search-intent] Tasks count:', data.tasks?.length);
+
+    // Capture debug info to return to frontend
+    const debugInfo: Record<string, unknown> = {
+      responseStatus: data.status_code,
+      responseMessage: data.status_message,
+      tasksCount: data.tasks?.length || 0
+    };
+
     if (data.tasks?.[0]) {
-      console.log('[search-intent] Task 0 status:', data.tasks[0].status_code, data.tasks[0].status_message);
-      console.log('[search-intent] Task 0 result length:', data.tasks[0].result?.length);
-      console.log('[search-intent] Task 0 result sample:', JSON.stringify(data.tasks[0].result?.[0])?.substring(0, 500));
+      const task = data.tasks[0];
+      console.log('[search-intent] Task 0 status:', task.status_code, task.status_message);
+      console.log('[search-intent] Task 0 result length:', task.result?.length);
+      console.log('[search-intent] Task 0 full result:', JSON.stringify(task.result)?.substring(0, 1000));
+
+      debugInfo.taskStatus = task.status_code;
+      debugInfo.taskMessage = task.status_message;
+      debugInfo.resultLength = task.result?.length || 0;
+      debugInfo.resultSample = task.result?.[0] ? JSON.stringify(task.result[0]).substring(0, 300) : 'empty';
     }
 
     if (!response.ok) {
@@ -78,7 +92,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       console.error('[search-intent] Task error:', data.tasks?.[0]?.status_message);
       return res.status(200).json({
         intentMap: {},
-        error: data.tasks?.[0]?.status_message || 'DataForSEO task failed'
+        error: data.tasks?.[0]?.status_message || 'DataForSEO task failed',
+        debug: debugInfo
       });
     }
 
@@ -102,7 +117,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
     }
 
-    return res.status(200).json({ intentMap });
+    // Always return debug info so we can diagnose issues
+    return res.status(200).json({ intentMap, debug: debugInfo });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error';
     return res.status(500).json({ error: message });

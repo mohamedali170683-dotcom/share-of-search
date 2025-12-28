@@ -131,7 +131,12 @@ export async function getSearchIntent(
   }
 
   const data = await response.json();
-  console.log('[API] search-intent raw response keys:', Object.keys(data));
+  console.log('[API] search-intent raw response:', data);
+
+  // Log debug info from backend - this shows what DataForSEO returned
+  if (data.debug) {
+    console.log('[API] DataForSEO debug:', data.debug);
+  }
 
   // Check for API-level errors (task failures from DataForSEO)
   if (data.error) {

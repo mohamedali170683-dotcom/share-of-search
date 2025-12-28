@@ -102,10 +102,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
     }
 
-    // DataForSEO Labs Search Intent API returns items directly in result array
-    // Items have: keyword, keyword_intent { label, probability }, secondary_keyword_intents
-    const taskResult = data.tasks?.[0]?.result || [];
-    console.log('[search-intent] Result array length:', taskResult.length);
+    // DataForSEO Labs Search Intent API returns items nested in result[0].items
+    // Structure: tasks[0].result[0] = { language_code, items_count, items: [...] }
+    const resultWrapper = data.tasks?.[0]?.result?.[0];
+    const items = resultWrapper?.items || [];
+    console.log('[search-intent] Result wrapper items_count:', resultWrapper?.items_count);
+    console.log('[search-intent] Actual items array length:', items.length);
 
     // Create a map of keyword -> intent info
     const intentMap: Record<string, {
@@ -114,7 +116,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       foreignIntents?: Array<{ intent: string; probability: number }>;
     }> = {};
 
-    for (const item of taskResult) {
+    for (const item of items) {
       // DataForSEO uses keyword_intent.label (not search_intent_info.main_intent)
       if (item.keyword && item.keyword_intent) {
         intentMap[item.keyword.toLowerCase()] = {
@@ -131,7 +133,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     console.log('[search-intent] Parsed', Object.keys(intentMap).length, 'keywords with intent');
 
     // Always return debug info so we can diagnose issues
-    debugInfo.parsedItemsCount = taskResult.length;
+    debugInfo.parsedItemsCount = items.length;
     debugInfo.intentMapCount = Object.keys(intentMap).length;
     return res.status(200).json({ intentMap, debug: debugInfo });
   } catch (error) {

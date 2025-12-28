@@ -1,15 +1,16 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 
+// DataForSEO Labs Search Intent API uses these field names
 interface SearchIntentResult {
   keyword: string;
-  search_intent_info: {
-    main_intent: 'informational' | 'navigational' | 'commercial' | 'transactional';
+  keyword_intent: {
+    label: 'informational' | 'navigational' | 'commercial' | 'transactional';
     probability: number;
-    foreign_intent?: Array<{
-      intent: string;
-      probability: number;
-    }>;
   };
+  secondary_keyword_intents?: Array<{
+    label: string;
+    probability: number;
+  }> | null;
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -101,22 +102,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
     }
 
-    // DataForSEO Labs API returns items nested in result[0].items
-    // Try nested structure first, then fall back to direct result array
-    const taskResult = data.tasks?.[0]?.result;
-    let items: Array<{ keyword: string; search_intent_info: { main_intent: string; probability: number; foreign_intent?: Array<{ intent: string; probability: number }> } }> = [];
-
-    if (taskResult?.[0]?.items) {
-      // Nested structure: result[0].items
-      items = taskResult[0].items;
-      console.log('[search-intent] Using nested structure: result[0].items with', items.length, 'items');
-    } else if (Array.isArray(taskResult) && taskResult.length > 0 && taskResult[0]?.keyword) {
-      // Direct structure: result array contains keyword objects directly
-      items = taskResult;
-      console.log('[search-intent] Using direct structure: result array with', items.length, 'items');
-    } else {
-      console.log('[search-intent] No items found in either structure');
-    }
+    // DataForSEO Labs Search Intent API returns items directly in result array
+    // Items have: keyword, keyword_intent { label, probability }, secondary_keyword_intents
+    const taskResult = data.tasks?.[0]?.result || [];
+    console.log('[search-intent] Result array length:', taskResult.length);
 
     // Create a map of keyword -> intent info
     const intentMap: Record<string, {
@@ -125,18 +114,24 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       foreignIntents?: Array<{ intent: string; probability: number }>;
     }> = {};
 
-    for (const item of items) {
-      if (item.keyword && item.search_intent_info) {
+    for (const item of taskResult) {
+      // DataForSEO uses keyword_intent.label (not search_intent_info.main_intent)
+      if (item.keyword && item.keyword_intent) {
         intentMap[item.keyword.toLowerCase()] = {
-          mainIntent: item.search_intent_info.main_intent,
-          probability: item.search_intent_info.probability || 0,
-          foreignIntents: item.search_intent_info.foreign_intent
+          mainIntent: item.keyword_intent.label as 'informational' | 'navigational' | 'commercial' | 'transactional',
+          probability: item.keyword_intent.probability || 0,
+          foreignIntents: item.secondary_keyword_intents?.map((s: { label: string; probability: number }) => ({
+            intent: s.label,
+            probability: s.probability
+          }))
         };
       }
     }
 
+    console.log('[search-intent] Parsed', Object.keys(intentMap).length, 'keywords with intent');
+
     // Always return debug info so we can diagnose issues
-    debugInfo.parsedItemsCount = items.length;
+    debugInfo.parsedItemsCount = taskResult.length;
     debugInfo.intentMapCount = Object.keys(intentMap).length;
     return res.status(200).json({ intentMap, debug: debugInfo });
   } catch (error) {

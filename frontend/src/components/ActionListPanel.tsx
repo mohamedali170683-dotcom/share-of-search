@@ -22,11 +22,29 @@ const getIntentLabel = (intent?: SearchIntent): string => {
   }
 };
 
+const getFunnelBadgeClass = (stage?: FunnelStage): string => {
+  switch (stage) {
+    case 'awareness': return 'bg-sky-100 text-sky-700 dark:bg-sky-900/50 dark:text-sky-300';
+    case 'consideration': return 'bg-orange-100 text-orange-700 dark:bg-orange-900/50 dark:text-orange-300';
+    case 'decision': return 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-300';
+    default: return '';
+  }
+};
+
 const getFunnelLabel = (stage?: FunnelStage): string => {
   switch (stage) {
     case 'awareness': return 'Awareness';
-    case 'consideration': return 'Consideration';
+    case 'consideration': return 'Consider';
     case 'decision': return 'Decision';
+    default: return '';
+  }
+};
+
+const getFunnelIcon = (stage?: FunnelStage): string => {
+  switch (stage) {
+    case 'awareness': return '👀';
+    case 'consideration': return '🤔';
+    case 'decision': return '💰';
     default: return '';
   }
 };
@@ -104,12 +122,23 @@ const getPriorityColor = (priority: number) => {
 
 export const ActionListPanel: React.FC<ActionListPanelProps> = ({ actions, onDiscardChange }) => {
   const [filterType, setFilterType] = useState<'all' | 'recommended' | ActionItem['actionType']>('all');
+  const [funnelFilter, setFunnelFilter] = useState<'all' | FunnelStage>('all');
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [discardedIds, setDiscardedIds] = useState<Set<string>>(new Set());
   const [showDiscarded, setShowDiscarded] = useState(false);
 
   // Count recommended actions
   const recommendedCount = actions.filter(a => a.isRecommended && !discardedIds.has(a.id)).length;
+
+  // Calculate funnel stage distribution
+  const funnelCounts = useMemo(() => {
+    const active = actions.filter(a => !discardedIds.has(a.id));
+    return {
+      awareness: active.filter(a => a.searchIntent?.funnelStage === 'awareness').length,
+      consideration: active.filter(a => a.searchIntent?.funnelStage === 'consideration').length,
+      decision: active.filter(a => a.searchIntent?.funnelStage === 'decision').length
+    };
+  }, [actions, discardedIds]);
 
   // Toggle discard state for an action
   const toggleDiscard = (id: string, e: React.MouseEvent) => {
@@ -126,10 +155,16 @@ export const ActionListPanel: React.FC<ActionListPanelProps> = ({ actions, onDis
     });
   };
 
-  // Filter actions by type and discard status
+  // Filter actions by type, funnel stage, and discard status
   const filteredActions = useMemo(() => {
     return actions.filter(action => {
       const isDiscarded = discardedIds.has(action.id);
+
+      // Check funnel filter
+      if (funnelFilter !== 'all' && action.searchIntent?.funnelStage !== funnelFilter) {
+        return false;
+      }
+
       if (filterType === 'all') {
         return showDiscarded || !isDiscarded;
       }
@@ -139,7 +174,7 @@ export const ActionListPanel: React.FC<ActionListPanelProps> = ({ actions, onDis
       const matchesType = action.actionType === filterType;
       return matchesType && (showDiscarded || !isDiscarded);
     });
-  }, [actions, filterType, discardedIds, showDiscarded]);
+  }, [actions, filterType, funnelFilter, discardedIds, showDiscarded]);
 
   const discardedCount = discardedIds.size;
 
@@ -335,6 +370,53 @@ export const ActionListPanel: React.FC<ActionListPanelProps> = ({ actions, onDis
             </button>
           )}
         </div>
+
+        {/* Funnel Stage Filter */}
+        <div className="flex flex-wrap items-center gap-2 mt-3 pt-3 border-t border-gray-200 dark:border-gray-600">
+          <span className="text-sm text-gray-600 dark:text-gray-300">Funnel Stage:</span>
+          <div className="flex rounded-lg border border-gray-300 dark:border-gray-600 overflow-hidden">
+            <button
+              onClick={() => setFunnelFilter('all')}
+              className={`px-3 py-1 text-sm ${
+                funnelFilter === 'all'
+                  ? 'bg-gray-700 dark:bg-gray-200 text-white dark:text-gray-900'
+                  : 'bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-600'
+              }`}
+            >
+              All
+            </button>
+            <button
+              onClick={() => setFunnelFilter('awareness')}
+              className={`px-3 py-1 text-sm ${
+                funnelFilter === 'awareness'
+                  ? 'bg-sky-500 text-white'
+                  : 'bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-600'
+              }`}
+            >
+              👀 Aware ({funnelCounts.awareness})
+            </button>
+            <button
+              onClick={() => setFunnelFilter('consideration')}
+              className={`px-3 py-1 text-sm ${
+                funnelFilter === 'consideration'
+                  ? 'bg-orange-500 text-white'
+                  : 'bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-600'
+              }`}
+            >
+              🤔 Consider ({funnelCounts.consideration})
+            </button>
+            <button
+              onClick={() => setFunnelFilter('decision')}
+              className={`px-3 py-1 text-sm ${
+                funnelFilter === 'decision'
+                  ? 'bg-emerald-500 text-white'
+                  : 'bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-600'
+              }`}
+            >
+              💰 Decision ({funnelCounts.decision})
+            </button>
+          </div>
+        </div>
       </div>
 
       {/* Action List */}
@@ -407,12 +489,14 @@ export const ActionListPanel: React.FC<ActionListPanelProps> = ({ actions, onDis
                           </span>
                         )}
                         {action.searchIntent && !isDiscarded && (
-                          <span
-                            className={`px-2 py-0.5 text-xs rounded-full ${getIntentBadgeClass(action.searchIntent.mainIntent)}`}
-                            title={`Funnel: ${getFunnelLabel(action.searchIntent.funnelStage)}`}
-                          >
-                            {getIntentLabel(action.searchIntent.mainIntent)}
-                          </span>
+                          <>
+                            <span className={`px-2 py-0.5 text-xs rounded-full ${getIntentBadgeClass(action.searchIntent.mainIntent)}`}>
+                              {getIntentLabel(action.searchIntent.mainIntent)}
+                            </span>
+                            <span className={`px-2 py-0.5 text-xs rounded-full ${getFunnelBadgeClass(action.searchIntent.funnelStage)}`}>
+                              {getFunnelIcon(action.searchIntent.funnelStage)} {getFunnelLabel(action.searchIntent.funnelStage)}
+                            </span>
+                          </>
                         )}
                       </div>
                     )}

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import type { QuickWinOpportunity, SearchIntent, FunnelStage } from '../types';
 
 // Intent badge configuration
@@ -22,11 +22,29 @@ const getIntentLabel = (intent?: SearchIntent): string => {
   }
 };
 
+const getFunnelBadgeClass = (stage?: FunnelStage): string => {
+  switch (stage) {
+    case 'awareness': return 'bg-sky-100 text-sky-700 dark:bg-sky-900/50 dark:text-sky-300';
+    case 'consideration': return 'bg-orange-100 text-orange-700 dark:bg-orange-900/50 dark:text-orange-300';
+    case 'decision': return 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-300';
+    default: return '';
+  }
+};
+
 const getFunnelLabel = (stage?: FunnelStage): string => {
   switch (stage) {
     case 'awareness': return 'Awareness';
     case 'consideration': return 'Consider';
     case 'decision': return 'Decision';
+    default: return '';
+  }
+};
+
+const getFunnelIcon = (stage?: FunnelStage): string => {
+  switch (stage) {
+    case 'awareness': return '👀';
+    case 'consideration': return '🤔';
+    case 'decision': return '💰';
     default: return '';
   }
 };
@@ -51,7 +69,8 @@ const getPositionBadgeClass = (position: number): string => {
 };
 
 export const QuickWinsPanel: React.FC<QuickWinsPanelProps> = ({ quickWins, onDiscardChange }) => {
-  const [filter, setFilter] = useState<'all' | 'low' | 'medium' | 'high'>('all');
+  const [effortFilter, setEffortFilter] = useState<'all' | 'low' | 'medium' | 'high'>('all');
+  const [funnelFilter, setFunnelFilter] = useState<'all' | FunnelStage>('all');
   const [sortBy, setSortBy] = useState<'uplift' | 'volume' | 'position' | 'recommended'>('uplift');
   const [expandedIdx, setExpandedIdx] = useState<number | null>(null);
   const [discardedKeywords, setDiscardedKeywords] = useState<Set<string>>(new Set());
@@ -59,6 +78,17 @@ export const QuickWinsPanel: React.FC<QuickWinsPanelProps> = ({ quickWins, onDis
 
   // Count recommended items
   const recommendedCount = quickWins.filter(qw => qw.isRecommended && !discardedKeywords.has(qw.keyword)).length;
+
+  // Calculate funnel stage distribution
+  const funnelCounts = useMemo(() => {
+    const active = quickWins.filter(qw => !discardedKeywords.has(qw.keyword));
+    return {
+      awareness: active.filter(qw => qw.searchIntent?.funnelStage === 'awareness').length,
+      consideration: active.filter(qw => qw.searchIntent?.funnelStage === 'consideration').length,
+      decision: active.filter(qw => qw.searchIntent?.funnelStage === 'decision').length,
+      unknown: active.filter(qw => !qw.searchIntent?.funnelStage).length
+    };
+  }, [quickWins, discardedKeywords]);
 
   const toggleDiscard = (keyword: string) => {
     setDiscardedKeywords(prev => {
@@ -74,7 +104,8 @@ export const QuickWinsPanel: React.FC<QuickWinsPanelProps> = ({ quickWins, onDis
   };
 
   const filteredWins = quickWins
-    .filter(qw => filter === 'all' || qw.effort === filter)
+    .filter(qw => effortFilter === 'all' || qw.effort === effortFilter)
+    .filter(qw => funnelFilter === 'all' || qw.searchIntent?.funnelStage === funnelFilter)
     .filter(qw => showDiscarded || !discardedKeywords.has(qw.keyword))
     .sort((a, b) => {
       switch (sortBy) {
@@ -167,7 +198,7 @@ export const QuickWinsPanel: React.FC<QuickWinsPanelProps> = ({ quickWins, onDis
         </div>
 
         {/* Summary Stats */}
-        <div className="flex items-center gap-4 mt-4">
+        <div className="flex flex-wrap items-center gap-4 mt-4">
           <div className="text-center px-4 py-2 bg-amber-50 dark:bg-amber-900/20 rounded-lg">
             <div className="text-2xl font-bold text-amber-600 dark:text-amber-400">
               +{totalPotential.toLocaleString()}
@@ -180,6 +211,27 @@ export const QuickWinsPanel: React.FC<QuickWinsPanelProps> = ({ quickWins, onDis
             </div>
             <div className="text-xs text-green-700 dark:text-green-300">low effort</div>
           </div>
+
+          {/* Funnel Stage Distribution */}
+          <div className="flex items-center gap-1 px-3 py-2 bg-gray-50 dark:bg-gray-700 rounded-lg">
+            <span className="text-xs text-gray-500 dark:text-gray-400 mr-2">Funnel:</span>
+            {funnelCounts.awareness > 0 && (
+              <span className="px-2 py-0.5 text-xs rounded-full bg-sky-100 text-sky-700 dark:bg-sky-900/50 dark:text-sky-300" title="Awareness stage keywords">
+                👀 {funnelCounts.awareness}
+              </span>
+            )}
+            {funnelCounts.consideration > 0 && (
+              <span className="px-2 py-0.5 text-xs rounded-full bg-orange-100 text-orange-700 dark:bg-orange-900/50 dark:text-orange-300" title="Consideration stage keywords">
+                🤔 {funnelCounts.consideration}
+              </span>
+            )}
+            {funnelCounts.decision > 0 && (
+              <span className="px-2 py-0.5 text-xs rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-300" title="Decision stage keywords">
+                💰 {funnelCounts.decision}
+              </span>
+            )}
+          </div>
+
           {discardedKeywords.size > 0 && (
             <div className="text-center px-4 py-2 bg-gray-50 dark:bg-gray-700 rounded-lg">
               <div className="text-2xl font-bold text-gray-500 dark:text-gray-400">
@@ -200,9 +252,9 @@ export const QuickWinsPanel: React.FC<QuickWinsPanelProps> = ({ quickWins, onDis
               {(['all', 'low', 'medium', 'high'] as const).map((option) => (
                 <button
                   key={option}
-                  onClick={() => setFilter(option)}
+                  onClick={() => setEffortFilter(option)}
                   className={`px-3 py-1 text-sm capitalize ${
-                    filter === option
+                    effortFilter === option
                       ? 'bg-amber-500 text-white'
                       : 'bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-600'
                   }`}
@@ -210,6 +262,56 @@ export const QuickWinsPanel: React.FC<QuickWinsPanelProps> = ({ quickWins, onDis
                   {option}
                 </button>
               ))}
+            </div>
+          </div>
+
+          {/* Funnel Stage Filter */}
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-gray-600 dark:text-gray-300">Funnel:</span>
+            <div className="flex rounded-lg border border-gray-300 dark:border-gray-600 overflow-hidden">
+              <button
+                onClick={() => setFunnelFilter('all')}
+                className={`px-3 py-1 text-sm ${
+                  funnelFilter === 'all'
+                    ? 'bg-gray-700 dark:bg-gray-200 text-white dark:text-gray-900'
+                    : 'bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-600'
+                }`}
+              >
+                All
+              </button>
+              <button
+                onClick={() => setFunnelFilter('awareness')}
+                className={`px-3 py-1 text-sm ${
+                  funnelFilter === 'awareness'
+                    ? 'bg-sky-500 text-white'
+                    : 'bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-600'
+                }`}
+                title="Top of funnel - informational & navigational intent"
+              >
+                👀 Aware
+              </button>
+              <button
+                onClick={() => setFunnelFilter('consideration')}
+                className={`px-3 py-1 text-sm ${
+                  funnelFilter === 'consideration'
+                    ? 'bg-orange-500 text-white'
+                    : 'bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-600'
+                }`}
+                title="Middle of funnel - commercial intent"
+              >
+                🤔 Consider
+              </button>
+              <button
+                onClick={() => setFunnelFilter('decision')}
+                className={`px-3 py-1 text-sm ${
+                  funnelFilter === 'decision'
+                    ? 'bg-emerald-500 text-white'
+                    : 'bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-600'
+                }`}
+                title="Bottom of funnel - transactional intent"
+              >
+                💰 Decision
+              </button>
             </div>
           </div>
 
@@ -292,9 +394,14 @@ export const QuickWinsPanel: React.FC<QuickWinsPanelProps> = ({ quickWins, onDis
                         </span>
                       )}
                       {qw.searchIntent && (
-                        <span className={`px-2 py-0.5 text-xs rounded-full ${getIntentBadgeClass(qw.searchIntent.mainIntent)}`} title={`Funnel: ${getFunnelLabel(qw.searchIntent.funnelStage)}`}>
-                          {getIntentLabel(qw.searchIntent.mainIntent)}
-                        </span>
+                        <>
+                          <span className={`px-2 py-0.5 text-xs rounded-full ${getIntentBadgeClass(qw.searchIntent.mainIntent)}`}>
+                            {getIntentLabel(qw.searchIntent.mainIntent)}
+                          </span>
+                          <span className={`px-2 py-0.5 text-xs rounded-full ${getFunnelBadgeClass(qw.searchIntent.funnelStage)}`}>
+                            {getFunnelIcon(qw.searchIntent.funnelStage)} {getFunnelLabel(qw.searchIntent.funnelStage)}
+                          </span>
+                        </>
                       )}
                     </div>
 

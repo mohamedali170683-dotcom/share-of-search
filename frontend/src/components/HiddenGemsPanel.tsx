@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import type { HiddenGem, SearchIntent, FunnelStage } from '../types';
 
 // Intent badge helpers
@@ -22,11 +22,29 @@ const getIntentLabel = (intent?: SearchIntent): string => {
   }
 };
 
+const getFunnelBadgeClass = (stage?: FunnelStage): string => {
+  switch (stage) {
+    case 'awareness': return 'bg-sky-100 text-sky-700 dark:bg-sky-900/50 dark:text-sky-300';
+    case 'consideration': return 'bg-orange-100 text-orange-700 dark:bg-orange-900/50 dark:text-orange-300';
+    case 'decision': return 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-300';
+    default: return '';
+  }
+};
+
 const getFunnelLabel = (stage?: FunnelStage): string => {
   switch (stage) {
     case 'awareness': return 'Awareness';
-    case 'consideration': return 'Consideration';
+    case 'consideration': return 'Consider';
     case 'decision': return 'Decision';
+    default: return '';
+  }
+};
+
+const getFunnelIcon = (stage?: FunnelStage): string => {
+  switch (stage) {
+    case 'awareness': return '👀';
+    case 'consideration': return '🤔';
+    case 'decision': return '💰';
     default: return '';
   }
 };
@@ -82,10 +100,19 @@ const getKDBarColor = (kd: number): string => {
 
 export const HiddenGemsPanel: React.FC<HiddenGemsPanelProps> = ({ hiddenGems }) => {
   const [filterOpportunity, setFilterOpportunity] = useState<'all' | HiddenGem['opportunity']>('all');
+  const [funnelFilter, setFunnelFilter] = useState<'all' | FunnelStage>('all');
   const [sortBy, setSortBy] = useState<'potential' | 'volume' | 'difficulty'>('potential');
+
+  // Calculate funnel stage distribution
+  const funnelCounts = useMemo(() => ({
+    awareness: hiddenGems.filter(g => g.searchIntent?.funnelStage === 'awareness').length,
+    consideration: hiddenGems.filter(g => g.searchIntent?.funnelStage === 'consideration').length,
+    decision: hiddenGems.filter(g => g.searchIntent?.funnelStage === 'decision').length
+  }), [hiddenGems]);
 
   const filteredGems = hiddenGems
     .filter(gem => filterOpportunity === 'all' || gem.opportunity === filterOpportunity)
+    .filter(gem => funnelFilter === 'all' || gem.searchIntent?.funnelStage === funnelFilter)
     .sort((a, b) => {
       switch (sortBy) {
         case 'volume':
@@ -281,6 +308,53 @@ export const HiddenGemsPanel: React.FC<HiddenGemsPanelProps> = ({ hiddenGems }) 
             </select>
           </div>
         </div>
+
+        {/* Funnel Stage Filter */}
+        <div className="flex flex-wrap items-center gap-2 mt-3 pt-3 border-t border-gray-200 dark:border-gray-600">
+          <span className="text-sm text-gray-600 dark:text-gray-300">Funnel Stage:</span>
+          <div className="flex rounded-lg border border-gray-300 dark:border-gray-600 overflow-hidden">
+            <button
+              onClick={() => setFunnelFilter('all')}
+              className={`px-3 py-1 text-sm ${
+                funnelFilter === 'all'
+                  ? 'bg-gray-700 dark:bg-gray-200 text-white dark:text-gray-900'
+                  : 'bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-600'
+              }`}
+            >
+              All
+            </button>
+            <button
+              onClick={() => setFunnelFilter('awareness')}
+              className={`px-3 py-1 text-sm ${
+                funnelFilter === 'awareness'
+                  ? 'bg-sky-500 text-white'
+                  : 'bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-600'
+              }`}
+            >
+              👀 Aware ({funnelCounts.awareness})
+            </button>
+            <button
+              onClick={() => setFunnelFilter('consideration')}
+              className={`px-3 py-1 text-sm ${
+                funnelFilter === 'consideration'
+                  ? 'bg-orange-500 text-white'
+                  : 'bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-600'
+              }`}
+            >
+              🤔 Consider ({funnelCounts.consideration})
+            </button>
+            <button
+              onClick={() => setFunnelFilter('decision')}
+              className={`px-3 py-1 text-sm ${
+                funnelFilter === 'decision'
+                  ? 'bg-emerald-500 text-white'
+                  : 'bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-600'
+              }`}
+            >
+              💰 Decision ({funnelCounts.decision})
+            </button>
+          </div>
+        </div>
       </div>
 
       {/* Summary Stats */}
@@ -378,12 +452,14 @@ export const HiddenGemsPanel: React.FC<HiddenGemsPanelProps> = ({ hiddenGems }) 
                         </span>
                       )}
                       {gem.searchIntent && (
-                        <span
-                          className={`px-2 py-0.5 text-xs rounded-full ${getIntentBadgeClass(gem.searchIntent.mainIntent)}`}
-                          title={`Funnel: ${getFunnelLabel(gem.searchIntent.funnelStage)}`}
-                        >
-                          {getIntentLabel(gem.searchIntent.mainIntent)}
-                        </span>
+                        <>
+                          <span className={`px-2 py-0.5 text-xs rounded-full ${getIntentBadgeClass(gem.searchIntent.mainIntent)}`}>
+                            {getIntentLabel(gem.searchIntent.mainIntent)}
+                          </span>
+                          <span className={`px-2 py-0.5 text-xs rounded-full ${getFunnelBadgeClass(gem.searchIntent.funnelStage)}`}>
+                            {getFunnelIcon(gem.searchIntent.funnelStage)} {getFunnelLabel(gem.searchIntent.funnelStage)}
+                          </span>
+                        </>
                       )}
                     </div>
                   )}

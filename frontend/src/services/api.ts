@@ -136,6 +136,11 @@ export async function getSearchIntent(
   // Log debug info from backend - this shows what DataForSEO returned
   if (data.debug) {
     console.log('[API] DataForSEO debug:', data.debug);
+    console.log('[API] resultLength:', data.debug.resultLength);
+    console.log('[API] resultKeys:', data.debug.resultKeys);
+    console.log('[API] itemsLength:', data.debug.itemsLength);
+    console.log('[API] parsedItemsCount:', data.debug.parsedItemsCount);
+    console.log('[API] resultSample:', data.debug.resultSample);
   }
 
   // Check for API-level errors (task failures from DataForSEO)

@@ -116,21 +116,27 @@ export async function getSearchIntent(
   locationCode: number,
   languageCode: string
 ): Promise<Record<string, SearchIntentData>> {
+  console.log('[API] Calling search-intent with', keywords.length, 'keywords');
+
   const response = await fetch(`${API_BASE}/search-intent`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ keywords, locationCode, languageCode })
   });
+
   if (!response.ok) {
-    // Silently return empty if intent fetch fails (graceful degradation)
-    console.warn('Failed to fetch search intent data');
+    const errorText = await response.text();
+    console.error('[API] search-intent failed:', response.status, errorText);
     return {};
   }
+
   const data = await response.json();
+  console.log('[API] search-intent raw response keys:', Object.keys(data));
 
   // Convert API response to our format with funnel stage
   const intentMap: Record<string, SearchIntentData> = {};
   const rawMap = data.intentMap || {};
+  console.log('[API] intentMap has', Object.keys(rawMap).length, 'entries');
 
   for (const [keyword, info] of Object.entries(rawMap)) {
     const intentInfo = info as {

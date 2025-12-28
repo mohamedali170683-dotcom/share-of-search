@@ -37,6 +37,8 @@ function App() {
   const [actualCompetitors, setActualCompetitors] = useState<string[]>([]);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [brandContext, setBrandContext] = useState<BrandContext | undefined>(undefined);
+  const [intentStatus, setIntentStatus] = useState<'idle' | 'loading' | 'loaded' | 'error'>('idle');
+  const [intentCount, setIntentCount] = useState<number>(0);
 
   // Custom metric overrides from table filters
   const [customSOS, setCustomSOS] = useState<{ sos: number; brandVolume: number; totalVolume: number } | null>(null);
@@ -120,8 +122,21 @@ function App() {
 
       // Fetch search intent for keywords (non-blocking, enriches data AFTER initial load)
       const keywordsList = calcResults.sov.keywordBreakdown.map((k: RankedKeyword) => k.keyword);
+      console.log('[Intent] Fetching intent for', keywordsList.length, 'keywords');
+      setIntentStatus('loading');
+      setIntentCount(0);
+
       getSearchIntent(keywordsList, config.locationCode, config.languageCode)
         .then(intentMap => {
+          const returnedCount = Object.keys(intentMap).length;
+          console.log('[Intent] Received intent data for', returnedCount, 'keywords');
+
+          if (returnedCount === 0) {
+            console.warn('[Intent] No intent data returned from API - check DataForSEO credentials');
+            setIntentStatus('error');
+            return;
+          }
+
           // Merge intent data into the keyword breakdown (which has CTR, visibleVolume)
           const enrichedKeywords = calcResults.sov.keywordBreakdown.map((kw: RankedKeyword) => {
             const intent = intentMap[kw.keyword.toLowerCase()];
@@ -130,10 +145,19 @@ function App() {
             }
             return kw;
           });
+
+          const enrichedCount = enrichedKeywords.filter((kw: RankedKeyword) => kw.searchIntent).length;
+          console.log('[Intent] Enriched', enrichedCount, 'keywords with intent data');
+
           // Update ranked keywords with intent data (triggers re-render of insights)
           setRankedKeywords(enrichedKeywords);
+          setIntentStatus('loaded');
+          setIntentCount(enrichedCount);
         })
-        .catch(() => {}); // Silently fail - analysis works without intent
+        .catch((err) => {
+          console.error('[Intent] Failed to fetch search intent:', err);
+          setIntentStatus('error');
+        });
 
       // Fetch brand context for personalized recommendations (non-blocking)
       const topKeywords = rankedData.results
@@ -447,6 +471,24 @@ function App() {
               <p className="text-indigo-100 text-sm">
                 {actionableInsights.quickWins.length} quick wins • {actionableInsights.hiddenGems.length} hidden gems • {actionableInsights.cannibalizationIssues.length} cannibalization issues • +{actionableInsights.summary.totalQuickWinPotential.toLocaleString()} clicks potential
               </p>
+              {/* Intent Status Indicator */}
+              <div className="mt-2 flex items-center gap-2 text-xs">
+                {intentStatus === 'loading' && (
+                  <span className="flex items-center gap-1 text-indigo-200">
+                    <svg className="animate-spin h-3 w-3" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    Loading search intent data...
+                  </span>
+                )}
+                {intentStatus === 'loaded' && intentCount > 0 && (
+                  <span className="text-green-200">✓ Intent data loaded for {intentCount} keywords</span>
+                )}
+                {intentStatus === 'error' && (
+                  <span className="text-red-200">⚠ Intent API unavailable - check DataForSEO credentials</span>
+                )}
+              </div>
             </div>
             <button
               onClick={() => setAnalysisTab('actions')}

@@ -110,12 +110,20 @@ function App() {
       setBrandName(brandData.brandName);
       setActualCompetitors(brandData.competitors || []);
 
-      // Fetch search intent for keywords (non-blocking, enriches data)
-      const keywordsList = rankedData.results.map((k: RankedKeyword) => k.keyword);
+      const calcResults = await calculateMetrics(brandData.brandKeywords, rankedData.results);
+
+      // Set initial results (without intent - intent loads async below)
+      setSosResult(calcResults.sos);
+      setSovResult(calcResults.sov);
+      setGapResult(calcResults.gap);
+      setRankedKeywords(calcResults.sov.keywordBreakdown);
+
+      // Fetch search intent for keywords (non-blocking, enriches data AFTER initial load)
+      const keywordsList = calcResults.sov.keywordBreakdown.map((k: RankedKeyword) => k.keyword);
       getSearchIntent(keywordsList, config.locationCode, config.languageCode)
         .then(intentMap => {
-          // Merge intent data into ranked keywords
-          const enrichedKeywords = rankedData.results.map((kw: RankedKeyword) => {
+          // Merge intent data into the keyword breakdown (which has CTR, visibleVolume)
+          const enrichedKeywords = calcResults.sov.keywordBreakdown.map((kw: RankedKeyword) => {
             const intent = intentMap[kw.keyword.toLowerCase()];
             if (intent) {
               return { ...kw, searchIntent: intent };
@@ -126,8 +134,6 @@ function App() {
           setRankedKeywords(enrichedKeywords);
         })
         .catch(() => {}); // Silently fail - analysis works without intent
-
-      const calcResults = await calculateMetrics(brandData.brandKeywords, rankedData.results);
 
       // Fetch brand context for personalized recommendations (non-blocking)
       const topKeywords = rankedData.results
@@ -148,10 +154,6 @@ function App() {
       })
         .then(context => setBrandContext(context))
         .catch(() => {}); // Silently fail - recommendations will work without context
-      setSosResult(calcResults.sos);
-      setSovResult(calcResults.sov);
-      setGapResult(calcResults.gap);
-      setRankedKeywords(calcResults.sov.keywordBreakdown);
 
       const newProject = saveProject({
         domain: config.domain,

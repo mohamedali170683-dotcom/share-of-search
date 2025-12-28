@@ -1,5 +1,35 @@
 import React, { useState } from 'react';
-import type { QuickWinOpportunity } from '../types';
+import type { QuickWinOpportunity, SearchIntent, FunnelStage } from '../types';
+
+// Intent badge configuration
+const getIntentBadgeClass = (intent?: SearchIntent): string => {
+  switch (intent) {
+    case 'informational': return 'bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300';
+    case 'navigational': return 'bg-purple-100 text-purple-700 dark:bg-purple-900/50 dark:text-purple-300';
+    case 'commercial': return 'bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-300';
+    case 'transactional': return 'bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-300';
+    default: return '';
+  }
+};
+
+const getIntentLabel = (intent?: SearchIntent): string => {
+  switch (intent) {
+    case 'informational': return 'Info';
+    case 'navigational': return 'Nav';
+    case 'commercial': return 'Comm';
+    case 'transactional': return 'Trans';
+    default: return '';
+  }
+};
+
+const getFunnelLabel = (stage?: FunnelStage): string => {
+  switch (stage) {
+    case 'awareness': return 'Awareness';
+    case 'consideration': return 'Consider';
+    case 'decision': return 'Decision';
+    default: return '';
+  }
+};
 
 interface QuickWinsPanelProps {
   quickWins: QuickWinOpportunity[];
@@ -259,6 +289,11 @@ export const QuickWinsPanel: React.FC<QuickWinsPanelProps> = ({ quickWins, onDis
                       {qw.category && (
                         <span className="px-2 py-0.5 text-xs rounded-full bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300">
                           {qw.category}
+                        </span>
+                      )}
+                      {qw.searchIntent && (
+                        <span className={`px-2 py-0.5 text-xs rounded-full ${getIntentBadgeClass(qw.searchIntent.mainIntent)}`} title={`Funnel: ${getFunnelLabel(qw.searchIntent.funnelStage)}`}>
+                          {getIntentLabel(qw.searchIntent.mainIntent)}
                         </span>
                       )}
                     </div>

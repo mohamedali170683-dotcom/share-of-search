@@ -124,6 +124,7 @@ export interface QuickWinOpportunity {
   reasoning?: string; // Detailed explanation of why this is a quick win
   isRecommended?: boolean; // Flagged as recommended based on brand context
   recommendedReason?: string; // Why this is recommended for the brand
+  searchIntent?: SearchIntentInfo; // Search intent classification
 }
 
 // Category SOV Breakdown
@@ -189,6 +190,7 @@ export interface ActionItem {
   detailedSteps?: string[]; // Step-by-step implementation guide
   isRecommended?: boolean; // Flagged as recommended based on brand context
   recommendedReason?: string; // Why this is recommended for the brand
+  searchIntent?: SearchIntentInfo; // Search intent classification
 }
 
 // Hidden Gem - Low competition, high potential keyword
@@ -202,6 +204,7 @@ export interface HiddenGem {
   opportunity: 'first-mover' | 'easy-win' | 'rising-trend';
   potentialClicks: number;
   reasoning: string;
+  searchIntent?: SearchIntentInfo; // Search intent classification
 }
 
 // Cannibalization Issue - Multiple URLs competing for same keyword

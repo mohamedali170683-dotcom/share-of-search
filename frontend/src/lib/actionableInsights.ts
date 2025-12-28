@@ -385,7 +385,8 @@ export function calculateQuickWins(
       category,
       reasoning: generateQuickWinReasoning(kw, targetPosition, clickUplift, upliftPercentage),
       isRecommended: contextMatch.matches,
-      recommendedReason: contextMatch.reason
+      recommendedReason: contextMatch.reason,
+      searchIntent: kw.searchIntent
     });
   }
 
@@ -732,7 +733,8 @@ export function calculateHiddenGems(
       category,
       opportunity: opportunityType,
       potentialClicks,
-      reasoning
+      reasoning,
+      searchIntent: kw.searchIntent
     });
   }
 
@@ -1073,7 +1075,8 @@ export function generateActionList(
       estimatedUplift: qw.clickUplift,
       reasoning: `+${qw.clickUplift.toLocaleString()} clicks potential (${qw.upliftPercentage}% increase)`,
       isRecommended: qw.isRecommended,
-      recommendedReason: qw.recommendedReason
+      recommendedReason: qw.recommendedReason,
+      searchIntent: qw.searchIntent
     });
   }
 
@@ -1093,7 +1096,8 @@ export function generateActionList(
       estimatedUplift: gem.potentialClicks,
       reasoning: `KD: ${gem.keywordDifficulty}, Volume: ${gem.searchVolume.toLocaleString()}, Potential: ${gem.potentialClicks.toLocaleString()} clicks`,
       isRecommended: gemContextMatch.matches,
-      recommendedReason: gemContextMatch.reason
+      recommendedReason: gemContextMatch.reason,
+      searchIntent: gem.searchIntent
     });
   }
 

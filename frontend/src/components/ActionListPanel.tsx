@@ -1,5 +1,35 @@
 import React, { useState, useMemo } from 'react';
-import type { ActionItem } from '../types';
+import type { ActionItem, SearchIntent, FunnelStage } from '../types';
+
+// Intent badge helpers
+const getIntentBadgeClass = (intent?: SearchIntent): string => {
+  switch (intent) {
+    case 'informational': return 'bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300';
+    case 'navigational': return 'bg-purple-100 text-purple-700 dark:bg-purple-900/50 dark:text-purple-300';
+    case 'commercial': return 'bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-300';
+    case 'transactional': return 'bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-300';
+    default: return 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400';
+  }
+};
+
+const getIntentLabel = (intent?: SearchIntent): string => {
+  switch (intent) {
+    case 'informational': return 'Info';
+    case 'navigational': return 'Nav';
+    case 'commercial': return 'Commercial';
+    case 'transactional': return 'Transact';
+    default: return '';
+  }
+};
+
+const getFunnelLabel = (stage?: FunnelStage): string => {
+  switch (stage) {
+    case 'awareness': return 'Awareness';
+    case 'consideration': return 'Consideration';
+    case 'decision': return 'Decision';
+    default: return '';
+  }
+};
 
 interface ActionListPanelProps {
   actions: ActionItem[];
@@ -364,8 +394,8 @@ export const ActionListPanel: React.FC<ActionListPanelProps> = ({ actions, onDis
                       {action.description}
                     </p>
 
-                    {(action.keyword || action.category) && (
-                      <div className="flex gap-2 mt-2">
+                    {(action.keyword || action.category || action.searchIntent) && (
+                      <div className="flex flex-wrap gap-2 mt-2">
                         {action.keyword && (
                           <span className={`text-xs px-2 py-0.5 bg-gray-100 dark:bg-gray-700 rounded ${isDiscarded ? 'text-gray-400' : 'text-gray-600 dark:text-gray-300'}`}>
                             {action.keyword}
@@ -374,6 +404,14 @@ export const ActionListPanel: React.FC<ActionListPanelProps> = ({ actions, onDis
                         {action.category && (
                           <span className={`text-xs px-2 py-0.5 bg-gray-100 dark:bg-gray-700 rounded ${isDiscarded ? 'text-gray-400' : 'text-gray-600 dark:text-gray-300'}`}>
                             {action.category}
+                          </span>
+                        )}
+                        {action.searchIntent && !isDiscarded && (
+                          <span
+                            className={`px-2 py-0.5 text-xs rounded-full ${getIntentBadgeClass(action.searchIntent.mainIntent)}`}
+                            title={`Funnel: ${getFunnelLabel(action.searchIntent.funnelStage)}`}
+                          >
+                            {getIntentLabel(action.searchIntent.mainIntent)}
                           </span>
                         )}
                       </div>

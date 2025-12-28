@@ -75,12 +75,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const task = data.tasks[0];
       console.log('[search-intent] Task 0 status:', task.status_code, task.status_message);
       console.log('[search-intent] Task 0 result length:', task.result?.length);
-      console.log('[search-intent] Task 0 full result:', JSON.stringify(task.result)?.substring(0, 1000));
+      console.log('[search-intent] Task 0 result[0] keys:', task.result?.[0] ? Object.keys(task.result[0]) : 'no result');
+      console.log('[search-intent] Task 0 result[0].items length:', task.result?.[0]?.items?.length);
+      console.log('[search-intent] Task 0 full result:', JSON.stringify(task.result)?.substring(0, 2000));
 
       debugInfo.taskStatus = task.status_code;
       debugInfo.taskMessage = task.status_message;
       debugInfo.resultLength = task.result?.length || 0;
-      debugInfo.resultSample = task.result?.[0] ? JSON.stringify(task.result[0]).substring(0, 300) : 'empty';
+      debugInfo.resultKeys = task.result?.[0] ? Object.keys(task.result[0]) : [];
+      debugInfo.itemsLength = task.result?.[0]?.items?.length || 0;
+      debugInfo.resultSample = task.result?.[0] ? JSON.stringify(task.result[0]).substring(0, 500) : 'empty';
     }
 
     if (!response.ok) {
@@ -97,8 +101,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
     }
 
-    const items = data.tasks?.[0]?.result || [];
-    console.log('[search-intent] Processing', items.length, 'items');
+    // DataForSEO Labs API returns items nested in result[0].items
+    // Try nested structure first, then fall back to direct result array
+    const taskResult = data.tasks?.[0]?.result;
+    let items: Array<{ keyword: string; search_intent_info: { main_intent: string; probability: number; foreign_intent?: Array<{ intent: string; probability: number }> } }> = [];
+
+    if (taskResult?.[0]?.items) {
+      // Nested structure: result[0].items
+      items = taskResult[0].items;
+      console.log('[search-intent] Using nested structure: result[0].items with', items.length, 'items');
+    } else if (Array.isArray(taskResult) && taskResult.length > 0 && taskResult[0]?.keyword) {
+      // Direct structure: result array contains keyword objects directly
+      items = taskResult;
+      console.log('[search-intent] Using direct structure: result array with', items.length, 'items');
+    } else {
+      console.log('[search-intent] No items found in either structure');
+    }
 
     // Create a map of keyword -> intent info
     const intentMap: Record<string, {
@@ -118,6 +136,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     // Always return debug info so we can diagnose issues
+    debugInfo.parsedItemsCount = items.length;
+    debugInfo.intentMapCount = Object.keys(intentMap).length;
     return res.status(200).json({ intentMap, debug: debugInfo });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error';

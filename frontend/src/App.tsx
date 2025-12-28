@@ -600,7 +600,7 @@ function App() {
             {sovResult && (
               <KeywordTable
                 type="sov"
-                keywords={sovResult.keywordBreakdown}
+                keywords={rankedKeywords}
                 onFilteredSOVChange={handleSOVChange}
               />
             )}

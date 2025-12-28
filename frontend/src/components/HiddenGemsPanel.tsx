@@ -98,6 +98,9 @@ export const HiddenGemsPanel: React.FC<HiddenGemsPanelProps> = ({ hiddenGems }) 
     URL.revokeObjectURL(url);
   };
 
+  // Check if we're using estimated KD values
+  const hasEstimatedKD = hiddenGems.some(gem => gem.reasoning?.includes('Est. KD'));
+
   if (hiddenGems.length === 0) {
     return (
       <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-8">
@@ -105,30 +108,24 @@ export const HiddenGemsPanel: React.FC<HiddenGemsPanelProps> = ({ hiddenGems }) 
           <svg className="w-16 h-16 text-yellow-400 mx-auto mb-4" fill="currentColor" viewBox="0 0 24 24">
             <path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z" />
           </svg>
-          <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">Hidden Gems Analysis</h3>
+          <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">No Hidden Gems Found</h3>
           <p className="text-gray-500 dark:text-gray-400 mb-4">
-            Hidden Gems are low-competition keywords where you can win with less effort.
+            No low-competition keywords matching your brand context were found. This could mean:
           </p>
         </div>
 
-        <div className="bg-amber-50 dark:bg-amber-900/20 rounded-lg p-4 border border-amber-200 dark:border-amber-800">
-          <h4 className="font-medium text-amber-800 dark:text-amber-300 mb-2 flex items-center gap-2">
+        <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-4 border border-blue-200 dark:border-blue-800">
+          <h4 className="font-medium text-blue-800 dark:text-blue-300 mb-2 flex items-center gap-2">
             <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-              <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+              <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
             </svg>
-            Keyword Difficulty Data Required
+            What This Means
           </h4>
-          <p className="text-sm text-amber-700 dark:text-amber-400 mb-3">
-            To find Hidden Gems, we need Keyword Difficulty (KD) scores for your keywords. The current API response doesn't include this data.
-          </p>
-          <div className="text-sm text-amber-700 dark:text-amber-400">
-            <p className="font-medium mb-1">How to enable Hidden Gems:</p>
-            <ul className="list-disc list-inside space-y-1 ml-2">
-              <li>Use DataForSEO's Keywords Data API to get KD scores</li>
-              <li>Or use a third-party tool like Ahrefs/SEMrush to export KD data</li>
-              <li>The system looks for keywords with KD &lt; 40 and volume &gt; 200</li>
-            </ul>
-          </div>
+          <ul className="text-sm text-blue-700 dark:text-blue-400 space-y-2">
+            <li>• Your keywords in positions 4-20 already have high competition</li>
+            <li>• Keywords with volume &gt;200 and difficulty &lt;40 weren't found in your niche</li>
+            <li>• Focus on Quick Wins and Content Gaps for opportunities instead</li>
+          </ul>
         </div>
 
         <div className="mt-6 grid sm:grid-cols-3 gap-4">
@@ -154,6 +151,20 @@ export const HiddenGemsPanel: React.FC<HiddenGemsPanelProps> = ({ hiddenGems }) 
 
   return (
     <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm overflow-hidden">
+      {/* Estimated KD Notice */}
+      {hasEstimatedKD && (
+        <div className="px-6 py-3 bg-amber-50 dark:bg-amber-900/20 border-b border-amber-200 dark:border-amber-800">
+          <div className="flex items-center gap-2 text-sm text-amber-700 dark:text-amber-300">
+            <svg className="w-4 h-4 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+              <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+            </svg>
+            <span>
+              <strong>Estimated difficulty:</strong> KD values are inferred from your ranking position. For precise difficulty scores, enable the Bulk Keyword Difficulty API.
+            </span>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">

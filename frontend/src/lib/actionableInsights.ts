@@ -15,12 +15,129 @@ import type {
 import { getCTR } from './calculations';
 
 // ==========================================
-// BRAND CONTEXT MATCHING
+// BRAND CONTEXT MATCHING AND RELEVANCE FILTERING
 // ==========================================
+
+// Keywords patterns that are typically irrelevant for brand-specific analysis
+const IRRELEVANT_PATTERNS = [
+  /\b(generation [xyz]|gen[- ]?[xyz]|millennial|boomer)\b/i,
+  /\b(news|weather|stocks?|crypto|bitcoin)\b/i,
+  /\b(how to|what is|who is|when is|why is)\b/i, // Informational queries not product-related
+  /\b(free download|torrent|crack|hack)\b/i,
+  /\b(job[s]?|career[s]?|hiring|salary|interview)\b/i,
+  /\b(login|sign in|password|account)\b/i, // Navigational queries
+];
+
+/**
+ * Check if a keyword is clearly irrelevant (generic/off-topic content)
+ */
+function isGenericIrrelevantKeyword(keyword: string): boolean {
+  return IRRELEVANT_PATTERNS.some(pattern => pattern.test(keyword));
+}
+
+/**
+ * Check if a keyword is relevant to the brand's business based on context
+ * Returns true if relevant, false if should be excluded
+ */
+function isRelevantToBrand(
+  keyword: string,
+  category: string | undefined,
+  context: BrandContext | undefined
+): boolean {
+  // If no context, assume all keywords are relevant (can't filter without context)
+  if (!context) return true;
+
+  // First, filter out clearly irrelevant generic keywords
+  if (isGenericIrrelevantKeyword(keyword)) return false;
+
+  const kwLower = keyword.toLowerCase();
+  const catLower = (category || '').toLowerCase();
+
+  // Check if keyword/category matches any brand focus areas
+  const relevanceChecks: string[] = [
+    ...(context.seoFocus || []),
+    ...(context.productCategories || []),
+    ...(context.keyStrengths || []),
+    context.industry || '',
+    context.vertical || ''
+  ].filter(Boolean).map(s => s.toLowerCase());
+
+  // If we have relevance criteria, check if the keyword matches any of them
+  if (relevanceChecks.length > 0) {
+    // Check for direct matches
+    for (const term of relevanceChecks) {
+      if (kwLower.includes(term) || catLower.includes(term) || term.includes(kwLower.split(' ')[0])) {
+        return true;
+      }
+    }
+
+    // Check if category is related to brand's industry
+    const brandIndustryTerms = getBrandIndustryTerms(context);
+    for (const term of brandIndustryTerms) {
+      if (kwLower.includes(term) || catLower.includes(term)) {
+        return true;
+      }
+    }
+
+    // If keyword has a category that matches brand's categories, it's relevant
+    if (category && relevanceChecks.some(check => catLower.includes(check))) {
+      return true;
+    }
+
+    // For keywords without clear category match, check against expanded industry terms
+    return false;
+  }
+
+  // If no specific criteria, consider relevant
+  return true;
+}
+
+/**
+ * Get expanded industry-related terms based on brand context
+ */
+function getBrandIndustryTerms(context: BrandContext): string[] {
+  const terms: string[] = [];
+
+  const industryTermsMap: Record<string, string[]> = {
+    'automotive': ['tire', 'tyre', 'reifen', 'wheel', 'car', 'vehicle', 'auto', 'driving', 'road', 'safety', 'winter', 'summer', 'all-season', 'suv', 'truck', 'performance', 'brake', 'suspension'],
+    'tires': ['tire', 'tyre', 'reifen', 'wheel', 'rim', 'winter', 'summer', 'all-season', 'snow', 'performance', 'size', 'pressure', 'rotation', 'alignment', 'balancing'],
+    'beauty': ['skincare', 'skin', 'face', 'cream', 'serum', 'anti-aging', 'moisturizer', 'cleanser', 'makeup', 'cosmetic', 'beauty', 'care', 'treatment', 'routine'],
+    'cosmetics': ['makeup', 'lipstick', 'foundation', 'mascara', 'eyeshadow', 'blush', 'concealer', 'powder', 'primer', 'beauty', 'cosmetic'],
+    'sports': ['running', 'training', 'fitness', 'workout', 'gym', 'sport', 'athletic', 'exercise', 'performance', 'gear', 'equipment', 'shoe', 'apparel'],
+    'footwear': ['shoe', 'sneaker', 'boot', 'sandal', 'footwear', 'running', 'walking', 'hiking', 'casual', 'sport'],
+    'technology': ['tech', 'software', 'app', 'device', 'digital', 'smart', 'phone', 'computer', 'laptop', 'tablet'],
+    'finance': ['bank', 'loan', 'credit', 'investment', 'savings', 'mortgage', 'insurance', 'financial', 'money', 'account'],
+    'retail': ['shop', 'store', 'buy', 'price', 'sale', 'discount', 'deal', 'product', 'order', 'delivery'],
+    'fashion': ['clothing', 'apparel', 'wear', 'style', 'fashion', 'outfit', 'dress', 'shirt', 'pants', 'jacket'],
+  };
+
+  // Add terms for matching industries
+  const industry = (context.industry || '').toLowerCase();
+  const vertical = (context.vertical || '').toLowerCase();
+
+  for (const [key, values] of Object.entries(industryTermsMap)) {
+    if (industry.includes(key) || vertical.includes(key) || key.includes(industry) || key.includes(vertical)) {
+      terms.push(...values);
+    }
+  }
+
+  // Add product category terms
+  for (const cat of context.productCategories || []) {
+    const catLower = cat.toLowerCase();
+    for (const [key, values] of Object.entries(industryTermsMap)) {
+      if (catLower.includes(key) || key.includes(catLower)) {
+        terms.push(...values);
+      }
+    }
+  }
+
+  return [...new Set(terms)]; // Remove duplicates
+}
 
 /**
  * Check if a keyword or category matches brand context (SEO focus, product categories, strengths)
  * Returns match reason if found, undefined otherwise
+ * This is for "recommended" labeling, separate from relevance filtering
  */
 function matchesBrandContext(
   keyword: string,
@@ -73,6 +190,21 @@ function matchesBrandContext(
   }
 
   return { matches: false };
+}
+
+/**
+ * Filter ranked keywords to only those relevant to the brand
+ */
+function filterRelevantKeywords(
+  keywords: RankedKeyword[],
+  brandContext?: BrandContext
+): RankedKeyword[] {
+  if (!brandContext) return keywords;
+
+  return keywords.filter(kw => {
+    const category = kw.category || detectCategory(kw.keyword);
+    return isRelevantToBrand(kw.keyword, category, brandContext);
+  });
 }
 
 // ==========================================
@@ -361,11 +493,12 @@ function isBrandedKeyword(keyword: string, brandNames: string[]): boolean {
 
 /**
  * Analyze competitor strength based on brand keywords and your rankings
- * Now filters out branded keywords and provides unique per-competitor analysis
+ * Now filters out branded keywords and irrelevant keywords, provides unique per-competitor analysis
  */
 export function calculateCompetitorStrength(
   brandKeywords: BrandKeyword[],
-  rankedKeywords: RankedKeyword[]
+  rankedKeywords: RankedKeyword[],
+  brandContext?: BrandContext
 ): CompetitorStrength[] {
   // Get your brand name
   const yourBrandKeywords = brandKeywords.filter(k => k.isOwnBrand);
@@ -394,7 +527,15 @@ export function calculateCompetitorStrength(
   const allBrandNames = [...yourBrandNames, ...Array.from(competitorMap.keys())];
 
   // Filter to GENERIC keywords only (exclude all branded keywords)
-  const genericKeywords = rankedKeywords.filter(k => !isBrandedKeyword(k.keyword, allBrandNames));
+  // Also filter out keywords that are not relevant to the brand's business
+  const genericKeywords = rankedKeywords.filter(k => {
+    // Exclude branded keywords
+    if (isBrandedKeyword(k.keyword, allBrandNames)) return false;
+
+    // Only include keywords relevant to the brand's industry/vertical
+    const category = k.category || detectCategory(k.keyword);
+    return isRelevantToBrand(k.keyword, category, brandContext);
+  });
 
   const results: CompetitorStrength[] = [];
   const totalBrandVolume = brandKeywords.reduce((sum, k) => sum + k.searchVolume, 0);
@@ -506,19 +647,43 @@ function determineOpportunityType(
 }
 
 /**
+ * Infer keyword difficulty when not available from API
+ * Uses heuristics based on position, volume, and keyword characteristics
+ */
+function inferKeywordDifficulty(kw: RankedKeyword): number {
+  // If we have actual KD, use it
+  if (kw.keywordDifficulty !== undefined) return kw.keywordDifficulty;
+
+  // Heuristic: if you're already ranking in top 10 for a keyword,
+  // it's likely low-to-medium difficulty for your domain
+  if (kw.position <= 5) return 25;
+  if (kw.position <= 10) return 30;
+  if (kw.position <= 15) return 35;
+
+  // For positions 16-20, assume medium difficulty
+  return 40;
+}
+
+/**
  * Find Hidden Gems - Low difficulty, high potential keywords
  * These are keywords you can win with less effort
  */
 export function calculateHiddenGems(
   rankedKeywords: RankedKeyword[],
+  brandContext?: BrandContext,
   minVolume: number = 200,
   maxKD: number = 40
 ): HiddenGem[] {
   const hiddenGems: HiddenGem[] = [];
 
+  // Check if we have any real KD data
+  const hasRealKDData = rankedKeywords.some(kw => kw.keywordDifficulty !== undefined);
+
   for (const kw of rankedKeywords) {
-    // Only consider keywords with KD data
-    const kd = kw.keywordDifficulty;
+    // Get KD (real or inferred)
+    const kd = hasRealKDData ? kw.keywordDifficulty : inferKeywordDifficulty(kw);
+
+    // Skip if no KD data and we expected real data
     if (kd === undefined) continue;
 
     // Skip if difficulty is too high
@@ -534,13 +699,24 @@ export function calculateHiddenGems(
     const targetPosition = kd <= 20 ? 1 : kd <= 30 ? 3 : 5;
     const potentialClicks = Math.round(kw.searchVolume * getCTR(targetPosition));
 
+    const category = kw.category || detectCategory(kw.keyword);
+
+    // Check if this is a recommended gem based on brand context
+    const contextMatch = matchesBrandContext(kw.keyword, category, brandContext);
+
     let reasoning = '';
+    const kdNote = hasRealKDData ? `KD: ${kd}` : `Est. KD: ${kd}`;
     if (opportunityType === 'rising-trend') {
-      reasoning = `Trending keyword (+${kw.trend}% YoY) with low competition (KD: ${kd})`;
+      reasoning = `Trending keyword (+${kw.trend}% YoY) with low competition (${kdNote})`;
     } else if (opportunityType === 'first-mover') {
-      reasoning = `You're not ranking yet, but low competition (KD: ${kd}) makes this achievable`;
+      reasoning = `You're not ranking yet, but low competition (${kdNote}) makes this achievable`;
     } else {
-      reasoning = `Currently #${kw.position}, easy to push to top 3 with KD of ${kd}`;
+      reasoning = `Currently #${kw.position}, easy to push to top 3 (${kdNote})`;
+    }
+
+    // Add recommendation context if applicable
+    if (contextMatch.matches) {
+      reasoning += `. ${contextMatch.reason}`;
     }
 
     hiddenGems.push({
@@ -549,16 +725,25 @@ export function calculateHiddenGems(
       keywordDifficulty: kd,
       position: kw.position,
       url: kw.url,
-      category: kw.category || detectCategory(kw.keyword),
+      category,
       opportunity: opportunityType,
       potentialClicks,
       reasoning
     });
   }
 
-  // Sort by potential value (volume / difficulty ratio)
+  // Sort by potential value (volume / difficulty ratio), with recommended first
   return hiddenGems
     .sort((a, b) => {
+      // Check if either is recommended based on brand context
+      const aRecommended = brandContext ? matchesBrandContext(a.keyword, a.category, brandContext).matches : false;
+      const bRecommended = brandContext ? matchesBrandContext(b.keyword, b.category, brandContext).matches : false;
+
+      // Recommended keywords get priority
+      if (aRecommended && !bRecommended) return -1;
+      if (!aRecommended && bRecommended) return 1;
+
+      // Then sort by value ratio
       const scoreA = a.searchVolume / (a.keywordDifficulty + 1);
       const scoreB = b.searchVolume / (b.keywordDifficulty + 1);
       return scoreB - scoreA;
@@ -704,7 +889,8 @@ function generateContentGapReasoning(
  */
 export function analyzeContentGaps(
   rankedKeywords: RankedKeyword[],
-  _brandKeywords: BrandKeyword[] // Reserved for future competitor coverage comparison
+  _brandKeywords: BrandKeyword[], // Reserved for future competitor coverage comparison
+  brandContext?: BrandContext
 ): ContentGap[] {
   // Group ranked keywords by category
   const categoryData = new Map<string, {
@@ -721,6 +907,11 @@ export function analyzeContentGaps(
 
     // Skip the "Other" category as it's not actionable
     if (category === 'Other') continue;
+
+    // Skip keywords not relevant to the brand (if context available)
+    if (brandContext && !isRelevantToBrand(kw.keyword, category, brandContext)) {
+      continue;
+    }
 
     const existing = categoryData.get(category) || {
       yourKeywords: [],
@@ -1004,18 +1195,24 @@ export function generateActionList(
 
 /**
  * Generate all actionable insights from keyword data
+ * Keywords are filtered by brand relevance to exclude off-topic/irrelevant terms
  */
 export function generateActionableInsights(
   rankedKeywords: RankedKeyword[],
   brandKeywords: BrandKeyword[],
   brandContext?: BrandContext
 ): ActionableInsights {
-  const quickWins = calculateQuickWins(rankedKeywords, 100, brandContext);
-  const categoryBreakdown = calculateCategorySOV(rankedKeywords);
-  const competitorStrengths = calculateCompetitorStrength(brandKeywords, rankedKeywords);
-  const hiddenGems = calculateHiddenGems(rankedKeywords);
-  const cannibalizationIssues = detectCannibalization(rankedKeywords);
-  const contentGaps = analyzeContentGaps(rankedKeywords, brandKeywords);
+  // Filter keywords to only those relevant to the brand's business
+  // This excludes off-topic keywords like "generation z" for a tire company
+  const relevantKeywords = filterRelevantKeywords(rankedKeywords, brandContext);
+
+  // Use filtered keywords for all analyses
+  const quickWins = calculateQuickWins(relevantKeywords, 100, brandContext);
+  const categoryBreakdown = calculateCategorySOV(relevantKeywords);
+  const competitorStrengths = calculateCompetitorStrength(brandKeywords, relevantKeywords, brandContext);
+  const hiddenGems = calculateHiddenGems(relevantKeywords, brandContext);
+  const cannibalizationIssues = detectCannibalization(relevantKeywords);
+  const contentGaps = analyzeContentGaps(relevantKeywords, brandKeywords, brandContext);
   const actionList = generateActionList(quickWins, categoryBreakdown, competitorStrengths, hiddenGems, cannibalizationIssues, brandContext);
 
   const totalQuickWinPotential = quickWins.reduce((sum, q) => sum + q.clickUplift, 0);

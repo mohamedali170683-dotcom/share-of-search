@@ -64,6 +64,26 @@ export async function getRankedKeywords(
   return response.json();
 }
 
+// Fetch keyword difficulty scores for a list of keywords
+export async function getKeywordDifficulty(
+  keywords: string[],
+  locationCode: number,
+  languageCode: string
+): Promise<Record<string, number>> {
+  const response = await fetch(`${API_BASE}/keyword-difficulty`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ keywords, locationCode, languageCode })
+  });
+  if (!response.ok) {
+    // Silently return empty if KD fetch fails (graceful degradation)
+    console.warn('Failed to fetch keyword difficulty data');
+    return {};
+  }
+  const data = await response.json();
+  return data.difficultyMap || {};
+}
+
 export async function getBrandKeywords(
   domain: string,
   locationCode: number,

@@ -7,6 +7,7 @@ interface AnalysisFormProps {
     locationCode: number;
     locationName: string;
     languageCode: string;
+    keywordLimit: number;
     customCompetitors?: string[];
   }) => void;
   isLoading: boolean;
@@ -19,10 +20,18 @@ const LANGUAGES = [
   { code: 'es', name: 'Spanish' }
 ];
 
+const KEYWORD_LIMITS = [
+  { value: 100, label: '100 keywords (faster)' },
+  { value: 250, label: '250 keywords' },
+  { value: 500, label: '500 keywords (recommended)' },
+  { value: 1000, label: '1000 keywords (comprehensive)' }
+];
+
 export const AnalysisForm: React.FC<AnalysisFormProps> = ({ onAnalyze, isLoading }) => {
   const [domain, setDomain] = useState('');
   const [location, setLocation] = useState('germany');
   const [language, setLanguage] = useState('de');
+  const [keywordLimit, setKeywordLimit] = useState(500);
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [competitorsInput, setCompetitorsInput] = useState('');
 
@@ -40,6 +49,7 @@ export const AnalysisForm: React.FC<AnalysisFormProps> = ({ onAnalyze, isLoading
       locationCode: LOCATIONS[location].code,
       locationName: LOCATIONS[location].name,
       languageCode: language,
+      keywordLimit,
       customCompetitors: customCompetitors.length > 0 ? customCompetitors : undefined
     });
   };
@@ -133,22 +143,46 @@ export const AnalysisForm: React.FC<AnalysisFormProps> = ({ onAnalyze, isLoading
 
         {/* Advanced Options */}
         {showAdvanced && (
-          <div className="mb-4 p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
-            <label htmlFor="competitors" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              Custom Competitors (optional)
-            </label>
-            <input
-              type="text"
-              id="competitors"
-              name="competitors"
-              value={competitorsInput}
-              onChange={(e) => setCompetitorsInput(e.target.value)}
-              placeholder="e.g., adidas, puma, reebok (comma-separated)"
-              className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500"
-            />
-            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-              Leave empty to auto-detect competitors based on your industry
-            </p>
+          <div className="mb-4 p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg space-y-4">
+            {/* Keyword Limit */}
+            <div>
+              <label htmlFor="keywordLimit" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                Keywords to Analyze
+              </label>
+              <select
+                id="keywordLimit"
+                name="keywordLimit"
+                value={keywordLimit}
+                onChange={(e) => setKeywordLimit(Number(e.target.value))}
+                className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+              >
+                {KEYWORD_LIMITS.map(opt => (
+                  <option key={opt.value} value={opt.value}>{opt.label}</option>
+                ))}
+              </select>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                More keywords = better coverage but higher API cost and longer load time
+              </p>
+            </div>
+
+            {/* Custom Competitors */}
+            <div>
+              <label htmlFor="competitors" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                Custom Competitors (optional)
+              </label>
+              <input
+                type="text"
+                id="competitors"
+                name="competitors"
+                value={competitorsInput}
+                onChange={(e) => setCompetitorsInput(e.target.value)}
+                placeholder="e.g., adidas, puma, reebok (comma-separated)"
+                className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500"
+              />
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                Leave empty to auto-detect competitors based on your industry
+              </p>
+            </div>
           </div>
         )}
 

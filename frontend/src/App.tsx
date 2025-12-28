@@ -98,7 +98,7 @@ function App() {
           config.domain,
           config.locationCode,
           config.languageCode,
-          100
+          config.keywordLimit || 500
         ),
         getBrandKeywords(
           config.domain,

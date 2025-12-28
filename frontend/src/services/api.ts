@@ -133,6 +133,11 @@ export async function getSearchIntent(
   const data = await response.json();
   console.log('[API] search-intent raw response keys:', Object.keys(data));
 
+  // Check for API-level errors (task failures from DataForSEO)
+  if (data.error) {
+    console.error('[API] search-intent API error:', data.error);
+  }
+
   // Convert API response to our format with funnel stage
   const intentMap: Record<string, SearchIntentData> = {};
   const rawMap = data.intentMap || {};

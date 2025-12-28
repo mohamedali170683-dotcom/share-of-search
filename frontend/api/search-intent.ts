@@ -60,11 +60,30 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const data = await response.json();
 
+    // Log full response for debugging
+    console.log('[search-intent] DataForSEO response status:', data.status_code, data.status_message);
+    console.log('[search-intent] Tasks count:', data.tasks?.length);
+    if (data.tasks?.[0]) {
+      console.log('[search-intent] Task 0 status:', data.tasks[0].status_code, data.tasks[0].status_message);
+      console.log('[search-intent] Task 0 result length:', data.tasks[0].result?.length);
+      console.log('[search-intent] Task 0 result sample:', JSON.stringify(data.tasks[0].result?.[0])?.substring(0, 500));
+    }
+
     if (!response.ok) {
       throw new Error(data.status_message || 'DataForSEO API error');
     }
 
+    // Check for task-level errors
+    if (data.tasks?.[0]?.status_code !== 20000) {
+      console.error('[search-intent] Task error:', data.tasks?.[0]?.status_message);
+      return res.status(200).json({
+        intentMap: {},
+        error: data.tasks?.[0]?.status_message || 'DataForSEO task failed'
+      });
+    }
+
     const items = data.tasks?.[0]?.result || [];
+    console.log('[search-intent] Processing', items.length, 'items');
 
     // Create a map of keyword -> intent info
     const intentMap: Record<string, {

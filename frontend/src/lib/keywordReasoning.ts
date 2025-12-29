@@ -1,4 +1,4 @@
-import type { RankedKeyword, BrandContext, QuickWinOpportunity, HiddenGem, CannibalizationIssue, CategorySOV, CompetitorStrength } from '../types';
+import type { BrandContext, QuickWinOpportunity, HiddenGem, CannibalizationIssue, CategorySOV, CompetitorStrength } from '../types';
 
 /**
  * Keyword Intent Classification
@@ -246,9 +246,8 @@ export function generateHiddenGemReasoning(
  */
 export function generateCannibalizationReasoning(
   issue: CannibalizationIssue,
-  brandContext?: BrandContext
+  _brandContext?: BrandContext
 ): string {
-  const chars = analyzeKeyword(issue.keyword);
   const urlCount = issue.competingUrls.length;
   const positions = issue.competingUrls.map(u => u.position).sort((a, b) => a - b);
   const parts: string[] = [];
@@ -337,7 +336,7 @@ export function generateCategoryActionReasoning(
  */
 export function generateCompetitorActionReasoning(
   competitor: CompetitorStrength,
-  brandContext?: BrandContext
+  _brandContext?: BrandContext
 ): string {
   const parts: string[] = [];
   const netResult = competitor.headToHead.youWin - competitor.headToHead.theyWin;

@@ -12,7 +12,11 @@
     }
   ],
   "functions": {
-    "api/**/*.ts": {
+    "api/*.ts": {
+      "memory": 1024,
+      "maxDuration": 30
+    },
+    "api/projects/*.ts": {
       "memory": 1024,
       "maxDuration": 30
     }

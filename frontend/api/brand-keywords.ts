@@ -1,11 +1,68 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import {
-  validateDomain,
-  validateLocationCode,
-  validateLanguageCode,
-  validateCompetitors,
-  getAllowedOrigin
-} from './lib/validation';
+
+// ============================================
+// INLINE VALIDATION (Vercel doesn't support lib imports well)
+// ============================================
+
+interface ValidationResult<T> {
+  success: boolean;
+  data?: T;
+  error?: string;
+}
+
+const DOMAIN_REGEX = /^(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,}$/;
+
+const VALID_LOCATION_CODES = new Set([
+  2276, 2840, 2826, 2250, 2724, 2380, 2528, 2056, 2040, 2756, 2616, 2752, 2578, 2208, 2246
+]);
+
+const VALID_LANGUAGE_CODES = new Set([
+  'de', 'en', 'fr', 'es', 'it', 'nl', 'pl', 'sv', 'no', 'da', 'fi', 'pt'
+]);
+
+function validateDomain(domain: unknown): ValidationResult<string> {
+  if (typeof domain !== 'string') return { success: false, error: 'Domain must be a string' };
+  const cleaned = domain.toLowerCase().replace(/^(https?:\/\/)?(www\.)?/, '').replace(/\/.*$/, '').trim();
+  if (!cleaned) return { success: false, error: 'Domain is required' };
+  if (cleaned.length > 253) return { success: false, error: 'Domain is too long' };
+  if (!DOMAIN_REGEX.test(cleaned)) return { success: false, error: 'Invalid domain format' };
+  return { success: true, data: cleaned };
+}
+
+function validateLocationCode(code: unknown): ValidationResult<number> {
+  if (typeof code !== 'number' || !Number.isInteger(code)) return { success: false, error: 'Location code must be an integer' };
+  if (!VALID_LOCATION_CODES.has(code)) return { success: false, error: `Invalid location code: ${code}` };
+  return { success: true, data: code };
+}
+
+function validateLanguageCode(code: unknown): ValidationResult<string> {
+  if (typeof code !== 'string') return { success: false, error: 'Language code must be a string' };
+  const cleaned = code.toLowerCase().trim();
+  if (!VALID_LANGUAGE_CODES.has(cleaned)) return { success: false, error: `Invalid language code: ${code}` };
+  return { success: true, data: cleaned };
+}
+
+function validateCompetitors(competitors: unknown): ValidationResult<string[] | undefined> {
+  if (competitors === undefined || competitors === null) return { success: true, data: undefined };
+  if (!Array.isArray(competitors)) return { success: false, error: 'Competitors must be an array' };
+  if (competitors.length > 20) return { success: false, error: 'Maximum 20 custom competitors allowed' };
+  const cleaned: string[] = [];
+  for (const comp of competitors) {
+    if (typeof comp !== 'string') return { success: false, error: 'Each competitor must be a string' };
+    const trimmed = comp.trim().toLowerCase();
+    if (trimmed.length > 0 && trimmed.length <= 100) cleaned.push(trimmed);
+  }
+  return { success: true, data: cleaned.length > 0 ? cleaned : undefined };
+}
+
+function getAllowedOrigin(requestOrigin: string | undefined): string {
+  const allowedOrigins = process.env.ALLOWED_ORIGINS?.split(',') || [];
+  if (process.env.NODE_ENV === 'development' || process.env.VERCEL_ENV === 'development') return '*';
+  if (requestOrigin && allowedOrigins.includes(requestOrigin)) return requestOrigin;
+  return process.env.PRODUCTION_URL || '*';
+}
+
+// ============================================
 
 interface KeywordVolumeResult {
   keyword: string;

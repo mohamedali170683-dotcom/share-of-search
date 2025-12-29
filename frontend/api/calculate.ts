@@ -1,9 +1,64 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import {
-  validateBrandKeywords,
-  validateRankedKeywords,
-  getAllowedOrigin
-} from './lib/validation';
+
+// ============================================
+// INLINE VALIDATION (Vercel doesn't support lib imports well)
+// ============================================
+
+interface ValidationResult<T> {
+  success: boolean;
+  data?: T;
+  error?: string;
+}
+
+function validateBrandKeywords(keywords: unknown): ValidationResult<Array<{
+  keyword: string;
+  searchVolume: number;
+  isOwnBrand: boolean;
+}>> {
+  if (!Array.isArray(keywords)) return { success: false, error: 'Brand keywords must be an array' };
+  if (keywords.length === 0) return { success: false, error: 'At least one brand keyword is required' };
+  if (keywords.length > 500) return { success: false, error: 'Maximum 500 brand keywords allowed' };
+  const validated: Array<{ keyword: string; searchVolume: number; isOwnBrand: boolean }> = [];
+  for (let i = 0; i < keywords.length; i++) {
+    const kw = keywords[i];
+    if (typeof kw !== 'object' || kw === null) return { success: false, error: `Invalid keyword at index ${i}` };
+    if (typeof kw.keyword !== 'string' || kw.keyword.trim().length === 0) return { success: false, error: `Invalid keyword text at index ${i}` };
+    if (typeof kw.searchVolume !== 'number' || kw.searchVolume < 0) return { success: false, error: `Invalid search volume at index ${i}` };
+    if (typeof kw.isOwnBrand !== 'boolean') return { success: false, error: `Invalid isOwnBrand at index ${i}` };
+    validated.push({ keyword: kw.keyword.trim(), searchVolume: Math.floor(kw.searchVolume), isOwnBrand: kw.isOwnBrand });
+  }
+  return { success: true, data: validated };
+}
+
+function validateRankedKeywords(keywords: unknown): ValidationResult<Array<{
+  keyword: string;
+  searchVolume: number;
+  position: number;
+  url?: string;
+}>> {
+  if (!Array.isArray(keywords)) return { success: false, error: 'Ranked keywords must be an array' };
+  if (keywords.length === 0) return { success: false, error: 'At least one ranked keyword is required' };
+  if (keywords.length > 1000) return { success: false, error: 'Maximum 1000 ranked keywords allowed' };
+  const validated: Array<{ keyword: string; searchVolume: number; position: number; url?: string }> = [];
+  for (let i = 0; i < keywords.length; i++) {
+    const kw = keywords[i];
+    if (typeof kw !== 'object' || kw === null) return { success: false, error: `Invalid keyword at index ${i}` };
+    if (typeof kw.keyword !== 'string' || kw.keyword.trim().length === 0) return { success: false, error: `Invalid keyword text at index ${i}` };
+    if (typeof kw.searchVolume !== 'number' || kw.searchVolume < 0) return { success: false, error: `Invalid search volume at index ${i}` };
+    if (typeof kw.position !== 'number' || kw.position < 1 || kw.position > 100) return { success: false, error: `Invalid position at index ${i}` };
+    validated.push({ keyword: kw.keyword.trim(), searchVolume: Math.floor(kw.searchVolume), position: Math.floor(kw.position), url: typeof kw.url === 'string' ? kw.url.trim() : undefined });
+  }
+  return { success: true, data: validated };
+}
+
+function getAllowedOrigin(requestOrigin: string | undefined): string {
+  const allowedOrigins = process.env.ALLOWED_ORIGINS?.split(',') || [];
+  if (process.env.NODE_ENV === 'development' || process.env.VERCEL_ENV === 'development') return '*';
+  if (requestOrigin && allowedOrigins.includes(requestOrigin)) return requestOrigin;
+  return process.env.PRODUCTION_URL || '*';
+}
+
+// ============================================
 
 interface BrandKeyword {
   keyword: string;

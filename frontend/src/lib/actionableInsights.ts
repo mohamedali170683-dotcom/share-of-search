@@ -54,47 +54,16 @@ function calculateEffort(currentPosition: number, targetPosition: number): 'low'
 const detectCategory = detectCategoryFromUtils;
 
 /**
- * Generate detailed reasoning for why this is a quick win
- */
-function generateQuickWinReasoning(
-  kw: RankedKeyword,
-  targetPosition: number,
-  clickUplift: number,
-  upliftPercentage: number
-): string {
-  const reasons: string[] = [];
-
-  // Position-based reasoning
-  if (kw.position >= 4 && kw.position <= 6) {
-    reasons.push(`Already on page 1 (#${kw.position}) - small optimization could push to top 3`);
-  } else if (kw.position >= 7 && kw.position <= 10) {
-    reasons.push(`Bottom of page 1 (#${kw.position}) - improving to top 5 dramatically increases visibility`);
-  } else if (kw.position >= 11 && kw.position <= 15) {
-    reasons.push(`Top of page 2 (#${kw.position}) - pushing to page 1 is crucial for traffic`);
-  } else {
-    reasons.push(`Position #${kw.position} has room for improvement with focused optimization`);
-  }
-
-  // Volume-based reasoning
-  if (kw.searchVolume >= 10000) {
-    reasons.push(`High-volume keyword (${kw.searchVolume.toLocaleString()} monthly searches)`);
-  } else if (kw.searchVolume >= 1000) {
-    reasons.push(`Good search volume with ${kw.searchVolume.toLocaleString()} monthly searches`);
-  }
-
-  // Uplift reasoning
-  reasons.push(`Moving to position #${targetPosition} could yield +${clickUplift.toLocaleString()} clicks (${upliftPercentage}% increase)`);
-
-  return reasons.join('. ') + '.';
-}
-
-/**
  * Calculate Quick Win opportunities from ranked keywords
  * Focuses on position 4-20 keywords with high potential
+ * @param rankedKeywords - Keywords where the brand ranks
+ * @param minVolume - Minimum search volume to consider
+ * @param brandContext - Optional brand context for tailored reasoning
  */
 export function calculateQuickWins(
   rankedKeywords: RankedKeyword[],
-  minVolume: number = 100
+  minVolume: number = 100,
+  brandContext?: BrandContext
 ): QuickWinOpportunity[] {
   const quickWins: QuickWinOpportunity[] = [];
 
@@ -117,7 +86,8 @@ export function calculateQuickWins(
     // Only include if there's meaningful uplift
     if (clickUplift < 50) continue;
 
-    quickWins.push({
+    // Build the quick win object first (without reasoning)
+    const quickWin: QuickWinOpportunity = {
       keyword: kw.keyword,
       currentPosition: kw.position,
       targetPosition,
@@ -129,8 +99,13 @@ export function calculateQuickWins(
       effort: calculateEffort(kw.position, targetPosition),
       url: kw.url || '',
       category: kw.category || detectCategory(kw.keyword),
-      reasoning: generateQuickWinReasoning(kw, targetPosition, clickUplift, upliftPercentage)
-    });
+      reasoning: '' // Placeholder, will be filled with advanced reasoning
+    };
+
+    // Generate tailored, keyword-specific reasoning using the advanced function
+    quickWin.reasoning = generateQuickWinReasoningAdvanced(quickWin, brandContext);
+
+    quickWins.push(quickWin);
   }
 
   // Sort by click uplift (highest first)
@@ -753,7 +728,7 @@ export function generateActionableInsights(
   brandKeywords: BrandKeyword[],
   brandContext?: BrandContext
 ): ActionableInsights {
-  const quickWins = calculateQuickWins(rankedKeywords);
+  const quickWins = calculateQuickWins(rankedKeywords, 100, brandContext);
   const categoryBreakdown = calculateCategorySOV(rankedKeywords);
   const competitorStrengths = calculateCompetitorStrength(brandKeywords, rankedKeywords);
   const hiddenGems = calculateHiddenGems(rankedKeywords);

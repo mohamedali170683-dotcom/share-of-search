@@ -73,8 +73,20 @@ export async function getRankedKeywords(
     body: JSON.stringify({ domain, locationCode, languageCode, limit })
   });
   if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.error || 'Failed to fetch ranked keywords');
+    let errorMessage = 'Failed to fetch ranked keywords';
+    try {
+      const error = await response.json();
+      errorMessage = error.error || errorMessage;
+    } catch {
+      // Response was not JSON (e.g., HTML error page)
+      const text = await response.text().catch(() => '');
+      if (text.includes('credentials') || text.includes('API')) {
+        errorMessage = 'API credentials not configured. Please check server environment variables.';
+      } else if (response.status === 500) {
+        errorMessage = 'Server error. Please try again later.';
+      }
+    }
+    throw new Error(errorMessage);
   }
   return response.json();
 }
@@ -96,8 +108,20 @@ export async function getBrandKeywords(
     body: JSON.stringify({ domain, locationCode, languageCode, customCompetitors })
   });
   if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.error || 'Failed to fetch brand keywords');
+    let errorMessage = 'Failed to fetch brand keywords';
+    try {
+      const error = await response.json();
+      errorMessage = error.error || errorMessage;
+    } catch {
+      // Response was not JSON (e.g., HTML error page)
+      const text = await response.text().catch(() => '');
+      if (text.includes('credentials') || text.includes('API')) {
+        errorMessage = 'API credentials not configured. Please check server environment variables.';
+      } else if (response.status === 500) {
+        errorMessage = 'Server error. Please try again later.';
+      }
+    }
+    throw new Error(errorMessage);
   }
   return response.json();
 }
@@ -165,8 +189,20 @@ export async function getTrends(
     body: JSON.stringify({ domain, locationCode, languageCode, customCompetitors })
   });
   if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.error || 'Failed to fetch trends data');
+    let errorMessage = 'Failed to fetch trends data';
+    try {
+      const error = await response.json();
+      errorMessage = error.error || errorMessage;
+    } catch {
+      // Response was not JSON (e.g., HTML error page)
+      const text = await response.text().catch(() => '');
+      if (text.includes('credentials') || text.includes('API')) {
+        errorMessage = 'API credentials not configured. Please check server environment variables.';
+      } else if (response.status === 500) {
+        errorMessage = 'Server error. Please try again later.';
+      }
+    }
+    throw new Error(errorMessage);
   }
   return response.json();
 }

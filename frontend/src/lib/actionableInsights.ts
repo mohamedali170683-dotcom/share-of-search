@@ -1,6 +1,7 @@
 import type {
   RankedKeyword,
   BrandKeyword,
+  BrandContext,
   QuickWinOpportunity,
   CategorySOV,
   CompetitorStrength,
@@ -12,6 +13,16 @@ import type {
   ContentGap
 } from '../types';
 import { getCTR } from './calculations';
+import { detectCategory as detectCategoryFromUtils } from '../utils/categoryDetection';
+import {
+  generateQuickWinReasoning as generateQuickWinReasoningAdvanced,
+  generateHiddenGemReasoning,
+  generateCannibalizationReasoning,
+  generateCategoryActionReasoning,
+  generateCompetitorActionReasoning,
+  generateActionTitle,
+  generateActionDescription
+} from './keywordReasoning';
 
 // ==========================================
 // QUICK WINS CALCULATION
@@ -39,69 +50,8 @@ function calculateEffort(currentPosition: number, targetPosition: number): 'low'
   return 'high';
 }
 
-/**
- * Detect category from keyword (fallback when not provided by API)
- * Comprehensive patterns covering multiple industries
- */
-function detectCategory(keyword: string): string {
-  const kw = keyword.toLowerCase();
-
-  const patterns: { category: string; regex: RegExp }[] = [
-    // Automotive / Tires (check specific first)
-    { category: 'Winter Tires', regex: /winter.?reifen|winter.?tire|winter.?tyre|schnee.?reifen|snow.?tire/i },
-    { category: 'Summer Tires', regex: /sommer.?reifen|summer.?tire|summer.?tyre/i },
-    { category: 'All-Season Tires', regex: /allwetter|ganzjahres|all.?season|4.?season/i },
-    { category: 'SUV/Truck Tires', regex: /suv.?reifen|suv.?tire|truck.?tire|geländewagen|offroad/i },
-    { category: 'Performance Tires', regex: /sport.?reifen|performance|uhp|ultra.?high|racing/i },
-    { category: 'Tires', regex: /\breifen\b|\btire[s]?\b|\btyre[s]?\b|pneu|pneumatic/i },
-    { category: 'Wheels & Rims', regex: /felge|rim\b|wheel\b|alufelge|alloy/i },
-    { category: 'Tire Services', regex: /reifenwechsel|tire.?change|mounting|balancing|rotation/i },
-    { category: 'Automotive', regex: /\bauto\b|\bcar\b|fahrzeug|vehicle|kfz|pkw/i },
-
-    // Beauty & Personal Care
-    { category: 'Anti-Aging', regex: /anti.?age|anti.?aging|anti.?falten|wrinkle|retinol|collagen/i },
-    { category: 'Skincare', regex: /skincare|skin.?care|hautpflege|face.?cream|gesichtscreme|serum|moistur|cleanser/i },
-    { category: 'Makeup', regex: /makeup|make-up|lipstick|mascara|foundation|eyeshadow|lippenstift|rouge|blush|concealer/i },
-    { category: 'Hair Care', regex: /hair.?care|haarpflege|shampoo|conditioner|spülung|haarkur/i },
-    { category: 'Body Care', regex: /body.?care|körperpflege|body.?lotion|duschgel|shower|bodywash/i },
-    { category: 'Natural Cosmetics', regex: /natural.?cosmetic|natur.?kosmetik|bio.?cosmetic|organic.?beauty/i },
-    { category: 'Fragrances', regex: /perfume|parfum|fragrance|duft|eau.?de|cologne/i },
-    { category: 'Sun Care', regex: /sun.?care|sonnenschutz|sunscreen|spf|uv.?schutz|sonnencreme/i },
-
-    // Sports & Athletic
-    { category: 'Running', regex: /running|laufschuh|jogging|marathon|trail.?run/i },
-    { category: 'Football/Soccer', regex: /football|fußball|soccer|fussball/i },
-    { category: 'Training', regex: /training|workout|fitness|gym\b|exercise/i },
-    { category: 'Sneakers', regex: /sneaker|sportschuh|trainer\b|athletic.?shoe/i },
-    { category: 'Outdoor', regex: /outdoor|hiking|wandern|camping|trekking/i },
-    { category: 'Cycling', regex: /cycling|fahrrad|bike|bicycle|radfahren/i },
-
-    // Fashion
-    { category: 'Apparel', regex: /\bshirt\b|hoodie|jacket|jacke|pants|hose|shorts|dress|kleid/i },
-    { category: 'Footwear', regex: /\bshoe[s]?\b|schuh|boots|stiefel|sandal/i },
-    { category: 'Accessories', regex: /accessory|accessories|bag|tasche|wallet|belt|gürtel|hat|mütze/i },
-
-    // Technology
-    { category: 'Smartphones', regex: /smartphone|iphone|samsung.?galaxy|mobile.?phone|handy/i },
-    { category: 'Laptops', regex: /laptop|notebook|macbook|computer/i },
-    { category: 'Audio', regex: /headphone|kopfhörer|speaker|lautsprecher|earbuds|audio/i },
-    { category: 'Smart Home', regex: /smart.?home|alexa|google.?home|iot|connected/i },
-
-    // Sustainability
-    { category: 'Eco-Friendly', regex: /eco.?friendly|öko|nachhaltig|sustainab|umweltfreundlich|green/i },
-    { category: 'Vegan', regex: /\bvegan\b|tierversuchsfrei|cruelty.?free|plant.?based/i },
-
-    // Services
-    { category: 'Dealer Locator', regex: /händler|dealer|store.?locator|find.?a.?store|standort/i },
-    { category: 'Contact', regex: /kontakt|contact|customer.?service|kundenservice|support/i },
-    { category: 'Warranty', regex: /garantie|warranty|gewährleistung/i },
-  ];
-
-  for (const { category, regex } of patterns) {
-    if (regex.test(kw)) return category;
-  }
-  return 'Other';
-}
+// Use shared category detection utility
+const detectCategory = detectCategoryFromUtils;
 
 /**
  * Generate detailed reasoning for why this is a quick win
@@ -649,18 +599,20 @@ export function analyzeContentGaps(
 
 /**
  * Generate prioritized action list based on all insights
+ * Now with unique, keyword-specific reasoning for each action
  */
 export function generateActionList(
   quickWins: QuickWinOpportunity[],
   categories: CategorySOV[],
   competitors: CompetitorStrength[],
   hiddenGems: HiddenGem[] = [],
-  cannibalizationIssues: CannibalizationIssue[] = []
+  cannibalizationIssues: CannibalizationIssue[] = [],
+  brandContext?: BrandContext
 ): ActionItem[] {
   const actions: ActionItem[] = [];
   let id = 1;
 
-  // Add Quick Win actions (optimize existing pages)
+  // Add Quick Win actions (optimize existing pages) with unique reasoning
   for (const qw of quickWins.slice(0, 5)) {
     const impactScore = qw.clickUplift >= 500 ? 'high' : qw.clickUplift >= 200 ? 'medium' : 'low';
 
@@ -668,35 +620,44 @@ export function generateActionList(
       id: `action-${id++}`,
       actionType: 'optimize',
       priority: Math.min(100, 50 + Math.round(qw.clickUplift / 50)),
-      title: `Optimize "${qw.keyword}" page`,
-      description: `Move from position #${qw.currentPosition} to #${qw.targetPosition}`,
+      title: generateActionTitle('optimize', qw.keyword, qw.category, {
+        position: qw.currentPosition,
+        targetPosition: qw.targetPosition
+      }),
+      description: generateActionDescription('optimize', qw.keyword, qw.category, {
+        currentPosition: qw.currentPosition,
+        targetPosition: qw.targetPosition,
+        clickUplift: qw.clickUplift
+      }),
       keyword: qw.keyword,
       category: qw.category,
       impact: impactScore,
       effort: qw.effort,
       estimatedUplift: qw.clickUplift,
-      reasoning: `+${qw.clickUplift.toLocaleString()} clicks potential (${qw.upliftPercentage}% increase)`
+      reasoning: generateQuickWinReasoningAdvanced(qw, brandContext)
     });
   }
 
-  // Add Hidden Gem actions (low competition opportunities)
+  // Add Hidden Gem actions with unique reasoning
   for (const gem of hiddenGems.slice(0, 3)) {
     actions.push({
       id: `action-${id++}`,
       actionType: 'create',
       priority: Math.min(95, 70 + Math.round(gem.searchVolume / 500)),
-      title: `Target "${gem.keyword}" (Hidden Gem)`,
-      description: gem.reasoning,
+      title: generateActionTitle('create', gem.keyword, gem.category),
+      description: generateActionDescription('create', gem.keyword, gem.category, {
+        volume: gem.searchVolume
+      }),
       keyword: gem.keyword,
       category: gem.category,
       impact: gem.searchVolume >= 1000 ? 'high' : gem.searchVolume >= 500 ? 'medium' : 'low',
       effort: gem.keywordDifficulty <= 20 ? 'low' : gem.keywordDifficulty <= 35 ? 'medium' : 'high',
       estimatedUplift: gem.potentialClicks,
-      reasoning: `KD: ${gem.keywordDifficulty}, Volume: ${gem.searchVolume.toLocaleString()}, Potential: ${gem.potentialClicks.toLocaleString()} clicks`
+      reasoning: generateHiddenGemReasoning(gem, brandContext)
     });
   }
 
-  // Add Cannibalization fix actions
+  // Add Cannibalization fix actions with unique reasoning
   for (const issue of cannibalizationIssues.slice(0, 3)) {
     if (issue.impactScore < 100) continue; // Skip minor issues
 
@@ -708,33 +669,36 @@ export function generateActionList(
       actionType: 'optimize',
       priority: Math.min(90, 55 + Math.round(issue.impactScore / 100)),
       title: `${actionVerb} pages for "${issue.keyword}"`,
-      description: `${issue.competingUrls.length} URLs competing - ${issue.recommendation}`,
+      description: `${issue.competingUrls.length} URLs competing for the same keyword`,
       keyword: issue.keyword,
       impact: issue.impactScore >= 500 ? 'high' : issue.impactScore >= 200 ? 'medium' : 'low',
       effort: issue.recommendation === 'redirect' ? 'low' : 'medium',
       estimatedUplift: issue.impactScore,
-      reasoning: `Cannibalization losing ~${issue.impactScore.toLocaleString()} clicks. URLs: ${issue.competingUrls.map(u => u.url).join(', ').slice(0, 100)}...`
+      reasoning: generateCannibalizationReasoning(issue, brandContext)
     });
   }
 
-  // Add category improvement actions
+  // Add category improvement actions with unique reasoning
   const weakCategories = categories.filter(c => c.status === 'weak' || c.status === 'trailing');
   for (const cat of weakCategories.slice(0, 3)) {
     actions.push({
       id: `action-${id++}`,
       actionType: 'create',
       priority: Math.min(95, 40 + Math.round(cat.totalCategoryVolume / 1000)),
-      title: `Build content for "${cat.category}"`,
-      description: `Create topic cluster to improve ${cat.status} category`,
+      title: generateActionTitle('create', undefined, cat.category),
+      description: generateActionDescription('create', undefined, cat.category, {
+        volume: cat.totalCategoryVolume,
+        sov: cat.yourSOV
+      }),
       category: cat.category,
       impact: cat.totalCategoryVolume > 10000 ? 'high' : 'medium',
       effort: 'high',
       estimatedUplift: Math.round(cat.totalCategoryVolume * 0.1),
-      reasoning: `${cat.keywordCount} keywords, ${cat.totalCategoryVolume.toLocaleString()} monthly searches. Current SOV: ${cat.yourSOV}%`
+      reasoning: generateCategoryActionReasoning(cat, brandContext)
     });
   }
 
-  // Add competitive response actions
+  // Add competitive response actions with unique reasoning
   for (const comp of competitors.slice(0, 2)) {
     if (comp.headToHead.theyWin > comp.headToHead.youWin) {
       actions.push({
@@ -742,29 +706,31 @@ export function generateActionList(
         actionType: 'investigate',
         priority: 60,
         title: `Analyze ${comp.competitor}'s content strategy`,
-        description: `They're winning ${comp.headToHead.theyWin} keywords vs your ${comp.headToHead.youWin}`,
+        description: `Competitive gap: they win ${comp.headToHead.theyWin} keywords vs your ${comp.headToHead.youWin}`,
         impact: 'medium',
         effort: 'low',
         estimatedUplift: 0,
-        reasoning: `${comp.competitor} dominates: ${comp.dominantCategories.join(', ') || 'multiple categories'}`
+        reasoning: generateCompetitorActionReasoning(comp, brandContext)
       });
     }
   }
 
-  // Add monitoring actions for leading categories
+  // Add monitoring actions for leading categories with unique reasoning
   const leadingCategories = categories.filter(c => c.status === 'leading');
   for (const cat of leadingCategories.slice(0, 2)) {
     actions.push({
       id: `action-${id++}`,
       actionType: 'monitor',
       priority: 30,
-      title: `Protect "${cat.category}" leadership`,
-      description: `Monitor competitor moves in this strong category`,
+      title: generateActionTitle('monitor', undefined, cat.category),
+      description: generateActionDescription('monitor', undefined, cat.category, {
+        sov: cat.yourSOV
+      }),
       category: cat.category,
       impact: 'low',
       effort: 'low',
       estimatedUplift: 0,
-      reasoning: `You lead with ${cat.yourSOV}% SOV, avg position #${cat.avgPosition}`
+      reasoning: generateCategoryActionReasoning(cat, brandContext)
     });
   }
 
@@ -778,10 +744,14 @@ export function generateActionList(
 
 /**
  * Generate all actionable insights from keyword data
+ * @param rankedKeywords - Keywords where the brand ranks
+ * @param brandKeywords - Brand and competitor brand keywords
+ * @param brandContext - Optional context about the brand for tailored explanations
  */
 export function generateActionableInsights(
   rankedKeywords: RankedKeyword[],
-  brandKeywords: BrandKeyword[]
+  brandKeywords: BrandKeyword[],
+  brandContext?: BrandContext
 ): ActionableInsights {
   const quickWins = calculateQuickWins(rankedKeywords);
   const categoryBreakdown = calculateCategorySOV(rankedKeywords);
@@ -789,7 +759,7 @@ export function generateActionableInsights(
   const hiddenGems = calculateHiddenGems(rankedKeywords);
   const cannibalizationIssues = detectCannibalization(rankedKeywords);
   const contentGaps = analyzeContentGaps(rankedKeywords, brandKeywords);
-  const actionList = generateActionList(quickWins, categoryBreakdown, competitorStrengths, hiddenGems, cannibalizationIssues);
+  const actionList = generateActionList(quickWins, categoryBreakdown, competitorStrengths, hiddenGems, cannibalizationIssues, brandContext);
 
   const totalQuickWinPotential = quickWins.reduce((sum, q) => sum + q.clickUplift, 0);
   const strongCategories = categoryBreakdown.filter(c => c.status === 'leading' || c.status === 'competitive').length;

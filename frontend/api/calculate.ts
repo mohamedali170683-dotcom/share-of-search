@@ -1,4 +1,9 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
+import {
+  validateBrandKeywords,
+  validateRankedKeywords,
+  getAllowedOrigin
+} from './lib/validation';
 
 interface BrandKeyword {
   keyword: string;
@@ -83,7 +88,9 @@ function calculateGrowthGap(sos: number, sov: number) {
 }
 
 export default function handler(req: VercelRequest, res: VercelResponse) {
-  res.setHeader('Access-Control-Allow-Origin', '*');
+  // Set CORS headers - restrict in production
+  const origin = getAllowedOrigin(req.headers.origin);
+  res.setHeader('Access-Control-Allow-Origin', origin);
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
@@ -96,7 +103,19 @@ export default function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
-    const { brandKeywords, rankedKeywords } = req.body;
+    // Validate input parameters
+    const brandResult = validateBrandKeywords(req.body?.brandKeywords);
+    if (!brandResult.success) {
+      return res.status(400).json({ error: brandResult.error });
+    }
+
+    const rankedResult = validateRankedKeywords(req.body?.rankedKeywords);
+    if (!rankedResult.success) {
+      return res.status(400).json({ error: rankedResult.error });
+    }
+
+    const brandKeywords = brandResult.data!;
+    const rankedKeywords = rankedResult.data!;
 
     const sosResult = calculateSOS(brandKeywords);
     const sovResult = calculateSOV(rankedKeywords);

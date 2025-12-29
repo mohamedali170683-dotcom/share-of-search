@@ -1,4 +1,11 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
+import {
+  validateDomain,
+  validateLocationCode,
+  validateLanguageCode,
+  validateLimit,
+  getAllowedOrigin
+} from './lib/validation';
 
 interface RankedKeywordItem {
   keyword_data: {
@@ -285,7 +292,9 @@ function getCategoryName(categoryIds?: number[]): string | null {
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  res.setHeader('Access-Control-Allow-Origin', '*');
+  // Set CORS headers - restrict in production
+  const origin = getAllowedOrigin(req.headers.origin);
+  res.setHeader('Access-Control-Allow-Origin', origin);
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
@@ -298,7 +307,31 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
-    const { domain, locationCode, languageCode, limit = 1000 } = req.body;
+    // Validate input parameters
+    const domainResult = validateDomain(req.body?.domain);
+    if (!domainResult.success) {
+      return res.status(400).json({ error: domainResult.error });
+    }
+
+    const locationResult = validateLocationCode(req.body?.locationCode);
+    if (!locationResult.success) {
+      return res.status(400).json({ error: locationResult.error });
+    }
+
+    const languageResult = validateLanguageCode(req.body?.languageCode);
+    if (!languageResult.success) {
+      return res.status(400).json({ error: languageResult.error });
+    }
+
+    const limitResult = validateLimit(req.body?.limit, 1000);
+    if (!limitResult.success) {
+      return res.status(400).json({ error: limitResult.error });
+    }
+
+    const domain = domainResult.data!;
+    const locationCode = locationResult.data!;
+    const languageCode = languageResult.data!;
+    const limit = limitResult.data!;
 
     // Use environment variables for API credentials
     const login = process.env.DATAFORSEO_LOGIN;

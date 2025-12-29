@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import type { BrandKeyword, RankedKeyword } from '../types';
+import { getCategory as getCategoryFromUtils } from '../utils/categoryDetection';
 
 interface SOVTableProps {
   type: 'sov';
@@ -18,67 +19,9 @@ type KeywordTableProps = SOVTableProps | SOSTableProps;
 type SortKey = 'keyword' | 'searchVolume' | 'position' | 'ctr' | 'visibleVolume' | 'isOwnBrand' | 'category';
 type SortDirection = 'asc' | 'desc';
 
-// Category patterns for keyword classification
-const CATEGORY_PATTERNS: { category: string; patterns: RegExp[] }[] = [
-  // Automotive / Tires (check first to avoid false positives)
-  { category: 'Tires', patterns: [/\breifen\b|tire|tyre|pneu|räder\b|wheels?\b/i] },
-  { category: 'Winter Tires', patterns: [/winterreifen|winter.?tire|winter.?tyre|schneereifen/i] },
-  { category: 'Summer Tires', patterns: [/sommerreifen|summer.?tire|summer.?tyre/i] },
-  { category: 'All-Season Tires', patterns: [/allwetter|ganzjahres|all.?season|allseason/i] },
-  { category: 'Car Parts', patterns: [/auto.?teil|car.?part|ersatzteil|brake|bremse|felge|rim\b/i] },
-  { category: 'Automotive', patterns: [/auto|car\b|vehicle|fahrzeug|kfz|pkw|suv\b|truck|lkw/i] },
-
-  // Cosmetics / Beauty
-  { category: 'Natural Cosmetics', patterns: [/natural.?cosmetic|natur.?kosmetik|bio.?cosmetic|organic.?beauty/i] },
-  { category: 'Skincare', patterns: [/skincare|skin.?care|hautpflege|face.?cream|gesichtscreme|serum|moistur/i] },
-  { category: 'Makeup', patterns: [/makeup|make-up|lipstick|mascara|foundation|eyeshadow|lippenstift|rouge|blush/i] },
-  { category: 'Hair Care', patterns: [/hair.?care|haarpflege|shampoo|conditioner|spülung/i] },
-  { category: 'Body Care', patterns: [/body.?care|körperpflege|body.?lotion|duschgel|shower/i] },
-  { category: 'Anti-Aging', patterns: [/anti.?age|anti.?aging|anti.?falten|wrinkle/i] },
-  { category: 'Sun Care', patterns: [/sun.?care|sonnenschutz|sunscreen|spf\s?\d|uv.?schutz/i] },
-
-  // Sportswear / Fashion
-  { category: 'Running', patterns: [/running|laufschuh|jogging|marathon/i] },
-  { category: 'Training', patterns: [/training|workout|fitness|gym\b/i] },
-  { category: 'Football', patterns: [/football|fußball|soccer|fussball/i] },
-  { category: 'Sneakers', patterns: [/sneaker|sportschuh|trainer\b/i] },
-  { category: 'Apparel', patterns: [/\bshirt\b|hoodie|jacket|jacke|pants|hose|shorts/i] },
-
-  // Technology
-  { category: 'Electronics', patterns: [/electronic|elektronik|gadget|device/i] },
-  { category: 'Software', patterns: [/software|app\b|application|programm/i] },
-
-  // General
-  { category: 'Eco-Friendly', patterns: [/eco.?friendly|öko|nachhaltig|sustainab|umweltfreundlich/i] },
-  { category: 'Vegan', patterns: [/\bvegan\b|tierversuchsfrei|cruelty.?free/i] },
-];
-
-// Detect category for a keyword (fallback when API doesn't provide one)
-// This is only used when DataForSEO doesn't return category IDs
-const detectCategoryFallback = (keyword: string): string => {
-  const keywordLower = keyword.toLowerCase();
-
-  // Try each pattern - first match wins
-  for (const { category, patterns } of CATEGORY_PATTERNS) {
-    for (const pattern of patterns) {
-      if (pattern.test(keywordLower)) {
-        return category;
-      }
-    }
-  }
-
-  // Don't create arbitrary categories - just mark as uncategorized
-  return 'Uncategorized';
-};
-
-// Get category - prefer API-provided, fall back to detection
+// Get category - prefer API-provided, fall back to detection using shared utility
 const getCategory = (kw: RankedKeyword): string => {
-  // Use API-provided category if available
-  if (kw.category) {
-    return kw.category;
-  }
-  // Fall back to regex-based detection
-  return detectCategoryFallback(kw.keyword);
+  return getCategoryFromUtils(kw.keyword, kw.category, 'Uncategorized');
 };
 
 interface CategorizedKeyword extends RankedKeyword {

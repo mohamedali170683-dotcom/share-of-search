@@ -1,33 +1,13 @@
 import type { BrandKeyword, RankedKeyword, SOSResult, SOVResult, GrowthGapResult } from '../types';
+import { CTR_CURVE, DEFAULT_CTR, GAP_THRESHOLD_HIGH, GAP_THRESHOLD_LOW } from '../config';
 
-// CTR curve based on SERP position
-const CTR_CURVE: Record<number, number> = {
-  1: 0.28,
-  2: 0.15,
-  3: 0.09,
-  4: 0.06,
-  5: 0.04,
-  6: 0.03,
-  7: 0.025,
-  8: 0.02,
-  9: 0.018,
-  10: 0.015,
-  11: 0.012,
-  12: 0.01,
-  13: 0.009,
-  14: 0.008,
-  15: 0.007,
-  16: 0.006,
-  17: 0.005,
-  18: 0.004,
-  19: 0.003,
-  20: 0.002
-};
-
+/**
+ * Get click-through rate for a given SERP position
+ */
 export function getCTR(position: number): number {
   if (position <= 0) return 0;
-  if (position > 20) return 0.001;
-  return CTR_CURVE[position] || 0.001;
+  if (position > 20) return DEFAULT_CTR;
+  return CTR_CURVE[position] || DEFAULT_CTR;
 }
 
 // Calculate Share of Search
@@ -82,8 +62,8 @@ export function calculateGrowthGap(sos: number, sov: number): GrowthGapResult {
   const gap = sov - sos;
   let interpretation: 'growth_potential' | 'missing_opportunities' | 'balanced';
 
-  if (gap > 2) interpretation = 'growth_potential';
-  else if (gap < -2) interpretation = 'missing_opportunities';
+  if (gap > GAP_THRESHOLD_HIGH) interpretation = 'growth_potential';
+  else if (gap < GAP_THRESHOLD_LOW) interpretation = 'missing_opportunities';
   else interpretation = 'balanced';
 
   return { gap: Math.round(gap * 10) / 10, interpretation };

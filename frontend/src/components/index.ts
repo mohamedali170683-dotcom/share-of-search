@@ -6,6 +6,7 @@ export { MethodologyPage } from './MethodologyPage';
 export { FAQ } from './FAQ';
 export { ProjectCard } from './ProjectCard';
 export { AnalysisForm } from './AnalysisForm';
+export { default as ErrorBoundary } from './ErrorBoundary';
 
 // Actionable Insights Components
 export { QuickWinsPanel } from './QuickWinsPanel';

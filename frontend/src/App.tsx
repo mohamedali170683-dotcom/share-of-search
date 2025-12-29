@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { MetricCard, KeywordTable, TrendsPanel, MethodologyPage, FAQ, ProjectCard, AnalysisForm, QuickWinsPanel, CategoryBreakdownPanel, CompetitorStrengthPanel, ActionListPanel, HiddenGemsPanel, CannibalizationPanel, ContentGapsPanel } from './components';
-import type { BrandKeyword, RankedKeyword, SOSResult, SOVResult, GrowthGapResult, Project, ActionableInsights } from './types';
+import type { BrandKeyword, RankedKeyword, SOSResult, SOVResult, GrowthGapResult, Project, ActionableInsights, BrandContext } from './types';
 import { calculateMetrics, getRankedKeywords, getBrandKeywords, getTrends, exportToCSV } from './services/api';
 import { getProjects, saveProject, deleteProject } from './services/projectStorage';
 import { useTheme } from './contexts/ThemeContext';
@@ -17,7 +17,6 @@ function App() {
   const [viewMode, setViewMode] = useState<ViewMode>('dashboard');
   const [analysisTab, setAnalysisTab] = useState<AnalysisTab>('overview');
   const [projects, setProjects] = useState<Project[]>([]);
-  const [, setCurrentProject] = useState<Project | null>(null);
 
   // Analysis state
   const [brandKeywords, setBrandKeywords] = useState<BrandKeyword[]>([]);
@@ -30,6 +29,7 @@ function App() {
   const [brandName, setBrandName] = useState<string>('');
   const [trendsData, setTrendsData] = useState<TrendsData | null>(null);
   const [trendsLoading, setTrendsLoading] = useState(false);
+  const [trendsError, setTrendsError] = useState<string | null>(null);
   const [showMethodology, setShowMethodology] = useState(false);
   const [currentDomain, setCurrentDomain] = useState<string>('');
   const [currentLocation, setCurrentLocation] = useState<{ code: number; name: string }>({ code: 2276, name: 'Germany' });
@@ -65,11 +65,46 @@ function App() {
   const effectiveSOV = customSOV?.sov ?? sovResult?.shareOfVoice ?? 0;
   const effectiveGap = Math.round((effectiveSOV - effectiveSOS) * 10) / 10;
 
-  // Generate actionable insights
+  // Create brand context for tailored recommendations
+  const brandContext: BrandContext | undefined = useMemo(() => {
+    if (!brandName) return undefined;
+
+    // Detect industry from ranked keywords categories
+    const categories = rankedKeywords
+      .map(k => k.category)
+      .filter((c): c is string => !!c);
+    const categoryFreq = categories.reduce((acc, cat) => {
+      acc[cat] = (acc[cat] || 0) + 1;
+      return acc;
+    }, {} as Record<string, number>);
+    const topCategories = Object.entries(categoryFreq)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 5)
+      .map(([cat]) => cat);
+
+    // Detect industry from most common category
+    const primaryCategory = topCategories[0] || 'General';
+
+    return {
+      brandName,
+      industry: primaryCategory,
+      vertical: primaryCategory,
+      productCategories: topCategories,
+      targetAudience: 'General audience',
+      competitorContext: actualCompetitors.length > 0
+        ? `Competing with ${actualCompetitors.join(', ')}`
+        : 'Competitor landscape not specified',
+      keyStrengths: [],
+      marketPosition: 'Challenger',
+      seoFocus: topCategories.slice(0, 3),
+    };
+  }, [brandName, rankedKeywords, actualCompetitors]);
+
+  // Generate actionable insights with brand context
   const actionableInsights: ActionableInsights | null = useMemo(() => {
     if (rankedKeywords.length === 0 || brandKeywords.length === 0) return null;
-    return generateActionableInsights(rankedKeywords, brandKeywords);
-  }, [rankedKeywords, brandKeywords]);
+    return generateActionableInsights(rankedKeywords, brandKeywords, brandContext);
+  }, [rankedKeywords, brandKeywords, brandContext]);
 
   // Handle new analysis
   const handleAnalyze = async (config: {
@@ -114,7 +149,7 @@ function App() {
       setGapResult(calcResults.gap);
       setRankedKeywords(calcResults.sov.keywordBreakdown);
 
-      const newProject = saveProject({
+      saveProject({
         domain: config.domain,
         brandName: brandData.brandName,
         locationCode: config.locationCode,
@@ -128,7 +163,6 @@ function App() {
         rankedKeywords: calcResults.sov.keywordBreakdown
       });
 
-      setCurrentProject(newProject);
       setProjects(getProjects());
       setViewMode('analysis');
     } catch (err) {
@@ -139,7 +173,6 @@ function App() {
   };
 
   const handleViewProject = (project: Project) => {
-    setCurrentProject(project);
     setBrandKeywords(project.brandKeywords);
     setRankedKeywords(project.rankedKeywords);
     setSosResult(project.sos);
@@ -163,7 +196,6 @@ function App() {
 
   const handleBackToDashboard = () => {
     setViewMode('dashboard');
-    setCurrentProject(null);
     setSosResult(null);
     setSovResult(null);
     setGapResult(null);
@@ -179,6 +211,7 @@ function App() {
 
     try {
       setTrendsLoading(true);
+      setTrendsError(null);
       const trends = await getTrends(
         currentDomain,
         currentLocation.code,
@@ -187,7 +220,8 @@ function App() {
       );
       setTrendsData(trends);
     } catch (err) {
-      console.error('Failed to fetch trends:', err);
+      const message = err instanceof Error ? err.message : 'Failed to fetch trends';
+      setTrendsError(message);
     } finally {
       setTrendsLoading(false);
     }
@@ -228,13 +262,14 @@ function App() {
       onClick={toggleTheme}
       className="p-2 rounded-lg bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
       title={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
+      aria-label={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
     >
       {isDark ? (
-        <svg className="w-5 h-5 text-yellow-500" fill="currentColor" viewBox="0 0 20 20">
+        <svg className="w-5 h-5 text-yellow-500" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
           <path fillRule="evenodd" d="M10 2a1 1 0 011 1v1a1 1 0 11-2 0V3a1 1 0 011-1zm4 8a4 4 0 11-8 0 4 4 0 018 0zm-.464 4.95l.707.707a1 1 0 001.414-1.414l-.707-.707a1 1 0 00-1.414 1.414zm2.12-10.607a1 1 0 010 1.414l-.706.707a1 1 0 11-1.414-1.414l.707-.707a1 1 0 011.414 0zM17 11a1 1 0 100-2h-1a1 1 0 100 2h1zm-7 4a1 1 0 011 1v1a1 1 0 11-2 0v-1a1 1 0 011-1zM5.05 6.464A1 1 0 106.465 5.05l-.708-.707a1 1 0 00-1.414 1.414l.707.707zm1.414 8.486l-.707.707a1 1 0 01-1.414-1.414l.707-.707a1 1 0 011.414 1.414zM4 11a1 1 0 100-2H3a1 1 0 000 2h1z" clipRule="evenodd" />
         </svg>
       ) : (
-        <svg className="w-5 h-5 text-gray-600" fill="currentColor" viewBox="0 0 20 20">
+        <svg className="w-5 h-5 text-gray-600" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
           <path d="M17.293 13.293A8 8 0 016.707 2.707a8.001 8.001 0 1010.586 10.586z" />
         </svg>
       )}
@@ -402,8 +437,9 @@ function App() {
           <button
             onClick={handleBackToDashboard}
             className="p-2 text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+            aria-label="Back to dashboard"
           >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
             </svg>
           </button>
@@ -415,8 +451,9 @@ function App() {
         <button
           onClick={handleExport}
           className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 flex items-center justify-center gap-2 text-sm sm:text-base"
+          aria-label="Export data to CSV"
         >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
           </svg>
           Export CSV
@@ -544,7 +581,7 @@ function App() {
           {/* Trends Section */}
           {sosResult && sovResult && (
             <div className="mb-6 sm:mb-8">
-              {!trendsData && !trendsLoading && (
+              {!trendsData && !trendsLoading && !trendsError && (
                 <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6 text-center">
                   <div className="flex flex-col items-center gap-4">
                     <svg className="w-12 h-12 text-purple-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -559,12 +596,31 @@ function App() {
                     <button
                       onClick={handleFetchTrends}
                       className="px-6 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 flex items-center gap-2 transition-colors"
+                      aria-label="Load historical trends data"
                     >
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
                       </svg>
                       Load Historical Trends
                     </button>
+                  </div>
+                </div>
+              )}
+              {trendsError && (
+                <div className="bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-xl p-4 mb-4">
+                  <div className="flex items-start gap-3">
+                    <svg className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    <div className="flex-1">
+                      <p className="text-sm text-red-700 dark:text-red-300">{trendsError}</p>
+                      <button
+                        onClick={handleFetchTrends}
+                        className="mt-2 text-sm text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-200 underline"
+                      >
+                        Try again
+                      </button>
+                    </div>
                   </div>
                 </div>
               )}
@@ -682,13 +738,15 @@ function App() {
               <button
                 onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
                 className="p-2 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+                aria-label={mobileMenuOpen ? 'Close menu' : 'Open menu'}
+                aria-expanded={mobileMenuOpen}
               >
                 {mobileMenuOpen ? (
-                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                   </svg>
                 ) : (
-                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
                   </svg>
                 )}

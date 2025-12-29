@@ -2,32 +2,48 @@ import type {
   BrandKeyword,
   RankedKeyword,
   CalculateResponse,
-  SampleDataResponse
+  SampleDataResponse,
+  Project
 } from '../types';
 
 // Use relative paths for Vercel deployment, absolute for local development
 const API_BASE = import.meta.env.DEV ? 'http://localhost:3001/api' : '/api';
 
-// Project types
-export interface Project {
-  id: string;
-  name: string;
-  domain: string | null;
-  locationCode: number;
-  languageCode: string;
-  createdAt: string;
-  updatedAt: string;
-  brandKeywords?: BrandKeyword[];
-  rankedKeywords?: RankedKeyword[];
-  _count?: {
-    brandKeywords: number;
-    rankedKeywords: number;
-    calculations: number;
-  };
+// Request timeout in milliseconds
+const REQUEST_TIMEOUT = 30000;
+
+/**
+ * Fetch with timeout support
+ */
+async function fetchWithTimeout(
+  url: string,
+  options: RequestInit = {},
+  timeout: number = REQUEST_TIMEOUT
+): Promise<Response> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeout);
+
+  try {
+    const response = await fetch(url, {
+      ...options,
+      signal: controller.signal,
+    });
+    return response;
+  } catch (error) {
+    if (error instanceof Error && error.name === 'AbortError') {
+      throw new Error('Request timed out. Please try again.');
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeoutId);
+  }
 }
 
+// Re-export Project type for convenience
+export type { Project };
+
 export async function getSampleData(): Promise<SampleDataResponse> {
-  const response = await fetch(`${API_BASE}/sample-data`);
+  const response = await fetchWithTimeout(`${API_BASE}/sample-data`);
   if (!response.ok) throw new Error('Failed to fetch sample data');
   return response.json();
 }
@@ -36,7 +52,7 @@ export async function calculateMetrics(
   brandKeywords: BrandKeyword[],
   rankedKeywords: RankedKeyword[]
 ): Promise<CalculateResponse> {
-  const response = await fetch(`${API_BASE}/calculate`, {
+  const response = await fetchWithTimeout(`${API_BASE}/calculate`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ brandKeywords, rankedKeywords })
@@ -51,7 +67,7 @@ export async function getRankedKeywords(
   languageCode: string,
   limit: number
 ): Promise<{ results: RankedKeyword[] }> {
-  const response = await fetch(`${API_BASE}/ranked-keywords`, {
+  const response = await fetchWithTimeout(`${API_BASE}/ranked-keywords`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ domain, locationCode, languageCode, limit })
@@ -74,7 +90,7 @@ export async function getBrandKeywords(
   brandKeywords: BrandKeyword[];
   competitors: string[];
 }> {
-  const response = await fetch(`${API_BASE}/brand-keywords`, {
+  const response = await fetchWithTimeout(`${API_BASE}/brand-keywords`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ domain, locationCode, languageCode, customCompetitors })
@@ -143,7 +159,7 @@ export async function getTrends(
   languageCode: string,
   customCompetitors?: string[]
 ): Promise<TrendsData> {
-  const response = await fetch(`${API_BASE}/trends`, {
+  const response = await fetchWithTimeout(`${API_BASE}/trends`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ domain, locationCode, languageCode, customCompetitors })
@@ -155,26 +171,26 @@ export async function getTrends(
   return response.json();
 }
 
-// Project management functions
-export async function getProjects(): Promise<Project[]> {
-  const response = await fetch(`${API_BASE}/projects`);
+// Project management functions (for database-backed API)
+export async function getProjectsFromAPI(): Promise<Project[]> {
+  const response = await fetchWithTimeout(`${API_BASE}/projects`);
   if (!response.ok) throw new Error('Failed to fetch projects');
   return response.json();
 }
 
-export async function getProject(id: string): Promise<Project> {
-  const response = await fetch(`${API_BASE}/projects/${id}`);
+export async function getProjectFromAPI(id: string): Promise<Project> {
+  const response = await fetchWithTimeout(`${API_BASE}/projects/${id}`);
   if (!response.ok) throw new Error('Failed to fetch project');
   return response.json();
 }
 
-export async function createProject(data: {
+export async function createProjectInAPI(data: {
   name: string;
   domain?: string;
   locationCode?: number;
   languageCode?: string;
 }): Promise<Project> {
-  const response = await fetch(`${API_BASE}/projects`, {
+  const response = await fetchWithTimeout(`${API_BASE}/projects`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(data)
@@ -183,7 +199,7 @@ export async function createProject(data: {
   return response.json();
 }
 
-export async function updateProject(
+export async function updateProjectInAPI(
   id: string,
   data: {
     name?: string;
@@ -194,7 +210,7 @@ export async function updateProject(
     rankedKeywords?: RankedKeyword[];
   }
 ): Promise<Project> {
-  const response = await fetch(`${API_BASE}/projects/${id}`, {
+  const response = await fetchWithTimeout(`${API_BASE}/projects/${id}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(data)
@@ -203,15 +219,15 @@ export async function updateProject(
   return response.json();
 }
 
-export async function deleteProject(id: string): Promise<void> {
-  const response = await fetch(`${API_BASE}/projects/${id}`, {
+export async function deleteProjectFromAPI(id: string): Promise<void> {
+  const response = await fetchWithTimeout(`${API_BASE}/projects/${id}`, {
     method: 'DELETE'
   });
   if (!response.ok) throw new Error('Failed to delete project');
 }
 
 export async function calculateProjectMetrics(projectId: string): Promise<CalculateResponse> {
-  const response = await fetch(`${API_BASE}/projects/${projectId}/calculate`, {
+  const response = await fetchWithTimeout(`${API_BASE}/projects/${projectId}/calculate`, {
     method: 'POST'
   });
   if (!response.ok) throw new Error('Failed to calculate project metrics');

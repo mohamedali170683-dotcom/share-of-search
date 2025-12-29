@@ -5,7 +5,7 @@ const MAX_PROJECTS = 10;
 
 // Generate unique ID
 const generateId = (): string => {
-  return `proj_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  return `proj_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`;
 };
 
 // Get all projects from localStorage

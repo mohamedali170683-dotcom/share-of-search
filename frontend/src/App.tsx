@@ -111,6 +111,7 @@ function App() {
   const [opportunities, setOpportunities] = useState<Opportunity[]>([]);
   const [isLoadingReasoning, setIsLoadingReasoning] = useState(false);
   const [reasoningGenerated, setReasoningGenerated] = useState(false);
+  const [lastAnalysisId, setLastAnalysisId] = useState<string>('');
 
   // Function to generate AI reasoning for opportunities
   const generateAIReasoning = async (opps: Opportunity[], context: BrandContext) => {
@@ -119,9 +120,8 @@ function App() {
     setIsLoadingReasoning(true);
 
     // Mark all opportunities as loading
-    setOpportunities(prev =>
-      prev.map(opp => ({ ...opp, isLoading: true }))
-    );
+    const loadingOpps = opps.map(opp => ({ ...opp, isLoading: true }));
+    setOpportunities(loadingOpps);
 
     try {
       // Process in batches of 20 to stay within API limits
@@ -147,21 +147,17 @@ function App() {
       }
 
       // Update opportunities with AI-generated reasoning
-      setOpportunities(prev =>
-        prev.map(opp => ({
-          ...opp,
-          reasoning: allReasonings[opp.keyword] || opp.reasoning,
-          isLoading: false
-        }))
-      );
+      setOpportunities(opps.map(opp => ({
+        ...opp,
+        reasoning: allReasonings[opp.keyword] || opp.reasoning,
+        isLoading: false
+      })));
 
       setReasoningGenerated(true);
     } catch (err) {
       console.error('Failed to generate AI reasoning:', err);
       // Clear loading state on error
-      setOpportunities(prev =>
-        prev.map(opp => ({ ...opp, isLoading: false }))
-      );
+      setOpportunities(opps.map(opp => ({ ...opp, isLoading: false })));
     } finally {
       setIsLoadingReasoning(false);
     }
@@ -169,17 +165,22 @@ function App() {
 
   // Update opportunities when actionable insights change and auto-generate reasoning
   useEffect(() => {
-    if (actionableInsights?.opportunities && actionableInsights.opportunities.length > 0) {
-      const newOpps = actionableInsights.opportunities;
-      setOpportunities(newOpps);
-      setReasoningGenerated(false);
+    if (actionableInsights?.opportunities && actionableInsights.opportunities.length > 0 && brandContext) {
+      // Create a unique ID for this analysis to prevent duplicate API calls
+      const analysisId = `${brandContext.brandName}-${actionableInsights.opportunities.length}`;
 
-      // Auto-generate AI reasoning when new opportunities are available
-      if (brandContext) {
+      // Only generate if this is a new analysis
+      if (analysisId !== lastAnalysisId) {
+        setLastAnalysisId(analysisId);
+        const newOpps = actionableInsights.opportunities;
+        setOpportunities(newOpps);
+        setReasoningGenerated(false);
+
+        // Auto-generate AI reasoning
         generateAIReasoning(newOpps, brandContext);
       }
     }
-  }, [actionableInsights, brandContext]);
+  }, [actionableInsights, brandContext, lastAnalysisId]);
 
   // Handle new analysis
   const handleAnalyze = async (config: {
@@ -261,6 +262,8 @@ function App() {
     setTrendsData(null);
     setCustomSOS(null);
     setCustomSOV(null);
+    setLastAnalysisId(''); // Reset to trigger AI reasoning for this project
+    setReasoningGenerated(false);
     setViewMode('project');
   };
 

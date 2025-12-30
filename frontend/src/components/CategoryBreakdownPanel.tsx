@@ -1,8 +1,10 @@
-import React, { useState } from 'react';
-import type { CategorySOV } from '../types';
+import React, { useState, useEffect } from 'react';
+import type { CategorySOV, BrandContext } from '../types';
 
 interface CategoryBreakdownPanelProps {
   categories: CategorySOV[];
+  brandContext?: BrandContext;
+  isLoadingInsights?: boolean;
 }
 
 const getStatusConfig = (status: CategorySOV['status']) => {
@@ -55,9 +57,77 @@ const getSOVBarColor = (status: CategorySOV['status']): string => {
   }
 };
 
-export const CategoryBreakdownPanel: React.FC<CategoryBreakdownPanelProps> = ({ categories }) => {
+export const CategoryBreakdownPanel: React.FC<CategoryBreakdownPanelProps> = ({
+  categories,
+  brandContext
+}) => {
   const [viewMode, setViewMode] = useState<'cards' | 'table'>('cards');
   const [filterStatus, setFilterStatus] = useState<'all' | CategorySOV['status']>('all');
+  const [strategicInsight, setStrategicInsight] = useState<string>('');
+  const [isGeneratingInsight, setIsGeneratingInsight] = useState(false);
+  const [insightGenerated, setInsightGenerated] = useState(false);
+
+  // Generate strategic insight when component mounts or data changes
+  useEffect(() => {
+    const generateInsight = async () => {
+      if (!brandContext || categories.length === 0 || insightGenerated) return;
+
+      setIsGeneratingInsight(true);
+      try {
+        const response = await fetch('/api/generate-reasoning', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            opportunities: [{
+              id: 'category-insight',
+              keyword: 'category-strategic-analysis',
+              type: 'content-gap',
+              priority: 100,
+              searchVolume: categories.reduce((sum, c) => sum + c.totalCategoryVolume, 0),
+              clickPotential: 0,
+              effort: 'medium',
+              category: 'Strategic Analysis'
+            }],
+            brandContext: {
+              ...brandContext,
+              // Add category-specific context
+              categoryData: categories.map(c => ({
+                name: c.category,
+                status: c.status,
+                sov: c.yourSOV,
+                keywords: c.keywordCount,
+                avgPosition: c.avgPosition,
+                volume: c.totalCategoryVolume
+              }))
+            },
+            customPrompt: `Analyze the category performance for ${brandContext.brandName}.
+              Categories breakdown:
+              ${categories.map(c => `- ${c.category}: ${c.yourSOV}% SOV, ${c.status} status, ${c.keywordCount} keywords, avg position #${c.avgPosition}`).join('\n')}
+
+              Write 2-3 sentences of strategic insight about:
+              1. Which categories show the strongest opportunity for growth
+              2. Where ${brandContext.brandName} should prioritize efforts
+              3. One specific actionable recommendation based on the category data`
+          })
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          const insight = data.reasonings?.['category-strategic-analysis'] || data.reasonings?.['category-insight'] || '';
+          if (insight) {
+            setStrategicInsight(insight);
+            setInsightGenerated(true);
+          }
+        }
+      } catch (err) {
+        console.error('Failed to generate category insight:', err);
+      } finally {
+        setIsGeneratingInsight(false);
+      }
+    };
+
+    generateInsight();
+  }, [brandContext, categories, insightGenerated]);
 
   const filteredCategories = categories.filter(
     cat => filterStatus === 'all' || cat.status === filterStatus
@@ -125,6 +195,36 @@ export const CategoryBreakdownPanel: React.FC<CategoryBreakdownPanelProps> = ({ 
             </button>
           </div>
         </div>
+
+        {/* AI Strategic Insight */}
+        {(isGeneratingInsight || strategicInsight) && (
+          <div className="mt-4 p-4 bg-gradient-to-r from-purple-50 to-indigo-50 dark:from-purple-900/20 dark:to-indigo-900/20 border border-purple-200 dark:border-purple-800 rounded-lg">
+            <div className="flex items-start gap-3">
+              <div className="flex-shrink-0">
+                {isGeneratingInsight ? (
+                  <svg className="w-5 h-5 text-purple-500 animate-spin" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                  </svg>
+                ) : (
+                  <svg className="w-5 h-5 text-purple-500" fill="currentColor" viewBox="0 0 20 20">
+                    <path d="M11.3 1.046A1 1 0 0112 2v5h4a1 1 0 01.82 1.573l-7 10A1 1 0 018 18v-5H4a1 1 0 01-.82-1.573l7-10a1 1 0 011.12-.38z" />
+                  </svg>
+                )}
+              </div>
+              <div>
+                <h4 className="text-sm font-semibold text-purple-800 dark:text-purple-300 mb-1">
+                  {isGeneratingInsight ? 'Generating Strategic Insight...' : 'AI Strategic Insight'}
+                </h4>
+                {strategicInsight ? (
+                  <p className="text-sm text-purple-700 dark:text-purple-300">{strategicInsight}</p>
+                ) : (
+                  <p className="text-sm text-purple-600 dark:text-purple-400 italic">Analyzing your category performance...</p>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Status Summary */}

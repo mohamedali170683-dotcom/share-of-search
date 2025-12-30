@@ -1,20 +1,91 @@
-import React, { useState } from 'react';
-import type { CompetitorStrength } from '../types';
+import React, { useState, useEffect } from 'react';
+import type { CompetitorStrength, BrandContext } from '../types';
 
 interface CompetitorStrengthPanelProps {
   competitors: CompetitorStrength[];
   yourBrand: string;
+  brandContext?: BrandContext;
+  isLoadingInsights?: boolean;
 }
 
 export const CompetitorStrengthPanel: React.FC<CompetitorStrengthPanelProps> = ({
   competitors,
-  yourBrand
+  yourBrand,
+  brandContext
 }) => {
   const [selectedCompetitor, setSelectedCompetitor] = useState<string | null>(
     competitors[0]?.competitor || null
   );
+  const [strategicInsight, setStrategicInsight] = useState<string>('');
+  const [isGeneratingInsight, setIsGeneratingInsight] = useState(false);
+  const [insightGenerated, setInsightGenerated] = useState(false);
 
   const selected = competitors.find(c => c.competitor === selectedCompetitor);
+
+  // Generate strategic insight when component mounts or data changes
+  useEffect(() => {
+    const generateInsight = async () => {
+      if (!brandContext || competitors.length === 0 || insightGenerated) return;
+
+      setIsGeneratingInsight(true);
+      try {
+        const competitorSummary = competitors.map(c => {
+          const total = c.headToHead.youWin + c.headToHead.theyWin + c.headToHead.ties;
+          const winRate = Math.round((c.headToHead.youWin / total) * 100);
+          return `${c.competitor}: ${winRate}% win rate (${c.headToHead.youWin} wins, ${c.headToHead.theyWin} losses), ${c.estimatedSOV}% SOV, dominates in: ${c.dominantCategories.slice(0, 2).join(', ') || 'none'}`;
+        }).join('\n');
+
+        const response = await fetch('/api/generate-reasoning', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            opportunities: [{
+              id: 'competitor-insight',
+              keyword: 'competitor-strategic-analysis',
+              type: 'content-gap',
+              priority: 100,
+              searchVolume: 0,
+              clickPotential: 0,
+              effort: 'medium',
+              category: 'Strategic Analysis'
+            }],
+            brandContext: {
+              ...brandContext,
+              competitorData: competitors.map(c => ({
+                name: c.competitor,
+                sov: c.estimatedSOV,
+                headToHead: c.headToHead,
+                dominantCategories: c.dominantCategories
+              }))
+            },
+            customPrompt: `Analyze the competitive landscape for ${yourBrand || brandContext.brandName}.
+              Competitor breakdown:
+              ${competitorSummary}
+
+              Write 2-3 sentences of strategic insight about:
+              1. Which competitor poses the biggest threat and why
+              2. Where ${yourBrand || brandContext.brandName} has competitive advantages to leverage
+              3. One specific tactical recommendation to improve competitive position`
+          })
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          const insight = data.reasonings?.['competitor-strategic-analysis'] || data.reasonings?.['competitor-insight'] || '';
+          if (insight) {
+            setStrategicInsight(insight);
+            setInsightGenerated(true);
+          }
+        }
+      } catch (err) {
+        console.error('Failed to generate competitor insight:', err);
+      } finally {
+        setIsGeneratingInsight(false);
+      }
+    };
+
+    generateInsight();
+  }, [brandContext, competitors, yourBrand, insightGenerated]);
 
   if (competitors.length === 0) {
     return (
@@ -43,6 +114,36 @@ export const CompetitorStrengthPanel: React.FC<CompetitorStrengthPanelProps> = (
         <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
           Head-to-head comparison with your main competitors
         </p>
+
+        {/* AI Strategic Insight */}
+        {(isGeneratingInsight || strategicInsight) && (
+          <div className="mt-4 p-4 bg-gradient-to-r from-red-50 to-orange-50 dark:from-red-900/20 dark:to-orange-900/20 border border-red-200 dark:border-red-800 rounded-lg">
+            <div className="flex items-start gap-3">
+              <div className="flex-shrink-0">
+                {isGeneratingInsight ? (
+                  <svg className="w-5 h-5 text-red-500 animate-spin" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                  </svg>
+                ) : (
+                  <svg className="w-5 h-5 text-red-500" fill="currentColor" viewBox="0 0 20 20">
+                    <path d="M11.3 1.046A1 1 0 0112 2v5h4a1 1 0 01.82 1.573l-7 10A1 1 0 018 18v-5H4a1 1 0 01-.82-1.573l7-10a1 1 0 011.12-.38z" />
+                  </svg>
+                )}
+              </div>
+              <div>
+                <h4 className="text-sm font-semibold text-red-800 dark:text-red-300 mb-1">
+                  {isGeneratingInsight ? 'Generating Competitive Intelligence...' : 'AI Competitive Insight'}
+                </h4>
+                {strategicInsight ? (
+                  <p className="text-sm text-red-700 dark:text-red-300">{strategicInsight}</p>
+                ) : (
+                  <p className="text-sm text-red-600 dark:text-red-400 italic">Analyzing your competitive landscape...</p>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Competitor Selector */}

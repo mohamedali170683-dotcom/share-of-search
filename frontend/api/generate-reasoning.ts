@@ -29,7 +29,23 @@ interface BrandContext {
 
 interface RequestBody {
   opportunities: Opportunity[];
-  brandContext: BrandContext;
+  brandContext: BrandContext & {
+    categoryData?: Array<{
+      name: string;
+      status: string;
+      sov: number;
+      keywords: number;
+      avgPosition: number;
+      volume: number;
+    }>;
+    competitorData?: Array<{
+      name: string;
+      sov: number;
+      headToHead: { youWin: number; theyWin: number; ties: number };
+      dominantCategories: string[];
+    }>;
+  };
+  customPrompt?: string;
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -62,7 +78,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   console.log('API key found, processing request...');
 
   try {
-    const { opportunities, brandContext } = req.body as RequestBody;
+    const { opportunities, brandContext, customPrompt } = req.body as RequestBody;
 
     if (!opportunities || !Array.isArray(opportunities) || opportunities.length === 0) {
       return res.status(400).json({ error: 'No opportunities provided' });
@@ -75,25 +91,43 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // Limit to 20 keywords per request for cost control
     const limitedOpportunities = opportunities.slice(0, 20);
 
-    // Build the prompt
-    const keywordsList = limitedOpportunities.map((opp, i) => {
-      const parts = [
-        `${i + 1}. "${opp.keyword}"`,
-        `Type: ${opp.type}`,
-        `Volume: ${opp.searchVolume.toLocaleString()}`
-      ];
+    // Check if this is a custom prompt request (for category/competitor insights)
+    let prompt: string;
 
-      if (opp.currentPosition) parts.push(`Position: #${opp.currentPosition}`);
-      if (opp.targetPosition) parts.push(`Target: #${opp.targetPosition}`);
-      if (opp.keywordDifficulty !== undefined) parts.push(`KD: ${opp.keywordDifficulty}`);
-      if (opp.category) parts.push(`Category: ${opp.category}`);
-      parts.push(`Effort: ${opp.effort}`);
-      parts.push(`Click Potential: +${opp.clickPotential.toLocaleString()}`);
+    if (customPrompt) {
+      // Use custom prompt for category/competitor strategic analysis
+      prompt = `You are an SEO strategist for ${brandContext.brandName}, a ${brandContext.marketPosition} in the ${brandContext.industry} industry.
 
-      return parts.join(' | ');
-    }).join('\n');
+Brand Context:
+- Target Audience: ${brandContext.targetAudience}
+- Competitors: ${brandContext.competitorContext}
+- Key Strengths: ${brandContext.keyStrengths.length > 0 ? brandContext.keyStrengths.join(', ') : 'Not specified'}
 
-    const prompt = `You are an SEO strategist analyzing keyword opportunities for ${brandContext.brandName}, a ${brandContext.marketPosition} in the ${brandContext.industry} industry.
+${customPrompt}
+
+IMPORTANT: Return ONLY a valid JSON object with this exact format (no markdown, no explanation):
+{"reasonings": {"${limitedOpportunities[0]?.keyword || 'insight'}": "your strategic insight here..."}}`;
+
+    } else {
+      // Build the standard keyword analysis prompt
+      const keywordsList = limitedOpportunities.map((opp, i) => {
+        const parts = [
+          `${i + 1}. "${opp.keyword}"`,
+          `Type: ${opp.type}`,
+          `Volume: ${opp.searchVolume.toLocaleString()}`
+        ];
+
+        if (opp.currentPosition) parts.push(`Position: #${opp.currentPosition}`);
+        if (opp.targetPosition) parts.push(`Target: #${opp.targetPosition}`);
+        if (opp.keywordDifficulty !== undefined) parts.push(`KD: ${opp.keywordDifficulty}`);
+        if (opp.category) parts.push(`Category: ${opp.category}`);
+        parts.push(`Effort: ${opp.effort}`);
+        parts.push(`Click Potential: +${opp.clickPotential.toLocaleString()}`);
+
+        return parts.join(' | ');
+      }).join('\n');
+
+      prompt = `You are an SEO strategist analyzing keyword opportunities for ${brandContext.brandName}, a ${brandContext.marketPosition} in the ${brandContext.industry} industry.
 
 Brand Context:
 - Target Audience: ${brandContext.targetAudience}
@@ -115,6 +149,7 @@ IMPORTANT: Return ONLY a valid JSON object with this exact format (no markdown, 
 {"reasonings": {"keyword1": "reasoning text...", "keyword2": "reasoning text..."}}
 
 Use the exact keyword text as keys.`;
+    }
 
     // Call Claude API - Using Claude 3 Haiku for fast, cost-effective reasoning
     const anthropic = new Anthropic({ apiKey });

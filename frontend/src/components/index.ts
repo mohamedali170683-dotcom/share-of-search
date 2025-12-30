@@ -9,10 +9,5 @@ export { AnalysisForm } from './AnalysisForm';
 export { default as ErrorBoundary } from './ErrorBoundary';
 
 // Actionable Insights Components
-export { QuickWinsPanel } from './QuickWinsPanel';
 export { CategoryBreakdownPanel } from './CategoryBreakdownPanel';
 export { CompetitorStrengthPanel } from './CompetitorStrengthPanel';
-export { ActionListPanel } from './ActionListPanel';
-export { HiddenGemsPanel } from './HiddenGemsPanel';
-export { CannibalizationPanel } from './CannibalizationPanel';
-export { ContentGapsPanel } from './ContentGapsPanel';

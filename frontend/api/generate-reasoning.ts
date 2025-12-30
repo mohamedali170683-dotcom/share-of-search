@@ -116,11 +116,11 @@ IMPORTANT: Return ONLY a valid JSON object with this exact format (no markdown, 
 
 Use the exact keyword text as keys.`;
 
-    // Call Claude API - Using Claude 3.5 Sonnet for high quality reasoning
+    // Call Claude API - Using Claude 3 Haiku for fast, cost-effective reasoning
     const anthropic = new Anthropic({ apiKey });
 
     const message = await anthropic.messages.create({
-      model: 'claude-3-5-sonnet-20241022',
+      model: 'claude-3-haiku-20240307',
       max_tokens: 4000,
       messages: [
         {

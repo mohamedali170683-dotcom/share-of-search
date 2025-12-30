@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
-import { MetricCard, KeywordTable, TrendsPanel, MethodologyPage, FAQ, ProjectCard, AnalysisForm, QuickWinsPanel, CategoryBreakdownPanel, CompetitorStrengthPanel, ActionListPanel, HiddenGemsPanel, CannibalizationPanel, ContentGapsPanel } from './components';
-import type { BrandKeyword, RankedKeyword, SOSResult, SOVResult, GrowthGapResult, Project, ActionableInsights, BrandContext } from './types';
+import { MetricCard, KeywordTable, TrendsPanel, MethodologyPage, FAQ, ProjectCard, AnalysisForm, CategoryBreakdownPanel, CompetitorStrengthPanel, HiddenGemsPanel, CannibalizationPanel, ContentGapsPanel } from './components';
+import { OpportunitiesPanel } from './components/OpportunitiesPanel';
+import type { BrandKeyword, RankedKeyword, SOSResult, SOVResult, GrowthGapResult, Project, ActionableInsights, BrandContext, Opportunity } from './types';
 import { calculateMetrics, getRankedKeywords, getBrandKeywords, getTrends, exportToCSV } from './services/api';
 import { getProjects, saveProject, deleteProject } from './services/projectStorage';
 import { useTheme } from './contexts/ThemeContext';
@@ -8,7 +9,7 @@ import type { TrendsData } from './services/api';
 import { generateActionableInsights } from './lib/actionableInsights';
 
 type ViewMode = 'dashboard' | 'analysis' | 'project';
-type AnalysisTab = 'overview' | 'quick-wins' | 'hidden-gems' | 'categories' | 'competitors' | 'cannibalization' | 'content-gaps' | 'actions';
+type AnalysisTab = 'overview' | 'opportunities' | 'hidden-gems' | 'categories' | 'competitors' | 'cannibalization' | 'content-gaps';
 
 function App() {
   const { toggleTheme, isDark } = useTheme();
@@ -105,6 +106,68 @@ function App() {
     if (rankedKeywords.length === 0 || brandKeywords.length === 0) return null;
     return generateActionableInsights(rankedKeywords, brandKeywords, brandContext);
   }, [rankedKeywords, brandKeywords, brandContext]);
+
+  // State for opportunities with AI-generated reasoning
+  const [opportunities, setOpportunities] = useState<Opportunity[]>([]);
+  const [isLoadingReasoning, setIsLoadingReasoning] = useState(false);
+
+  // Update opportunities when actionable insights change
+  useEffect(() => {
+    if (actionableInsights?.opportunities) {
+      setOpportunities(actionableInsights.opportunities);
+    }
+  }, [actionableInsights]);
+
+  // Handler to refresh AI reasoning for opportunities
+  const handleRefreshReasoning = async (opportunityIds: string[]) => {
+    if (!brandContext || opportunityIds.length === 0) return;
+
+    setIsLoadingReasoning(true);
+
+    // Mark selected opportunities as loading
+    setOpportunities(prev =>
+      prev.map(opp =>
+        opportunityIds.includes(opp.id) ? { ...opp, isLoading: true } : opp
+      )
+    );
+
+    try {
+      const selectedOpps = opportunities.filter(opp => opportunityIds.includes(opp.id));
+
+      const response = await fetch('/api/generate-reasoning', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          opportunities: selectedOpps,
+          brandContext
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to generate reasoning');
+      }
+
+      const data = await response.json();
+      const reasonings: Record<string, string> = data.reasonings || {};
+
+      // Update opportunities with new reasoning
+      setOpportunities(prev =>
+        prev.map(opp => ({
+          ...opp,
+          reasoning: reasonings[opp.keyword] || opp.reasoning,
+          isLoading: false
+        }))
+      );
+    } catch (err) {
+      console.error('Failed to generate AI reasoning:', err);
+      // Clear loading state on error
+      setOpportunities(prev =>
+        prev.map(opp => ({ ...opp, isLoading: false }))
+      );
+    } finally {
+      setIsLoadingReasoning(false);
+    }
+  };
 
   // Handle new analysis
   const handleAnalyze = async (config: {
@@ -357,14 +420,14 @@ function App() {
       )
     },
     {
-      id: 'quick-wins',
-      label: 'Quick Wins',
+      id: 'opportunities',
+      label: 'Opportunities',
       icon: (
         <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
           <path d="M11.3 1.046A1 1 0 0112 2v5h4a1 1 0 01.82 1.573l-7 10A1 1 0 018 18v-5H4a1 1 0 01-.82-1.573l7-10a1 1 0 011.12-.38z" />
         </svg>
       ),
-      badge: actionableInsights?.quickWins.length
+      badge: opportunities.length
     },
     {
       id: 'hidden-gems',
@@ -415,16 +478,6 @@ function App() {
         </svg>
       ),
       badge: actionableInsights?.contentGaps.length
-    },
-    {
-      id: 'actions',
-      label: 'Actions',
-      icon: (
-        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
-        </svg>
-      ),
-      badge: actionableInsights?.actionList.length
     }
   ];
 
@@ -461,20 +514,20 @@ function App() {
       </div>
 
       {/* Insights Summary Banner */}
-      {actionableInsights && (
+      {opportunities.length > 0 && (
         <div className="mb-6 p-4 bg-gradient-to-r from-indigo-500 to-purple-600 rounded-xl text-white">
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div>
-              <h3 className="font-semibold text-lg">Actionable Insights Available</h3>
+              <h3 className="font-semibold text-lg">Opportunities Identified</h3>
               <p className="text-indigo-100 text-sm">
-                {actionableInsights.quickWins.length} quick wins • {actionableInsights.hiddenGems.length} hidden gems • {actionableInsights.cannibalizationIssues.length} cannibalization issues • +{actionableInsights.summary.totalQuickWinPotential.toLocaleString()} clicks potential
+                {opportunities.length} opportunities • +{actionableInsights?.summary.totalQuickWinPotential.toLocaleString()} clicks potential • Click "AI Insights" to generate strategic analysis
               </p>
             </div>
             <button
-              onClick={() => setAnalysisTab('actions')}
+              onClick={() => setAnalysisTab('opportunities')}
               className="px-4 py-2 bg-white/20 hover:bg-white/30 rounded-lg text-sm font-medium transition-colors"
             >
-              View Action Plan
+              View Opportunities
             </button>
           </div>
         </div>
@@ -649,8 +702,13 @@ function App() {
         </>
       )}
 
-      {analysisTab === 'quick-wins' && actionableInsights && (
-        <QuickWinsPanel quickWins={actionableInsights.quickWins} />
+      {analysisTab === 'opportunities' && (
+        <OpportunitiesPanel
+          opportunities={opportunities}
+          brandContext={brandContext}
+          onRefreshReasoning={handleRefreshReasoning}
+          isLoadingReasoning={isLoadingReasoning}
+        />
       )}
 
       {analysisTab === 'hidden-gems' && actionableInsights && (
@@ -674,10 +732,6 @@ function App() {
 
       {analysisTab === 'content-gaps' && actionableInsights && (
         <ContentGapsPanel contentGaps={actionableInsights.contentGaps} />
-      )}
-
-      {analysisTab === 'actions' && actionableInsights && (
-        <ActionListPanel actions={actionableInsights.actionList} />
       )}
     </main>
   );

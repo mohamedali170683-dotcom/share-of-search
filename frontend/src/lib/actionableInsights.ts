@@ -10,7 +10,8 @@ import type {
   KeywordBattle,
   HiddenGem,
   CannibalizationIssue,
-  ContentGap
+  ContentGap,
+  Opportunity
 } from '../types';
 import { getCTR } from './calculations';
 import { detectCategory as detectCategoryFromUtils } from '../utils/categoryDetection';
@@ -717,6 +718,92 @@ export function generateActionList(
 // MAIN FUNCTION
 // ==========================================
 
+// ==========================================
+// UNIFIED OPPORTUNITIES
+// ==========================================
+
+/**
+ * Generate unified opportunities list from all insight types
+ * Combines quick wins, hidden gems, and cannibalization issues into a single prioritized list
+ */
+export function generateUnifiedOpportunities(
+  quickWins: QuickWinOpportunity[],
+  hiddenGems: HiddenGem[],
+  cannibalizationIssues: CannibalizationIssue[]
+): Opportunity[] {
+  const opportunities: Opportunity[] = [];
+  let idCounter = 1;
+
+  // Convert Quick Wins to Opportunities
+  for (const qw of quickWins) {
+    // Priority based on click uplift potential (higher = better)
+    const priority = Math.min(100, 50 + Math.round(qw.clickUplift / 100));
+
+    opportunities.push({
+      id: `opp-qw-${idCounter++}`,
+      keyword: qw.keyword,
+      type: 'quick-win',
+      priority,
+      searchVolume: qw.searchVolume,
+      clickPotential: qw.clickUplift,
+      effort: qw.effort,
+      reasoning: '', // Will be filled by AI
+      currentPosition: qw.currentPosition,
+      targetPosition: qw.targetPosition,
+      category: qw.category,
+      url: qw.url
+    });
+  }
+
+  // Convert Hidden Gems to Opportunities
+  for (const gem of hiddenGems) {
+    // Priority based on volume/difficulty ratio
+    const priority = Math.min(95, 40 + Math.round((gem.searchVolume / (gem.keywordDifficulty + 1)) / 50));
+
+    opportunities.push({
+      id: `opp-gem-${idCounter++}`,
+      keyword: gem.keyword,
+      type: 'hidden-gem',
+      priority,
+      searchVolume: gem.searchVolume,
+      clickPotential: gem.potentialClicks,
+      effort: gem.keywordDifficulty <= 20 ? 'low' : gem.keywordDifficulty <= 35 ? 'medium' : 'high',
+      reasoning: '', // Will be filled by AI
+      currentPosition: gem.position || undefined,
+      keywordDifficulty: gem.keywordDifficulty,
+      category: gem.category,
+      url: gem.url
+    });
+  }
+
+  // Convert Cannibalization Issues to Opportunities
+  for (const issue of cannibalizationIssues) {
+    if (issue.impactScore < 50) continue; // Skip minor issues
+
+    const priority = Math.min(90, 45 + Math.round(issue.impactScore / 50));
+
+    opportunities.push({
+      id: `opp-cann-${idCounter++}`,
+      keyword: issue.keyword,
+      type: 'cannibalization',
+      priority,
+      searchVolume: issue.searchVolume,
+      clickPotential: issue.impactScore,
+      effort: issue.recommendation === 'redirect' ? 'low' : 'medium',
+      reasoning: '', // Will be filled by AI
+      competingUrls: issue.competingUrls.map(u => ({ url: u.url, position: u.position })),
+      recommendation: issue.recommendation
+    });
+  }
+
+  // Sort by priority (highest first)
+  return opportunities.sort((a, b) => b.priority - a.priority);
+}
+
+// ==========================================
+// MAIN FUNCTION
+// ==========================================
+
 /**
  * Generate all actionable insights from keyword data
  * @param rankedKeywords - Keywords where the brand ranks
@@ -736,6 +823,9 @@ export function generateActionableInsights(
   const contentGaps = analyzeContentGaps(rankedKeywords, brandKeywords);
   const actionList = generateActionList(quickWins, categoryBreakdown, competitorStrengths, hiddenGems, cannibalizationIssues, brandContext);
 
+  // Generate unified opportunities list
+  const opportunities = generateUnifiedOpportunities(quickWins, hiddenGems, cannibalizationIssues);
+
   const totalQuickWinPotential = quickWins.reduce((sum, q) => sum + q.clickUplift, 0);
   const strongCategories = categoryBreakdown.filter(c => c.status === 'leading' || c.status === 'competitive').length;
   const weakCategories = categoryBreakdown.filter(c => c.status === 'weak' || c.status === 'trailing').length;
@@ -748,6 +838,7 @@ export function generateActionableInsights(
     hiddenGems,
     cannibalizationIssues,
     contentGaps,
+    opportunities,
     summary: {
       totalQuickWinPotential,
       strongCategories,

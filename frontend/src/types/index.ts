@@ -216,6 +216,7 @@ export interface ActionableInsights {
   hiddenGems: HiddenGem[];
   cannibalizationIssues: CannibalizationIssue[];
   contentGaps: ContentGap[];
+  opportunities: Opportunity[]; // Unified opportunities list
   summary: {
     totalQuickWinPotential: number;
     strongCategories: number;
@@ -224,4 +225,36 @@ export interface ActionableInsights {
     cannibalizationCount: number;
     topPriorityAction: string;
   };
+}
+
+// ==========================================
+// UNIFIED OPPORTUNITY TYPE
+// ==========================================
+
+// Opportunity types for the unified panel
+export type OpportunityType = 'quick-win' | 'hidden-gem' | 'content-gap' | 'cannibalization';
+
+// Unified Opportunity - Single type for all actionable insights
+export interface Opportunity {
+  id: string;
+  keyword: string;
+  type: OpportunityType;
+  priority: number;  // 1-100, used for sorting
+  searchVolume: number;
+  clickPotential: number;  // Estimated click uplift
+  effort: 'low' | 'medium' | 'high';
+  reasoning: string;  // AI-generated, keyword-specific explanation
+  isLoading?: boolean;  // True while AI is generating reasoning
+  isDiscarded?: boolean;  // User can dismiss opportunities
+
+  // Type-specific metrics (optional based on type)
+  currentPosition?: number;
+  targetPosition?: number;
+  keywordDifficulty?: number;
+  category?: string;
+  url?: string;
+
+  // For cannibalization
+  competingUrls?: { url: string; position: number }[];
+  recommendation?: 'consolidate' | 'differentiate' | 'redirect';
 }

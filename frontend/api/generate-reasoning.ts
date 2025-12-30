@@ -33,19 +33,33 @@ interface RequestBody {
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
+  // Set CORS headers
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+
+  // Handle preflight
+  if (req.method === 'OPTIONS') {
+    return res.status(200).end();
+  }
+
   // Only allow POST
   if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method not allowed' });
+    console.log('Received non-POST request:', req.method);
+    return res.status(405).json({ error: 'Method not allowed', receivedMethod: req.method });
   }
 
   // Check for API key
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
+    console.error('ANTHROPIC_API_KEY not found in environment variables');
     return res.status(500).json({
       error: 'ANTHROPIC_API_KEY not configured',
       reasonings: {}
     });
   }
+
+  console.log('API key found, processing request...');
 
   try {
     const { opportunities, brandContext } = req.body as RequestBody;
@@ -140,6 +154,7 @@ Use the exact keyword text as keys.`;
 
     // Check for specific error types
     if (error instanceof Anthropic.APIError) {
+      console.error('Anthropic API Error:', error.status, error.message);
       if (error.status === 401) {
         return res.status(500).json({
           error: 'Invalid API key',
@@ -152,10 +167,17 @@ Use the exact keyword text as keys.`;
           reasonings: {}
         });
       }
+      return res.status(500).json({
+        error: `Anthropic API error: ${error.message}`,
+        reasonings: {}
+      });
     }
 
+    // Generic error
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    console.error('Generic error:', errorMessage);
     return res.status(500).json({
-      error: 'Failed to generate reasoning',
+      error: `Failed to generate reasoning: ${errorMessage}`,
       reasonings: {}
     });
   }

@@ -5,7 +5,6 @@ interface OpportunitiesPanelProps {
   opportunities: Opportunity[];
   brandContext?: BrandContext;
   onDiscardChange?: (discardedIds: Set<string>) => void;
-  onRefreshReasoning?: (opportunityIds: string[]) => void;
   isLoadingReasoning?: boolean;
 }
 
@@ -57,7 +56,6 @@ const getPositionBadgeClass = (position: number): string => {
 export const OpportunitiesPanel: React.FC<OpportunitiesPanelProps> = ({
   opportunities,
   onDiscardChange,
-  onRefreshReasoning,
   isLoadingReasoning = false
 }) => {
   const [typeFilter, setTypeFilter] = useState<'all' | OpportunityType>('all');
@@ -129,11 +127,6 @@ export const OpportunitiesPanel: React.FC<OpportunitiesPanelProps> = ({
     URL.revokeObjectURL(url);
   };
 
-  const handleRefreshAll = () => {
-    const ids = filteredOpportunities.slice(0, 20).map(opp => opp.id);
-    onRefreshReasoning?.(ids);
-  };
-
   if (opportunities.length === 0) {
     return (
       <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-8 text-center">
@@ -166,24 +159,14 @@ export const OpportunitiesPanel: React.FC<OpportunitiesPanelProps> = ({
           </div>
 
           <div className="flex items-center gap-2">
-            {onRefreshReasoning && (
-              <button
-                onClick={handleRefreshAll}
-                disabled={isLoadingReasoning}
-                className="flex items-center gap-2 px-4 py-2 bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 rounded-lg hover:bg-purple-200 dark:hover:bg-purple-900/50 transition-colors text-sm disabled:opacity-50"
-              >
-                {isLoadingReasoning ? (
-                  <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                  </svg>
-                ) : (
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                  </svg>
-                )}
-                {isLoadingReasoning ? 'Generating...' : 'AI Insights'}
-              </button>
+            {isLoadingReasoning && (
+              <div className="flex items-center gap-2 px-4 py-2 bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 rounded-lg text-sm">
+                <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                </svg>
+                Generating AI insights...
+              </div>
             )}
             <button
               onClick={handleExport}
@@ -478,9 +461,13 @@ export const OpportunitiesPanel: React.FC<OpportunitiesPanelProps> = ({
                       <p className="text-sm text-gray-700 dark:text-gray-300">
                         {opp.reasoning}
                       </p>
+                    ) : opp.isLoading ? (
+                      <p className="text-sm text-gray-500 dark:text-gray-400 italic">
+                        Generating personalized strategic analysis...
+                      </p>
                     ) : (
                       <p className="text-sm text-gray-500 dark:text-gray-400 italic">
-                        Click "AI Insights" to generate personalized strategic analysis for this keyword.
+                        Strategic insight will be generated shortly.
                       </p>
                     )}
 

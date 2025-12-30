@@ -110,54 +110,52 @@ function App() {
   // State for opportunities with AI-generated reasoning
   const [opportunities, setOpportunities] = useState<Opportunity[]>([]);
   const [isLoadingReasoning, setIsLoadingReasoning] = useState(false);
+  const [reasoningGenerated, setReasoningGenerated] = useState(false);
 
-  // Update opportunities when actionable insights change
-  useEffect(() => {
-    if (actionableInsights?.opportunities) {
-      setOpportunities(actionableInsights.opportunities);
-    }
-  }, [actionableInsights]);
-
-  // Handler to refresh AI reasoning for opportunities
-  const handleRefreshReasoning = async (opportunityIds: string[]) => {
-    if (!brandContext || opportunityIds.length === 0) return;
+  // Function to generate AI reasoning for opportunities
+  const generateAIReasoning = async (opps: Opportunity[], context: BrandContext) => {
+    if (opps.length === 0) return;
 
     setIsLoadingReasoning(true);
 
-    // Mark selected opportunities as loading
+    // Mark all opportunities as loading
     setOpportunities(prev =>
-      prev.map(opp =>
-        opportunityIds.includes(opp.id) ? { ...opp, isLoading: true } : opp
-      )
+      prev.map(opp => ({ ...opp, isLoading: true }))
     );
 
     try {
-      const selectedOpps = opportunities.filter(opp => opportunityIds.includes(opp.id));
+      // Process in batches of 20 to stay within API limits
+      const batchSize = 20;
+      const allReasonings: Record<string, string> = {};
 
-      const response = await fetch('/api/generate-reasoning', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          opportunities: selectedOpps,
-          brandContext
-        })
-      });
+      for (let i = 0; i < opps.length; i += batchSize) {
+        const batch = opps.slice(i, i + batchSize);
 
-      if (!response.ok) {
-        throw new Error('Failed to generate reasoning');
+        const response = await fetch('/api/generate-reasoning', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            opportunities: batch,
+            brandContext: context
+          })
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          Object.assign(allReasonings, data.reasonings || {});
+        }
       }
 
-      const data = await response.json();
-      const reasonings: Record<string, string> = data.reasonings || {};
-
-      // Update opportunities with new reasoning
+      // Update opportunities with AI-generated reasoning
       setOpportunities(prev =>
         prev.map(opp => ({
           ...opp,
-          reasoning: reasonings[opp.keyword] || opp.reasoning,
+          reasoning: allReasonings[opp.keyword] || opp.reasoning,
           isLoading: false
         }))
       );
+
+      setReasoningGenerated(true);
     } catch (err) {
       console.error('Failed to generate AI reasoning:', err);
       // Clear loading state on error
@@ -168,6 +166,20 @@ function App() {
       setIsLoadingReasoning(false);
     }
   };
+
+  // Update opportunities when actionable insights change and auto-generate reasoning
+  useEffect(() => {
+    if (actionableInsights?.opportunities && actionableInsights.opportunities.length > 0) {
+      const newOpps = actionableInsights.opportunities;
+      setOpportunities(newOpps);
+      setReasoningGenerated(false);
+
+      // Auto-generate AI reasoning when new opportunities are available
+      if (brandContext) {
+        generateAIReasoning(newOpps, brandContext);
+      }
+    }
+  }, [actionableInsights, brandContext]);
 
   // Handle new analysis
   const handleAnalyze = async (config: {
@@ -518,9 +530,18 @@ function App() {
         <div className="mb-6 p-4 bg-gradient-to-r from-indigo-500 to-purple-600 rounded-xl text-white">
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div>
-              <h3 className="font-semibold text-lg">Opportunities Identified</h3>
+              <h3 className="font-semibold text-lg flex items-center gap-2">
+                Opportunities Identified
+                {isLoadingReasoning && (
+                  <svg className="w-5 h-5 animate-spin" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                  </svg>
+                )}
+              </h3>
               <p className="text-indigo-100 text-sm">
-                {opportunities.length} opportunities • +{actionableInsights?.summary.totalQuickWinPotential.toLocaleString()} clicks potential • Click "AI Insights" to generate strategic analysis
+                {opportunities.length} opportunities • +{actionableInsights?.summary.totalQuickWinPotential.toLocaleString()} clicks potential
+                {isLoadingReasoning ? ' • Generating AI insights...' : reasoningGenerated ? ' • AI insights ready' : ''}
               </p>
             </div>
             <button
@@ -706,7 +727,6 @@ function App() {
         <OpportunitiesPanel
           opportunities={opportunities}
           brandContext={brandContext}
-          onRefreshReasoning={handleRefreshReasoning}
           isLoadingReasoning={isLoadingReasoning}
         />
       )}

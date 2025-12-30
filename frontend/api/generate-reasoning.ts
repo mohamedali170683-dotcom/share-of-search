@@ -102,12 +102,12 @@ IMPORTANT: Return ONLY a valid JSON object with this exact format (no markdown, 
 
 Use the exact keyword text as keys.`;
 
-    // Call Claude API
+    // Call Claude API - Using Sonnet for higher quality reasoning
     const anthropic = new Anthropic({ apiKey });
 
     const message = await anthropic.messages.create({
-      model: 'claude-3-haiku-20240307',
-      max_tokens: 3000,
+      model: 'claude-sonnet-4-20250514',
+      max_tokens: 4000,
       messages: [
         {
           role: 'user',

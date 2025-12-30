@@ -117,6 +117,7 @@ function App() {
   const generateAIReasoning = async (opps: Opportunity[], context: BrandContext) => {
     if (opps.length === 0) return;
 
+    console.log('[AI Reasoning] Starting generation for', opps.length, 'opportunities');
     setIsLoadingReasoning(true);
 
     // Mark all opportunities as loading
@@ -130,6 +131,7 @@ function App() {
 
       for (let i = 0; i < opps.length; i += batchSize) {
         const batch = opps.slice(i, i + batchSize);
+        console.log('[AI Reasoning] Processing batch', i / batchSize + 1, 'with', batch.length, 'keywords');
 
         const response = await fetch('/api/generate-reasoning', {
           method: 'POST',
@@ -140,11 +142,19 @@ function App() {
           })
         });
 
+        console.log('[AI Reasoning] Response status:', response.status);
+
         if (response.ok) {
           const data = await response.json();
+          console.log('[AI Reasoning] Received reasonings for', Object.keys(data.reasonings || {}).length, 'keywords');
           Object.assign(allReasonings, data.reasonings || {});
+        } else {
+          const errorText = await response.text();
+          console.error('[AI Reasoning] API error:', response.status, errorText);
         }
       }
+
+      console.log('[AI Reasoning] Total reasonings received:', Object.keys(allReasonings).length);
 
       // Update opportunities with AI-generated reasoning
       setOpportunities(opps.map(opp => ({
@@ -153,9 +163,9 @@ function App() {
         isLoading: false
       })));
 
-      setReasoningGenerated(true);
+      setReasoningGenerated(Object.keys(allReasonings).length > 0);
     } catch (err) {
-      console.error('Failed to generate AI reasoning:', err);
+      console.error('[AI Reasoning] Failed to generate:', err);
       // Clear loading state on error
       setOpportunities(opps.map(opp => ({ ...opp, isLoading: false })));
     } finally {
@@ -165,12 +175,22 @@ function App() {
 
   // Update opportunities when actionable insights change and auto-generate reasoning
   useEffect(() => {
+    console.log('[AI Reasoning Effect] Running with:', {
+      hasOpportunities: !!actionableInsights?.opportunities?.length,
+      opportunityCount: actionableInsights?.opportunities?.length || 0,
+      hasBrandContext: !!brandContext,
+      brandName: brandContext?.brandName,
+      lastAnalysisId
+    });
+
     if (actionableInsights?.opportunities && actionableInsights.opportunities.length > 0 && brandContext) {
       // Create a unique ID for this analysis to prevent duplicate API calls
       const analysisId = `${brandContext.brandName}-${actionableInsights.opportunities.length}`;
+      console.log('[AI Reasoning Effect] Analysis ID:', analysisId, 'Last:', lastAnalysisId);
 
       // Only generate if this is a new analysis
       if (analysisId !== lastAnalysisId) {
+        console.log('[AI Reasoning Effect] Triggering AI generation');
         setLastAnalysisId(analysisId);
         const newOpps = actionableInsights.opportunities;
         setOpportunities(newOpps);
@@ -178,6 +198,8 @@ function App() {
 
         // Auto-generate AI reasoning
         generateAIReasoning(newOpps, brandContext);
+      } else {
+        console.log('[AI Reasoning Effect] Skipping - same analysis ID');
       }
     }
   }, [actionableInsights, brandContext, lastAnalysisId]);

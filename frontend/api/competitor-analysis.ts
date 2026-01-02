@@ -45,6 +45,7 @@ interface CompetitorKeywordAnalysis {
   gaps: Array<{
     keyword: string;
     searchVolume: number;
+    yourPosition: number | null; // null = not ranking in top 100, number = ranking but below competitor
     competitorPosition: number;
     competitorUrl: string;
     opportunityScore: number;
@@ -55,6 +56,7 @@ interface CompetitorKeywordAnalysis {
     yourPosition: number;
     competitorPosition: number;
     positionDiff: number;
+    yourUrl?: string;
   }>;
   summary: {
     totalOverlap: number;
@@ -110,7 +112,8 @@ async function fetchDomainKeywords(
   locationCode: number,
   languageCode: string,
   auth: string,
-  limit: number = 100
+  limit: number = 100,
+  maxPosition: number = 50
 ): Promise<KeywordRanking[]> {
   const response = await fetch('https://api.dataforseo.com/v3/dataforseo_labs/google/ranked_keywords/live', {
     method: 'POST',
@@ -127,7 +130,7 @@ async function fetchDomainKeywords(
       filters: [
         ['keyword_data.keyword_info.search_volume', '>=', 100],
         'and',
-        ['ranked_serp_element.serp_item.rank_group', '<=', 50]
+        ['ranked_serp_element.serp_item.rank_group', '<=', maxPosition]
       ],
       order_by: ['keyword_data.keyword_info.search_volume,desc']
     }])
@@ -152,13 +155,18 @@ async function fetchDomainKeywords(
 
 function analyzeCompetitorKeywords(
   yourKeywords: KeywordRanking[],
+  yourExtendedKeywords: KeywordRanking[], // Extended list up to position 100 for gap checking
   competitorKeywords: KeywordRanking[],
   competitorName: string,
   competitorDomain: string
 ): CompetitorKeywordAnalysis {
-  // Create lookup map for your keywords
+  // Create lookup maps for your keywords
   const yourKeywordMap = new Map<string, KeywordRanking>();
   yourKeywords.forEach(k => yourKeywordMap.set(k.keyword, k));
+
+  // Extended map for finding your position on gap keywords
+  const yourExtendedMap = new Map<string, KeywordRanking>();
+  yourExtendedKeywords.forEach(k => yourExtendedMap.set(k.keyword, k));
 
   const threats: CompetitorKeywordAnalysis['threats'] = [];
   const gaps: CompetitorKeywordAnalysis['gaps'] = [];
@@ -204,9 +212,12 @@ function analyzeCompetitorKeywords(
         });
       }
     } else {
-      // Gap: competitor ranks but you don't
+      // Gap: competitor ranks in top 50 but you don't (or rank poorly at 51-100)
       // Only include if competitor has a good position
       if (compKw.position <= 20) {
+        // Check if you rank for this keyword in extended range (51-100)
+        const yourExtendedKw = yourExtendedMap.get(compKw.keyword);
+
         const opportunityScore = Math.round(
           compKw.searchVolume * (1 + (20 - compKw.position) / 20)
         );
@@ -214,6 +225,7 @@ function analyzeCompetitorKeywords(
         gaps.push({
           keyword: compKw.keyword,
           searchVolume: compKw.searchVolume,
+          yourPosition: yourExtendedKw ? yourExtendedKw.position : null, // null = not ranking in top 100
           competitorPosition: compKw.position,
           competitorUrl: compKw.url,
           opportunityScore
@@ -273,9 +285,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const auth = Buffer.from(`${login}:${password}`).toString('base64');
 
-    // Fetch your domain's keywords first
+    // Fetch your domain's keywords first (top 50 positions for main analysis)
     console.log(`Fetching keywords for ${domain}...`);
-    const yourKeywords = await fetchDomainKeywords(domain, locationCode, languageCode, auth, 200);
+    const yourKeywords = await fetchDomainKeywords(domain, locationCode, languageCode, auth, 200, 50);
+
+    // Also fetch extended range (51-100) for gap analysis
+    console.log(`Fetching extended keywords for ${domain} (positions 51-100)...`);
+    const yourExtendedKeywords = await fetchDomainKeywords(domain, locationCode, languageCode, auth, 300, 100);
 
     if (yourKeywords.length === 0) {
       return res.status(400).json({ error: 'No keywords found for your domain' });
@@ -306,6 +322,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (competitorKeywords.length > 0) {
         const analysis = analyzeCompetitorKeywords(
           yourKeywords,
+          yourExtendedKeywords,
           competitorKeywords,
           competitorName,
           competitorDomain

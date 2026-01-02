@@ -285,6 +285,7 @@ export interface CompetitorThreat {
 export interface CompetitorGap {
   keyword: string;
   searchVolume: number;
+  yourPosition: number | null; // null = not ranking in top 100, number = ranking but below competitor
   competitorPosition: number;
   competitorUrl: string;
   opportunityScore: number;

@@ -59,10 +59,11 @@ export const CompetitorStrengthPanel: React.FC<CompetitorStrengthPanelProps> = (
     fetchAnalysis();
   }, [domain, locationCode, languageCode, competitors]);
 
-  // Generate strategic insight
+  // Generate strategic insight - wait for competitor analysis to complete
   useEffect(() => {
     const generateInsight = async () => {
-      if (!brandContext || competitors.length === 0 || insightGenerated) return;
+      // Only generate insight once competitor analysis is loaded
+      if (!brandContext || competitors.length === 0 || insightGenerated || isLoadingAnalysis) return;
 
       setIsGeneratingInsight(true);
       try {
@@ -70,19 +71,38 @@ export const CompetitorStrengthPanel: React.FC<CompetitorStrengthPanelProps> = (
           `${c.competitor}: ${c.estimatedSOV}% share of search, ${c.brandSearchVolume.toLocaleString()} brand search volume`
         ).join('\n');
 
-        // Include threat/gap data if available
-        let threatSummary = '';
+        // Include detailed threat/gap analysis
+        let analysisDetails = '';
         if (competitorAnalysis.length > 0) {
+          // Top threats by opportunity score
           const topThreats = competitorAnalysis
-            .flatMap(c => c.threats.slice(0, 3))
+            .flatMap(c => c.threats.map(t => ({ ...t, competitor: c.competitor })))
             .sort((a, b) => b.opportunityScore - a.opportunityScore)
             .slice(0, 5);
 
-          if (topThreats.length > 0) {
-            threatSummary = `\n\nTop competitive threats (keywords where competitors rank better):\n${
-              topThreats.map(t => `- "${t.keyword}": You #${t.yourPosition || 'not ranking'} vs competitor #${t.competitorPosition}`).join('\n')
-            }`;
-          }
+          // Top content gaps
+          const topGaps = competitorAnalysis
+            .flatMap(c => c.gaps.map(g => ({ ...g, competitor: c.competitor })))
+            .sort((a, b) => b.opportunityScore - a.opportunityScore)
+            .slice(0, 5);
+
+          // Your wins summary
+          const totalWins = competitorAnalysis.reduce((sum, c) => sum + c.summary.winsCount, 0);
+          const totalThreats = competitorAnalysis.reduce((sum, c) => sum + c.summary.threatsCount, 0);
+          const totalGaps = competitorAnalysis.reduce((sum, c) => sum + c.summary.gapsCount, 0);
+
+          analysisDetails = `
+
+COMPETITIVE KEYWORD ANALYSIS:
+- You are winning on ${totalWins} keywords against competitors
+- Competitors beat you on ${totalThreats} keywords (threats)
+- There are ${totalGaps} content gap opportunities
+
+Top 5 Competitive Threats (keywords where competitors outrank you):
+${topThreats.map(t => `- "${t.keyword}" (${t.searchVolume.toLocaleString()} searches): You #${t.yourPosition || 'not ranking'} vs ${t.competitor} #${t.competitorPosition}`).join('\n')}
+
+Top 5 Content Gap Opportunities (keywords competitors rank for that you could target):
+${topGaps.map(g => `- "${g.keyword}" (${g.searchVolume.toLocaleString()} searches): ${g.competitor} #${g.competitorPosition}, You: ${g.yourPosition ? `#${g.yourPosition}` : 'Not in top 100'}`).join('\n')}`;
         }
 
         const response = await fetch('/api/generate-reasoning', {
@@ -100,18 +120,19 @@ export const CompetitorStrengthPanel: React.FC<CompetitorStrengthPanelProps> = (
               category: 'Strategic Analysis'
             }],
             brandContext,
-            customPrompt: `Analyze the competitive landscape for ${yourBrand || brandContext.brandName}.
+            customPrompt: `You are an SEO strategist analyzing the competitive landscape for ${yourBrand || brandContext.brandName}.
 
-Your brand has ${yourSOV.toFixed(1)}% Share of Search.
-
-Competitor Share of Search (based on brand keyword search volumes):
+BRAND AWARENESS (Share of Search):
+Your brand: ${yourSOV.toFixed(1)}%
 ${competitorSummary}
-${threatSummary}
+${analysisDetails}
 
-Write 2-3 sentences of strategic insight about:
-1. Who is your biggest competitor by brand awareness
-2. What this means for your market position
-3. One specific actionable recommendation to improve brand visibility`
+Provide 3-4 sentences of strategic insight. Include:
+1. A key observation about the competitive position (who leads in brand awareness)
+2. The most critical keyword threat or opportunity to address (be specific with the keyword name)
+3. A concrete recommendation with a specific keyword to prioritize
+
+Be concise, actionable, and mention specific keywords from the data. Focus on what will have the biggest impact.`
           })
         });
 
@@ -131,7 +152,7 @@ Write 2-3 sentences of strategic insight about:
     };
 
     generateInsight();
-  }, [brandContext, competitors, yourBrand, yourSOV, insightGenerated, competitorAnalysis]);
+  }, [brandContext, competitors, yourBrand, yourSOV, insightGenerated, competitorAnalysis, isLoadingAnalysis]);
 
   if (competitors.length === 0) {
     return (
@@ -372,22 +393,26 @@ Write 2-3 sentences of strategic insight about:
                   </div>
                 )}
 
-                {/* Content Gaps - Keywords competitor ranks for but you don't */}
+                {/* Content Gaps - Keywords competitor ranks for but you don't (or rank poorly) */}
                 {selectedAnalysis.gaps.length > 0 && (
                   <div>
                     <h4 className="text-sm font-semibold text-amber-700 dark:text-amber-400 mb-3 flex items-center gap-2">
                       <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
                         <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-11a1 1 0 10-2 0v2H7a1 1 0 100 2h2v2a1 1 0 102 0v-2h2a1 1 0 100-2h-2V7z" clipRule="evenodd" />
                       </svg>
-                      Content Gaps - New Keyword Opportunities
+                      Content Gaps - Keywords Where {selectedAnalysis.competitor} Leads
                     </h4>
+                    <p className="text-xs text-amber-600 dark:text-amber-500 mb-3 -mt-1">
+                      Keywords where {selectedAnalysis.competitor} ranks in top 20 but you rank outside top 50 (or not at all)
+                    </p>
                     <div className="bg-amber-50 dark:bg-amber-900/10 rounded-lg overflow-hidden">
                       <table className="w-full text-sm">
                         <thead className="bg-amber-100 dark:bg-amber-900/30">
                           <tr>
                             <th className="px-4 py-2 text-left text-xs font-medium text-amber-800 dark:text-amber-300">Keyword</th>
                             <th className="px-4 py-2 text-right text-xs font-medium text-amber-800 dark:text-amber-300">Volume</th>
-                            <th className="px-4 py-2 text-center text-xs font-medium text-amber-800 dark:text-amber-300">{selectedAnalysis.competitor} Rank</th>
+                            <th className="px-4 py-2 text-center text-xs font-medium text-amber-800 dark:text-amber-300">You</th>
+                            <th className="px-4 py-2 text-center text-xs font-medium text-amber-800 dark:text-amber-300">{selectedAnalysis.competitor}</th>
                             <th className="px-4 py-2 text-right text-xs font-medium text-amber-800 dark:text-amber-300">Opportunity</th>
                           </tr>
                         </thead>
@@ -402,6 +427,15 @@ Write 2-3 sentences of strategic insight about:
                               </td>
                               <td className="px-4 py-3 text-right text-gray-600 dark:text-gray-400">
                                 {gap.searchVolume.toLocaleString()}
+                              </td>
+                              <td className="px-4 py-3 text-center">
+                                <span className={`px-2 py-1 rounded font-medium ${
+                                  gap.yourPosition
+                                    ? 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
+                                    : 'bg-red-100 dark:bg-red-900/50 text-red-600 dark:text-red-400'
+                                }`}>
+                                  {gap.yourPosition ? `#${gap.yourPosition}` : 'Not ranked'}
+                                </span>
                               </td>
                               <td className="px-4 py-3 text-center">
                                 <span className="px-2 py-1 bg-amber-200 dark:bg-amber-800 rounded text-amber-800 dark:text-amber-200 font-medium">
@@ -481,6 +515,62 @@ Write 2-3 sentences of strategic insight about:
         )}
       </div>
 
+      {/* AI Strategic Insights - Show after analysis is loaded */}
+      {competitorAnalysis.length > 0 && (
+        <div className="bg-gradient-to-r from-purple-50 to-indigo-50 dark:from-purple-900/20 dark:to-indigo-900/20 rounded-xl border border-purple-200 dark:border-purple-800 overflow-hidden">
+          <div className="px-6 py-4 border-b border-purple-200 dark:border-purple-700">
+            <h3 className="text-lg font-semibold text-purple-900 dark:text-purple-100 flex items-center gap-2">
+              <svg className="w-5 h-5 text-purple-500" fill="currentColor" viewBox="0 0 20 20">
+                <path d="M11.3 1.046A1 1 0 0112 2v5h4a1 1 0 01.82 1.573l-7 10A1 1 0 018 18v-5H4a1 1 0 01-.82-1.573l7-10a1 1 0 011.12-.38z" />
+              </svg>
+              AI Strategic Recommendations
+            </h3>
+          </div>
+          <div className="p-6">
+            {isGeneratingInsight ? (
+              <div className="flex items-center gap-3">
+                <svg className="w-5 h-5 text-purple-500 animate-spin" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                </svg>
+                <span className="text-purple-700 dark:text-purple-300">Analyzing competitor data and generating strategic recommendations...</span>
+              </div>
+            ) : strategicInsight ? (
+              <div className="space-y-4">
+                <p className="text-purple-900 dark:text-purple-100 leading-relaxed">{strategicInsight}</p>
+
+                {/* Quick Action Items */}
+                <div className="mt-4 pt-4 border-t border-purple-200 dark:border-purple-700">
+                  <h4 className="text-sm font-semibold text-purple-800 dark:text-purple-200 mb-3">Priority Actions:</h4>
+                  <div className="grid gap-3 md:grid-cols-2">
+                    {competitorAnalysis[0]?.threats.slice(0, 2).map((threat, idx) => (
+                      <div key={`threat-${idx}`} className="flex items-start gap-2 text-sm bg-white/50 dark:bg-gray-800/50 rounded-lg p-3">
+                        <span className="text-red-500 font-bold flex-shrink-0">!</span>
+                        <div>
+                          <div className="font-medium text-gray-900 dark:text-white">Improve "{threat.keyword}"</div>
+                          <div className="text-gray-600 dark:text-gray-400">Move from #{threat.yourPosition} to top 3 ({threat.searchVolume.toLocaleString()} searches/mo)</div>
+                        </div>
+                      </div>
+                    ))}
+                    {competitorAnalysis[0]?.gaps.slice(0, 2).map((gap, idx) => (
+                      <div key={`gap-${idx}`} className="flex items-start gap-2 text-sm bg-white/50 dark:bg-gray-800/50 rounded-lg p-3">
+                        <span className="text-amber-500 font-bold flex-shrink-0">+</span>
+                        <div>
+                          <div className="font-medium text-gray-900 dark:text-white">Create content for "{gap.keyword}"</div>
+                          <div className="text-gray-600 dark:text-gray-400">{gap.yourPosition ? `You're at #${gap.yourPosition}` : 'Not ranking'} - competitor at #{gap.competitorPosition}</div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <p className="text-purple-600 dark:text-purple-400 italic">Strategic insights will appear after competitor analysis completes.</p>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Data Explanation */}
       <div className="bg-blue-50 dark:bg-blue-900/20 rounded-xl p-4 border border-blue-200 dark:border-blue-800">
         <div className="flex gap-3">
@@ -491,7 +581,7 @@ Write 2-3 sentences of strategic insight about:
             <h5 className="text-sm font-medium text-blue-800 dark:text-blue-300">How to Use This Data</h5>
             <ul className="text-xs text-blue-700 dark:text-blue-400 mt-1 space-y-1 list-disc list-inside">
               <li><strong>Threats:</strong> Keywords where competitors outrank you - prioritize improving these</li>
-              <li><strong>Content Gaps:</strong> Keywords competitors rank for but you don't - create new content</li>
+              <li><strong>Content Gaps:</strong> Keywords competitors rank for but you don't (or rank outside top 50) - create new content</li>
               <li><strong>Your Wins:</strong> Keywords where you lead - protect these positions</li>
             </ul>
           </div>

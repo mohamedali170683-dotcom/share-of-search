@@ -59,6 +59,10 @@ export const CompetitorStrengthPanel: React.FC<CompetitorStrengthPanelProps> = (
     fetchAnalysis();
   }, [domain, locationCode, languageCode, competitors]);
 
+  // Get all competitor brand names for filtering
+  const competitorBrandNames = competitors.map(c => c.competitor.toLowerCase());
+  const yourBrandName = (yourBrand || brandContext?.brandName || '').toLowerCase();
+
   // Generate strategic insight - wait for competitor analysis to complete
   useEffect(() => {
     const generateInsight = async () => {
@@ -67,42 +71,61 @@ export const CompetitorStrengthPanel: React.FC<CompetitorStrengthPanelProps> = (
 
       setIsGeneratingInsight(true);
       try {
+        // Determine the actual leader by SOS%
+        const leader = yourSOV > Math.max(...competitors.map(c => c.estimatedSOV))
+          ? { name: yourBrand || brandContext.brandName, sov: yourSOV, isYou: true }
+          : { name: competitors.reduce((max, c) => c.estimatedSOV > max.estimatedSOV ? c : max).competitor,
+              sov: Math.max(...competitors.map(c => c.estimatedSOV)), isYou: false };
+
         const competitorSummary = competitors.map(c =>
-          `${c.competitor}: ${c.estimatedSOV}% share of search, ${c.brandSearchVolume.toLocaleString()} brand search volume`
+          `${c.competitor}: ${c.estimatedSOV.toFixed(1)}% share of search, ${c.brandSearchVolume.toLocaleString()} brand search volume`
         ).join('\n');
 
-        // Include detailed threat/gap analysis
+        // Include detailed threat/gap analysis - FILTER OUT brand keywords
         let analysisDetails = '';
+        let filteredThreats: Array<{ keyword: string; searchVolume: number; yourPosition: number | null; competitorPosition: number; competitor: string; opportunityScore: number }> = [];
+        let filteredGaps: Array<{ keyword: string; searchVolume: number; yourPosition: number | null; competitorPosition: number; competitor: string; opportunityScore: number }> = [];
+
         if (competitorAnalysis.length > 0) {
-          // Top threats by opportunity score
-          const topThreats = competitorAnalysis
+          // Filter function to exclude brand keywords
+          const isNotBrandKeyword = (keyword: string) => {
+            const kw = keyword.toLowerCase();
+            // Exclude if contains any competitor brand name or your brand name
+            return !competitorBrandNames.some(brand => kw.includes(brand)) &&
+                   !kw.includes(yourBrandName);
+          };
+
+          // Top threats by opportunity score - exclude brand keywords
+          filteredThreats = competitorAnalysis
             .flatMap(c => c.threats.map(t => ({ ...t, competitor: c.competitor })))
+            .filter(t => isNotBrandKeyword(t.keyword))
             .sort((a, b) => b.opportunityScore - a.opportunityScore)
             .slice(0, 5);
 
-          // Top content gaps
-          const topGaps = competitorAnalysis
+          // Top content gaps - exclude brand keywords
+          filteredGaps = competitorAnalysis
             .flatMap(c => c.gaps.map(g => ({ ...g, competitor: c.competitor })))
+            .filter(g => isNotBrandKeyword(g.keyword))
             .sort((a, b) => b.opportunityScore - a.opportunityScore)
             .slice(0, 5);
 
-          // Your wins summary
+          // Summary counts
           const totalWins = competitorAnalysis.reduce((sum, c) => sum + c.summary.winsCount, 0);
           const totalThreats = competitorAnalysis.reduce((sum, c) => sum + c.summary.threatsCount, 0);
           const totalGaps = competitorAnalysis.reduce((sum, c) => sum + c.summary.gapsCount, 0);
 
           analysisDetails = `
 
-COMPETITIVE KEYWORD ANALYSIS:
+COMPETITIVE KEYWORD ANALYSIS (excluding brand keywords):
 - You are winning on ${totalWins} keywords against competitors
 - Competitors beat you on ${totalThreats} keywords (threats)
 - There are ${totalGaps} content gap opportunities
 
-Top 5 Competitive Threats (keywords where competitors outrank you):
-${topThreats.map(t => `- "${t.keyword}" (${t.searchVolume.toLocaleString()} searches): You #${t.yourPosition || 'not ranking'} vs ${t.competitor} #${t.competitorPosition}`).join('\n')}
+Top Generic Keyword Threats (where competitors outrank you):
+${filteredThreats.length > 0 ? filteredThreats.map(t => `- "${t.keyword}" (${t.searchVolume.toLocaleString()} searches/mo): You #${t.yourPosition || 'not ranking'} vs ${t.competitor} #${t.competitorPosition}`).join('\n') : '- No significant generic keyword threats found'}
 
-Top 5 Content Gap Opportunities (keywords competitors rank for that you could target):
-${topGaps.map(g => `- "${g.keyword}" (${g.searchVolume.toLocaleString()} searches): ${g.competitor} #${g.competitorPosition}, You: ${g.yourPosition ? `#${g.yourPosition}` : 'Not in top 100'}`).join('\n')}`;
+Top Content Gap Opportunities (generic keywords to target):
+${filteredGaps.length > 0 ? filteredGaps.map(g => `- "${g.keyword}" (${g.searchVolume.toLocaleString()} searches/mo): ${g.competitor} #${g.competitorPosition}, You: ${g.yourPosition ? `#${g.yourPosition}` : 'Not in top 100'}`).join('\n') : '- No significant content gaps found'}`;
         }
 
         const response = await fetch('/api/generate-reasoning', {
@@ -120,19 +143,26 @@ ${topGaps.map(g => `- "${g.keyword}" (${g.searchVolume.toLocaleString()} searche
               category: 'Strategic Analysis'
             }],
             brandContext,
-            customPrompt: `You are an SEO strategist analyzing the competitive landscape for ${yourBrand || brandContext.brandName}.
+            customPrompt: `You are an SEO strategist. Analyze the competitive landscape for ${yourBrand || brandContext.brandName}.
 
-BRAND AWARENESS (Share of Search):
-Your brand: ${yourSOV.toFixed(1)}%
+IMPORTANT: Share of Search (SOS%) measures brand awareness - the higher the percentage, the more dominant the brand.
+
+BRAND AWARENESS (Share of Search - who leads):
+- ${yourBrand || brandContext.brandName} (YOUR BRAND): ${yourSOV.toFixed(1)}% SOS
 ${competitorSummary}
+
+THE LEADER: ${leader.name} leads with ${leader.sov.toFixed(1)}% Share of Search${leader.isYou ? ' - this is YOUR brand!' : ''}.
 ${analysisDetails}
 
-Provide 3-4 sentences of strategic insight. Include:
-1. A key observation about the competitive position (who leads in brand awareness)
-2. The most critical keyword threat or opportunity to address (be specific with the keyword name)
-3. A concrete recommendation with a specific keyword to prioritize
+IMPORTANT RULES:
+1. NEVER recommend targeting competitor brand keywords (like "michelin tires" or "goodyear tires") - those belong to competitors
+2. Only recommend GENERIC keywords (like "winter tires", "all season tires", "tire reviews")
+3. Focus on the threats and gaps data provided - these are real opportunities
 
-Be concise, actionable, and mention specific keywords from the data. Focus on what will have the biggest impact.`
+Write 2-3 sentences about:
+1. State who leads in brand awareness (by SOS%) - if it's the user's brand, congratulate them
+2. Identify the #1 priority generic keyword to improve (from the threats or gaps list)
+3. Give ONE specific, actionable recommendation for that keyword`
           })
         });
 
@@ -152,7 +182,7 @@ Be concise, actionable, and mention specific keywords from the data. Focus on wh
     };
 
     generateInsight();
-  }, [brandContext, competitors, yourBrand, yourSOV, insightGenerated, competitorAnalysis, isLoadingAnalysis]);
+  }, [brandContext, competitors, yourBrand, yourSOV, insightGenerated, competitorAnalysis, isLoadingAnalysis, competitorBrandNames, yourBrandName]);
 
   if (competitors.length === 0) {
     return (
@@ -193,36 +223,6 @@ Be concise, actionable, and mention specific keywords from the data. Focus on wh
             How often people search for each brand (based on branded keyword volume)
           </p>
         </div>
-
-        {/* AI Strategic Insight */}
-        {(isGeneratingInsight || strategicInsight) && (
-          <div className="px-6 py-4 bg-gradient-to-r from-indigo-50 to-purple-50 dark:from-indigo-900/20 dark:to-purple-900/20 border-b border-indigo-200 dark:border-indigo-800">
-            <div className="flex items-start gap-3">
-              <div className="flex-shrink-0 mt-0.5">
-                {isGeneratingInsight ? (
-                  <svg className="w-5 h-5 text-indigo-500 animate-spin" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                  </svg>
-                ) : (
-                  <svg className="w-5 h-5 text-indigo-500" fill="currentColor" viewBox="0 0 20 20">
-                    <path d="M11.3 1.046A1 1 0 0112 2v5h4a1 1 0 01.82 1.573l-7 10A1 1 0 018 18v-5H4a1 1 0 01-.82-1.573l7-10a1 1 0 011.12-.38z" />
-                  </svg>
-                )}
-              </div>
-              <div className="flex-1">
-                <h4 className="text-sm font-semibold text-indigo-800 dark:text-indigo-300 mb-1">
-                  {isGeneratingInsight ? 'Analyzing Brand Landscape...' : 'AI Strategic Insight'}
-                </h4>
-                {strategicInsight ? (
-                  <p className="text-sm text-indigo-700 dark:text-indigo-300">{strategicInsight}</p>
-                ) : (
-                  <p className="text-sm text-indigo-600 dark:text-indigo-400 italic">Generating strategic insights...</p>
-                )}
-              </div>
-            </div>
-          </div>
-        )}
 
         {/* Share of Search Bar Chart */}
         <div className="px-6 py-6">
@@ -516,7 +516,27 @@ Be concise, actionable, and mention specific keywords from the data. Focus on wh
       </div>
 
       {/* AI Strategic Insights - Show after analysis is loaded */}
-      {competitorAnalysis.length > 0 && (
+      {competitorAnalysis.length > 0 && (() => {
+        // Filter out brand keywords from priority actions
+        const isNotBrandKeyword = (keyword: string) => {
+          const kw = keyword.toLowerCase();
+          return !competitorBrandNames.some(brand => kw.includes(brand)) &&
+                 !kw.includes(yourBrandName);
+        };
+
+        const filteredThreats = competitorAnalysis
+          .flatMap(c => c.threats)
+          .filter(t => isNotBrandKeyword(t.keyword))
+          .sort((a, b) => b.opportunityScore - a.opportunityScore)
+          .slice(0, 2);
+
+        const filteredGaps = competitorAnalysis
+          .flatMap(c => c.gaps)
+          .filter(g => isNotBrandKeyword(g.keyword))
+          .sort((a, b) => b.opportunityScore - a.opportunityScore)
+          .slice(0, 2);
+
+        return (
         <div className="bg-gradient-to-r from-purple-50 to-indigo-50 dark:from-purple-900/20 dark:to-indigo-900/20 rounded-xl border border-purple-200 dark:border-purple-800 overflow-hidden">
           <div className="px-6 py-4 border-b border-purple-200 dark:border-purple-700">
             <h3 className="text-lg font-semibold text-purple-900 dark:text-purple-100 flex items-center gap-2">
@@ -525,6 +545,9 @@ Be concise, actionable, and mention specific keywords from the data. Focus on wh
               </svg>
               AI Strategic Recommendations
             </h3>
+            <p className="text-xs text-purple-600 dark:text-purple-400 mt-1">
+              Based on generic keyword analysis (excluding brand keywords)
+            </p>
           </div>
           <div className="p-6">
             {isGeneratingInsight ? (
@@ -539,37 +562,40 @@ Be concise, actionable, and mention specific keywords from the data. Focus on wh
               <div className="space-y-4">
                 <p className="text-purple-900 dark:text-purple-100 leading-relaxed">{strategicInsight}</p>
 
-                {/* Quick Action Items */}
-                <div className="mt-4 pt-4 border-t border-purple-200 dark:border-purple-700">
-                  <h4 className="text-sm font-semibold text-purple-800 dark:text-purple-200 mb-3">Priority Actions:</h4>
-                  <div className="grid gap-3 md:grid-cols-2">
-                    {competitorAnalysis[0]?.threats.slice(0, 2).map((threat, idx) => (
-                      <div key={`threat-${idx}`} className="flex items-start gap-2 text-sm bg-white/50 dark:bg-gray-800/50 rounded-lg p-3">
-                        <span className="text-red-500 font-bold flex-shrink-0">!</span>
-                        <div>
-                          <div className="font-medium text-gray-900 dark:text-white">Improve "{threat.keyword}"</div>
-                          <div className="text-gray-600 dark:text-gray-400">Move from #{threat.yourPosition} to top 3 ({threat.searchVolume.toLocaleString()} searches/mo)</div>
+                {/* Quick Action Items - Filtered to exclude brand keywords */}
+                {(filteredThreats.length > 0 || filteredGaps.length > 0) && (
+                  <div className="mt-4 pt-4 border-t border-purple-200 dark:border-purple-700">
+                    <h4 className="text-sm font-semibold text-purple-800 dark:text-purple-200 mb-3">Priority Actions (Generic Keywords Only):</h4>
+                    <div className="grid gap-3 md:grid-cols-2">
+                      {filteredThreats.map((threat, idx) => (
+                        <div key={`threat-${idx}`} className="flex items-start gap-2 text-sm bg-white/50 dark:bg-gray-800/50 rounded-lg p-3">
+                          <span className="text-red-500 font-bold flex-shrink-0">!</span>
+                          <div>
+                            <div className="font-medium text-gray-900 dark:text-white">Improve "{threat.keyword}"</div>
+                            <div className="text-gray-600 dark:text-gray-400">Move from #{threat.yourPosition} to top 3 ({threat.searchVolume.toLocaleString()} searches/mo)</div>
+                          </div>
                         </div>
-                      </div>
-                    ))}
-                    {competitorAnalysis[0]?.gaps.slice(0, 2).map((gap, idx) => (
-                      <div key={`gap-${idx}`} className="flex items-start gap-2 text-sm bg-white/50 dark:bg-gray-800/50 rounded-lg p-3">
-                        <span className="text-amber-500 font-bold flex-shrink-0">+</span>
-                        <div>
-                          <div className="font-medium text-gray-900 dark:text-white">Create content for "{gap.keyword}"</div>
-                          <div className="text-gray-600 dark:text-gray-400">{gap.yourPosition ? `You're at #${gap.yourPosition}` : 'Not ranking'} - competitor at #{gap.competitorPosition}</div>
+                      ))}
+                      {filteredGaps.map((gap, idx) => (
+                        <div key={`gap-${idx}`} className="flex items-start gap-2 text-sm bg-white/50 dark:bg-gray-800/50 rounded-lg p-3">
+                          <span className="text-amber-500 font-bold flex-shrink-0">+</span>
+                          <div>
+                            <div className="font-medium text-gray-900 dark:text-white">Create content for "{gap.keyword}"</div>
+                            <div className="text-gray-600 dark:text-gray-400">{gap.yourPosition ? `You're at #${gap.yourPosition}` : 'Not ranking'} - competitor at #{gap.competitorPosition}</div>
+                          </div>
                         </div>
-                      </div>
-                    ))}
+                      ))}
+                    </div>
                   </div>
-                </div>
+                )}
               </div>
             ) : (
               <p className="text-purple-600 dark:text-purple-400 italic">Strategic insights will appear after competitor analysis completes.</p>
             )}
           </div>
         </div>
-      )}
+        );
+      })()}
 
       {/* Data Explanation */}
       <div className="bg-blue-50 dark:bg-blue-900/20 rounded-xl p-4 border border-blue-200 dark:border-blue-800">

@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { MetricCard, KeywordTable, TrendsPanel, MethodologyPage, FAQ, ProjectCard, AnalysisForm, CategoryBreakdownPanel, CompetitorStrengthPanel } from './components';
 import { OpportunitiesPanel } from './components/OpportunitiesPanel';
+import { SocialSOVPanel } from './components/SocialSOVPanel';
 import type { BrandKeyword, RankedKeyword, SOSResult, SOVResult, GrowthGapResult, Project, ActionableInsights, BrandContext, Opportunity } from './types';
 import { calculateMetrics, getRankedKeywords, getBrandKeywords, getTrends, exportToCSV } from './services/api';
 import { getProjects, saveProject, deleteProject } from './services/projectStorage';
@@ -9,7 +10,7 @@ import type { TrendsData } from './services/api';
 import { generateActionableInsights } from './lib/actionableInsights';
 
 type ViewMode = 'dashboard' | 'analysis' | 'project';
-type AnalysisTab = 'overview' | 'opportunities' | 'categories' | 'competitors';
+type AnalysisTab = 'overview' | 'opportunities' | 'categories' | 'competitors' | 'social';
 
 function App() {
   const { toggleTheme, isDark } = useTheme();
@@ -485,6 +486,15 @@ function App() {
         </svg>
       ),
       badge: actionableInsights?.competitorStrengths.length
+    },
+    {
+      id: 'social',
+      label: 'Social',
+      icon: (
+        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 8h2a2 2 0 012 2v6a2 2 0 01-2 2h-2v4l-4-4H9a1.994 1.994 0 01-1.414-.586m0 0L11 14h4a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2v4l.586-.586z" />
+        </svg>
+      )
     }
   ];
 
@@ -741,6 +751,13 @@ function App() {
           domain={currentDomain}
           locationCode={currentLocation.code}
           languageCode={currentLanguage}
+        />
+      )}
+
+      {analysisTab === 'social' && (
+        <SocialSOVPanel
+          brandName={brandName}
+          competitors={actualCompetitors}
         />
       )}
     </main>

@@ -67,10 +67,8 @@ async function fetchYouTubeSERP(
         },
         body: JSON.stringify([{
           keyword,
-          location_code: locationCode,
           language_code: languageCode,
           device: 'desktop',
-          depth: 20,
         }]),
       }
     );

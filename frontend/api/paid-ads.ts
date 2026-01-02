@@ -37,7 +37,8 @@ interface PaidAdsResponse {
 }
 
 /**
- * Fetch domain metrics (your own domain's data)
+ * Fetch domain metrics using historical_rank_overview endpoint
+ * This gives us domain-level paid search metrics
  */
 async function fetchDomainMetrics(
   domain: string,
@@ -46,10 +47,11 @@ async function fetchDomainMetrics(
   auth: string
 ): Promise<PaidCompetitor | null> {
   try {
-    console.log(`Fetching domain metrics for ${domain}`);
+    console.log(`Fetching historical rank overview for ${domain}`);
 
+    // Try historical_rank_overview first - it gives overall domain metrics
     const response = await fetch(
-      'https://api.dataforseo.com/v3/dataforseo_labs/google/domain_metrics_by_categories/live',
+      'https://api.dataforseo.com/v3/dataforseo_labs/google/historical_rank_overview/live',
       {
         method: 'POST',
         headers: {
@@ -64,33 +66,35 @@ async function fetchDomainMetrics(
       }
     );
 
-    if (!response.ok) {
-      console.error(`Domain metrics API error: ${response.status}`);
-      // Try alternative endpoint
-      return await fetchDomainRankedKeywords(domain, locationCode, languageCode, auth);
-    }
-
     const data = await response.json();
-    console.log(`Domain metrics response:`, JSON.stringify(data).substring(0, 500));
+    console.log(`Historical rank overview response:`, JSON.stringify(data).substring(0, 1000));
 
-    const metrics = data?.tasks?.[0]?.result?.[0]?.metrics?.paid;
+    const items = data?.tasks?.[0]?.result?.[0]?.items || [];
 
-    if (metrics) {
-      return {
-        domain,
-        paidETV: metrics.etv || 0,
-        paidKeywordsCount: metrics.count || 0,
-        estimatedAdSpend: metrics.estimated_paid_traffic_cost || 0,
-        avgPosition: metrics.avg_position || 0,
-        intersections: 0,
-      };
+    // Get most recent data point
+    if (items.length > 0) {
+      const latestData = items[0];
+      const paidMetrics = latestData.metrics?.paid;
+
+      if (paidMetrics && (paidMetrics.etv > 0 || paidMetrics.count > 0)) {
+        return {
+          domain,
+          paidETV: paidMetrics.etv || 0,
+          paidKeywordsCount: paidMetrics.count || 0,
+          estimatedAdSpend: paidMetrics.estimated_paid_traffic_cost || 0,
+          avgPosition: paidMetrics.pos_1 ? 1 : paidMetrics.pos_2_3 ? 2 : paidMetrics.pos_4_10 ? 5 : 10,
+          intersections: 0,
+        };
+      }
     }
 
-    // Fallback to ranked keywords
+    // Fallback to ranked keywords endpoint
+    console.log(`No paid metrics in historical overview, trying ranked_keywords...`);
     return await fetchDomainRankedKeywords(domain, locationCode, languageCode, auth);
   } catch (error) {
     console.error('Domain metrics error:', error);
-    return null;
+    // Try fallback
+    return await fetchDomainRankedKeywords(domain, locationCode, languageCode, auth);
   }
 }
 
@@ -170,7 +174,8 @@ async function fetchDomainRankedKeywords(
 }
 
 /**
- * Fetch paid search competitors
+ * Fetch paid search competitors using competitors_domain endpoint
+ * Note: This requires the domain to have some organic presence
  */
 async function fetchPaidCompetitors(
   domain: string,
@@ -183,6 +188,7 @@ async function fetchPaidCompetitors(
   try {
     console.log(`Fetching paid competitors for ${domain}`);
 
+    // First try competitors_domain without item_types filter
     const response = await fetch(
       'https://api.dataforseo.com/v3/dataforseo_labs/google/competitors_domain/live',
       {
@@ -195,39 +201,42 @@ async function fetchPaidCompetitors(
           target: domain,
           location_code: locationCode,
           language_code: languageCode,
-          item_types: ['paid'],
-          limit: 20,
+          limit: 30,
+          filters: ['metrics.paid.count', '>', 0],
           order_by: ['metrics.paid.etv,desc'],
         }]),
       }
     );
 
-    if (!response.ok) {
-      console.error(`Competitors Domain API error: ${response.status}`);
-      return [];
+    const data = await response.json();
+    console.log(`Competitors response:`, JSON.stringify(data).substring(0, 1000));
+
+    // Check for API errors
+    const taskError = data?.tasks?.[0]?.status_message;
+    if (taskError && taskError !== 'Ok.') {
+      console.log(`Competitors API status: ${taskError}`);
     }
 
-    const data = await response.json();
-    console.log(`Competitors response:`, JSON.stringify(data).substring(0, 500));
-
     const items = data?.tasks?.[0]?.result?.[0]?.items || [];
+    console.log(`Got ${items.length} competitor items from API`);
 
     for (const item of items) {
       const paidMetrics = item.metrics?.paid || {};
 
+      // Include competitors with any paid activity
       if (paidMetrics.etv > 0 || paidMetrics.count > 0) {
         competitors.push({
           domain: item.domain || '',
           paidETV: paidMetrics.etv || 0,
           paidKeywordsCount: paidMetrics.count || 0,
           estimatedAdSpend: paidMetrics.estimated_paid_traffic_cost || 0,
-          avgPosition: paidMetrics.avg_position || 0,
+          avgPosition: paidMetrics.pos_1 ? 1 : paidMetrics.pos_2_3 ? 2 : paidMetrics.pos_4_10 ? 5 : 10,
           intersections: item.intersections || 0,
         });
       }
     }
 
-    console.log(`Found ${competitors.length} paid search competitors`);
+    console.log(`Found ${competitors.length} paid search competitors after filtering`);
   } catch (error) {
     console.error('Competitors Domain API error:', error);
   }

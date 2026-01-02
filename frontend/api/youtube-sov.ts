@@ -3,7 +3,12 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 /**
  * YouTube SOV API
  * Fetches YouTube video rankings using DataForSEO SERP API
- * Shows all videos in search results and identifies brand-owned ones
+ *
+ * Metrics:
+ * - Share of Search: Count of videos mentioning brand in title / Total brand-mentioned videos
+ * - Share of Voice: Total views on brand videos / Total views on all identified brand videos
+ *
+ * Brand matching: Based on video title containing brand name (not channel name)
  */
 
 interface YouTubeVideo {
@@ -116,36 +121,34 @@ async function fetchYouTubeSERP(
 }
 
 /**
- * Check if a video belongs to a brand (by channel name matching)
+ * Check if a video mentions a brand in its title
+ * Only uses title matching for cleaner brand attribution
  */
-function videoBelongsToBrand(video: YouTubeVideo, brandName: string): boolean {
-  const channelLower = video.channelName.toLowerCase();
+function videoMentionsBrand(video: YouTubeVideo, brandName: string): boolean {
   const titleLower = video.title.toLowerCase();
   const brandLower = brandName.toLowerCase();
 
-  // Direct channel name match
-  if (channelLower.includes(brandLower)) return true;
+  // Direct brand name in title
+  if (titleLower.includes(brandLower)) return true;
 
-  // Brand words in channel name (words > 3 chars)
+  // Check for brand words (words > 3 chars) to catch variations
   const brandWords = brandLower.split(/\s+/);
-  if (brandWords.some(word => word.length > 3 && channelLower.includes(word))) {
+  if (brandWords.some(word => word.length > 3 && titleLower.includes(word))) {
     return true;
   }
-
-  // Check if title contains brand (secondary indicator)
-  if (titleLower.includes(brandLower)) return true;
 
   return false;
 }
 
 /**
  * Aggregate videos for a brand across search results
+ * Uses title-based matching only
  */
 function aggregateBrandVideos(
   allVideos: YouTubeVideo[],
   brandName: string
 ): BrandYouTubeData {
-  const brandVideos = allVideos.filter(v => videoBelongsToBrand(v, brandName));
+  const brandVideos = allVideos.filter(v => videoMentionsBrand(v, brandName));
 
   // Deduplicate by video ID
   const uniqueVideos = Array.from(
@@ -248,10 +251,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       new Map(allVideos.map(v => [v.videoId, v])).values()
     ).sort((a, b) => a.rank - b.rank);
 
-    // Mark brand-owned videos
+    // Mark videos that mention the brand in title
     const videosWithOwnership = uniqueAllVideos.map(v => ({
       ...v,
-      isBrandOwned: videoBelongsToBrand(v, brandName),
+      isBrandOwned: videoMentionsBrand(v, brandName),
     }));
 
     // Aggregate by brand

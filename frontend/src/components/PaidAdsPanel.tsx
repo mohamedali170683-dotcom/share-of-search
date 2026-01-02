@@ -7,11 +7,6 @@ interface PaidCompetitor {
   estimatedAdSpend: number;
   avgPosition: number;
   intersections: number;
-  positionDistribution: {
-    pos1: number;
-    pos2_3: number;
-    pos4_10: number;
-  };
 }
 
 interface PaidAdsResponse {
@@ -28,6 +23,11 @@ interface PaidAdsResponse {
     totalSpend: number;
   };
   timestamp: string;
+  debug?: {
+    apiStatus: string;
+    metricsFound: boolean;
+    competitorsFound: number;
+  };
 }
 
 interface PaidAdsPanelProps {
@@ -265,6 +265,11 @@ export function PaidAdsPanel({ domain, locationCode = 2840, languageCode = 'en' 
                 No paid search activity was detected for your domain. This could mean you're not running Google Ads,
                 or the data isn't available in this market.
               </p>
+              {data.debug && (
+                <p className="text-xs text-yellow-600 dark:text-yellow-400 mt-2">
+                  Debug: API status: {data.debug.apiStatus}, Metrics found: {data.debug.metricsFound ? 'Yes' : 'No'}, Competitors found: {data.debug.competitorsFound}
+                </p>
+              )}
             </div>
           </div>
         </div>
@@ -353,6 +358,14 @@ export function PaidAdsPanel({ domain, locationCode = 2840, languageCode = 'en' 
           </div>
         </div>
       </div>
+
+      {/* Debug Info */}
+      {data.debug && (
+        <div className="bg-gray-50 dark:bg-gray-800/50 rounded-lg p-4 text-xs text-gray-500 dark:text-gray-400">
+          <p>Debug: API status: {data.debug.apiStatus} | Metrics found: {data.debug.metricsFound ? 'Yes' : 'No'} | Competitors found: {data.debug.competitorsFound}</p>
+          <p className="mt-1">Timestamp: {data.timestamp}</p>
+        </div>
+      )}
 
       {/* Refresh button */}
       <div className="flex justify-center">

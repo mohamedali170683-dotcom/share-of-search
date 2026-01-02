@@ -100,33 +100,28 @@ export const SocialSOVPanel: React.FC<SocialSOVPanelProps> = ({
             </svg>
           </div>
           <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
-            Social Media Share of Voice
+            Reddit Brand Mentions
           </h3>
           <p className="text-gray-500 dark:text-gray-400 mb-4 max-w-md mx-auto">
-            Track brand mentions across Instagram, TikTok, YouTube, and Reddit.
-            Compare your social presence against competitors.
+            Track brand mentions on Reddit and compare your presence against competitors.
           </p>
-          <div className="bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-lg p-4 mb-6 max-w-md mx-auto">
+          <div className="bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-lg p-4 mb-6 max-w-md mx-auto">
             <div className="flex items-start gap-3">
-              <svg className="w-5 h-5 text-gray-500 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd" />
-              </svg>
+              {PLATFORM_ICONS.reddit}
               <div className="text-left">
-                <p className="text-sm text-gray-700 dark:text-gray-200 font-medium">Analysis takes 1-2 minutes</p>
-                <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
-                  Searches for brand mentions across social platforms in real-time.
+                <p className="text-sm text-orange-700 dark:text-orange-300 font-medium">Reddit analysis takes ~30 seconds</p>
+                <p className="text-xs text-orange-600 dark:text-orange-400 mt-1">
+                  Searches for brand discussions across Reddit communities.
                 </p>
               </div>
             </div>
           </div>
           <button
             onClick={fetchData}
-            className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-pink-500 via-purple-500 to-blue-500 text-white rounded-lg font-medium hover:opacity-90 transition-opacity"
+            className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-orange-500 to-orange-600 text-white rounded-lg font-medium hover:opacity-90 transition-opacity"
           >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-            </svg>
-            Analyze Social Mentions
+            {PLATFORM_ICONS.reddit}
+            Analyze Reddit Mentions
           </button>
         </div>
       </div>

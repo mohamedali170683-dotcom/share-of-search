@@ -2,25 +2,23 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 
 /**
  * Social Mentions API
- * Fetches brand mentions from social media platforms using Apify actors
+ * Fetches brand mentions from Reddit using Apify actors
  *
- * Uses the following actors:
- * - insiteco/social-insight-scraper ($30/mo) - Instagram, TikTok, YouTube
- * - harshmaur/reddit-scraper-pro ($20/mo) - Reddit
+ * Currently only Reddit is supported. Other platforms (Instagram, TikTok, YouTube)
+ * require scrapers that support keyword/hashtag search, which the current actors don't.
  */
 
 interface SocialMention {
-  platform: 'instagram' | 'tiktok' | 'youtube' | 'reddit';
+  platform: 'reddit';
   text: string;
   url?: string;
   engagement: {
     likes?: number;
     comments?: number;
-    shares?: number;
-    views?: number;
   };
   author?: string;
   timestamp?: string;
+  subreddit?: string;
 }
 
 interface BrandMentions {
@@ -39,6 +37,7 @@ interface SocialSOVResponse {
     byEngagement: number;
   };
   timestamp: string;
+  note?: string;
 }
 
 /**
@@ -48,14 +47,12 @@ async function runApifyActor(
   actorId: string,
   input: Record<string, unknown>,
   apiToken: string,
-  timeoutMs: number = 60000
+  timeoutMs: number = 25000 // Keep under Vercel's 30s limit
 ): Promise<unknown[]> {
-  try {
-    // Convert actor ID format: "owner/actor" or "owner~actor" -> URL encoded
-    // Apify API expects the format: owner~actor-name in the URL
-    const encodedActorId = actorId.replace('/', '~');
-    console.log(`Starting actor ${encodedActorId} with input:`, JSON.stringify(input));
+  const encodedActorId = actorId.replace('/', '~');
+  console.log(`Starting actor ${encodedActorId} with input:`, JSON.stringify(input));
 
+  try {
     // Start the actor run
     const runResponse = await fetch(
       `https://api.apify.com/v2/acts/${encodedActorId}/runs?token=${apiToken}`,
@@ -67,10 +64,10 @@ async function runApifyActor(
     );
 
     const responseText = await runResponse.text();
-    console.log(`Actor ${encodedActorId} start response (${runResponse.status}):`, responseText.substring(0, 500));
+    console.log(`Actor ${encodedActorId} response (${runResponse.status}):`, responseText.substring(0, 300));
 
     if (!runResponse.ok) {
-      console.error(`Actor ${encodedActorId} start failed with status ${runResponse.status}`);
+      console.error(`Actor ${encodedActorId} failed: ${runResponse.status}`);
       return [];
     }
 
@@ -78,19 +75,18 @@ async function runApifyActor(
     try {
       runData = JSON.parse(responseText);
     } catch {
-      console.error(`Actor ${encodedActorId} returned invalid JSON`);
+      console.error(`Actor ${encodedActorId} invalid JSON response`);
       return [];
     }
 
     const runId = runData.data?.id;
-
     if (!runId) {
-      console.error(`No run ID returned for actor ${encodedActorId}`);
+      console.error(`No run ID for ${encodedActorId}`);
       return [];
     }
 
-    // Poll for completion
-    const pollInterval = 3000;
+    // Poll for completion with shorter intervals
+    const pollInterval = 2000;
     let elapsed = 0;
 
     while (elapsed < timeoutMs) {
@@ -106,31 +102,34 @@ async function runApifyActor(
       const statusData = await statusResponse.json();
       const status = statusData.data?.status;
 
+      console.log(`Actor ${encodedActorId} status: ${status} (${elapsed}ms elapsed)`);
+
       if (status === 'SUCCEEDED') {
         const datasetId = statusData.data?.defaultDatasetId;
-        console.log(`Actor ${encodedActorId} succeeded, dataset: ${datasetId}`);
         if (!datasetId) return [];
 
         const datasetResponse = await fetch(
-          `https://api.apify.com/v2/datasets/${datasetId}/items?token=${apiToken}&limit=50`
+          `https://api.apify.com/v2/datasets/${datasetId}/items?token=${apiToken}&limit=30`
         );
 
-        if (!datasetResponse.ok) {
-          console.error(`Failed to fetch dataset for ${encodedActorId}`);
-          return [];
-        }
+        if (!datasetResponse.ok) return [];
+
         const items = await datasetResponse.json();
         console.log(`Actor ${encodedActorId} returned ${items.length} items`);
         return items;
       }
 
       if (status === 'FAILED' || status === 'ABORTED' || status === 'TIMED-OUT') {
-        console.error(`Actor ${encodedActorId} run ${status}`);
+        // Try to get error details
+        const errorLog = statusData.data?.stats?.runTimeSecs
+          ? `ran for ${statusData.data.stats.runTimeSecs}s`
+          : '';
+        console.error(`Actor ${encodedActorId} ${status} ${errorLog}`);
         return [];
       }
     }
 
-    console.error(`Actor ${encodedActorId} timed out`);
+    console.log(`Actor ${encodedActorId} polling timeout after ${elapsed}ms`);
     return [];
   } catch (error) {
     console.error(`Actor ${actorId} error:`, error);
@@ -139,109 +138,7 @@ async function runApifyActor(
 }
 
 /**
- * Fetch social media insights using Social Insight Scraper
- * Actor: insiteco/social-insight-scraper
- * Supports Instagram, TikTok, and YouTube via direct URL scraping
- */
-async function fetchSocialInsights(
-  brandName: string,
-  platform: 'instagram' | 'tiktok' | 'youtube',
-  apiToken: string
-): Promise<SocialMention[]> {
-  const mentions: SocialMention[] = [];
-
-  try {
-    // Social Insight Scraper requires direct URLs
-    // We'll search for brand-related content URLs first
-    // For now, construct search URLs that the scraper can process
-    const searchUrls: { url: string; inputId: string }[] = [];
-
-    // Generate unique IDs for each input
-    const generateId = () => Math.random().toString(36).substring(2, 15);
-
-    if (platform === 'instagram') {
-      // Instagram hashtag search URL
-      searchUrls.push({
-        url: `https://www.instagram.com/explore/tags/${brandName.toLowerCase().replace(/[^a-z0-9]/g, '')}/`,
-        inputId: generateId()
-      });
-    } else if (platform === 'tiktok') {
-      // TikTok search URL
-      searchUrls.push({
-        url: `https://www.tiktok.com/search?q=${encodeURIComponent(brandName)}`,
-        inputId: generateId()
-      });
-    } else if (platform === 'youtube') {
-      // YouTube search URL
-      searchUrls.push({
-        url: `https://www.youtube.com/results?search_query=${encodeURIComponent(brandName)}`,
-        inputId: generateId()
-      });
-    }
-
-    if (searchUrls.length === 0) {
-      console.log(`No URLs to scrape for ${platform}`);
-      return mentions;
-    }
-
-    const results = await runApifyActor(
-      'insiteco~social-insight-scraper',
-      {
-        input: searchUrls
-      },
-      apiToken,
-      90000 // 90 second timeout
-    ) as Array<{
-      url?: string;
-      title?: string;
-      description?: string;
-      text?: string;
-      caption?: string;
-      likes?: number;
-      likesCount?: number;
-      comments?: number;
-      commentsCount?: number;
-      shares?: number;
-      shareCount?: number;
-      views?: number;
-      viewCount?: number;
-      playCount?: number;
-      author?: string;
-      username?: string;
-      ownerUsername?: string;
-      timestamp?: string;
-      createTime?: number;
-      publishedAt?: string;
-    }>;
-
-    console.log(`Social Insight Scraper (${platform}) returned ${results.length} raw items`);
-
-    for (const item of results) {
-      mentions.push({
-        platform,
-        text: item.caption || item.description || item.title || item.text || '',
-        url: item.url,
-        engagement: {
-          likes: item.likes || item.likesCount || 0,
-          comments: item.comments || item.commentsCount || 0,
-          shares: item.shares || item.shareCount || 0,
-          views: item.views || item.viewCount || item.playCount || 0,
-        },
-        author: item.author || item.username || item.ownerUsername,
-        timestamp: item.timestamp || item.publishedAt ||
-          (item.createTime ? new Date(item.createTime * 1000).toISOString() : undefined),
-      });
-    }
-  } catch (error) {
-    console.error(`Social Insight Scraper (${platform}) error:`, error);
-  }
-
-  return mentions;
-}
-
-/**
- * Fetch Reddit mentions using Reddit Scraper Pro
- * Actor: harshmaur/reddit-scraper-pro
+ * Fetch Reddit mentions using harshmaur's Reddit Scraper
  */
 async function fetchRedditMentions(
   brandName: string,
@@ -250,54 +147,73 @@ async function fetchRedditMentions(
   const mentions: SocialMention[] = [];
 
   try {
-    // Use harshmaur's Reddit Scraper Pro
+    // Try the regular reddit-scraper (not pro) with search functionality
+    // Based on documentation, it expects 'searchPosts' and 'keywords' parameters
     const results = await runApifyActor(
-      'harshmaur~reddit-scraper-pro',
+      'harshmaur/reddit-scraper',
       {
-        keywords: [brandName],
-        maxPosts: 20,
+        type: 'search',
+        searchPosts: true,
+        keyword: brandName,
+        maxItems: 15,
         sort: 'relevance',
         time: 'month',
+        // Include proxy config for reliability
+        proxy: {
+          useApifyProxy: true,
+        }
       },
       apiToken,
-      90000 // 90 second timeout
+      25000
     ) as Array<{
       title?: string;
       body?: string;
       selftext?: string;
       text?: string;
+      content?: string;
       url?: string;
       permalink?: string;
+      link?: string;
       score?: number;
       ups?: number;
       upvotes?: number;
+      upVotes?: number;
       numComments?: number;
       num_comments?: number;
+      numberOfComments?: number;
       commentCount?: number;
       author?: string;
+      authorName?: string;
+      subreddit?: string;
+      subredditName?: string;
       createdAt?: string;
       created_utc?: number;
+      postedAt?: string;
       timestamp?: string;
     }>;
 
-    console.log(`Reddit Scraper Pro returned ${results.length} raw items`);
+    console.log(`Reddit scraper returned ${results.length} items for "${brandName}"`);
 
     for (const item of results) {
+      const text = item.title || item.body || item.selftext || item.text || item.content || '';
+      if (!text) continue;
+
       mentions.push({
         platform: 'reddit',
-        text: item.title || item.body || item.selftext || item.text || '',
-        url: item.url || (item.permalink ? `https://reddit.com${item.permalink}` : undefined),
+        text,
+        url: item.url || item.link || (item.permalink ? `https://reddit.com${item.permalink}` : undefined),
         engagement: {
-          likes: item.score || item.ups || item.upvotes || 0,
-          comments: item.numComments || item.num_comments || item.commentCount || 0,
+          likes: item.score || item.ups || item.upvotes || item.upVotes || 0,
+          comments: item.numComments || item.num_comments || item.numberOfComments || item.commentCount || 0,
         },
-        author: item.author,
-        timestamp: item.createdAt || item.timestamp ||
+        author: item.author || item.authorName,
+        subreddit: item.subreddit || item.subredditName,
+        timestamp: item.createdAt || item.postedAt || item.timestamp ||
           (item.created_utc ? new Date(item.created_utc * 1000).toISOString() : undefined),
       });
     }
   } catch (error) {
-    console.error('Reddit Scraper Pro error:', error);
+    console.error('Reddit scraper error:', error);
   }
 
   return mentions;
@@ -311,12 +227,7 @@ function aggregateMentions(brand: string, mentions: SocialMention[]): BrandMenti
   let totalEngagement = 0;
 
   for (const mention of mentions) {
-    const engagement =
-      (mention.engagement.likes || 0) +
-      (mention.engagement.comments || 0) +
-      (mention.engagement.shares || 0) +
-      (mention.engagement.views || 0) / 100; // Weight views less
-
+    const engagement = (mention.engagement.likes || 0) + (mention.engagement.comments || 0) * 2;
     totalEngagement += engagement;
 
     if (!byPlatform[mention.platform]) {
@@ -358,25 +269,7 @@ function calculateSOV(
   };
 }
 
-/**
- * Fetch all social mentions for a brand
- */
-async function fetchAllMentions(brandName: string, apiToken: string): Promise<SocialMention[]> {
-  // Run all scrapers in parallel
-  // Using Social Insight Scraper for Instagram, TikTok, YouTube
-  // Using Reddit Scraper Pro for Reddit
-  const [instagram, tiktok, youtube, reddit] = await Promise.all([
-    fetchSocialInsights(brandName, 'instagram', apiToken),
-    fetchSocialInsights(brandName, 'tiktok', apiToken),
-    fetchSocialInsights(brandName, 'youtube', apiToken),
-    fetchRedditMentions(brandName, apiToken),
-  ]);
-
-  return [...instagram, ...tiktok, ...youtube, ...reddit];
-}
-
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  // CORS headers
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
@@ -400,33 +293,32 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     if (!apiToken) {
       return res.status(500).json({
-        error: 'Social media tracking is not configured. Please add APIFY_API_TOKEN to environment variables.'
+        error: 'APIFY_API_TOKEN not configured in environment variables.'
       });
     }
 
-    // Validate competitors
+    // Only take first competitor due to time constraints
     const validCompetitors = Array.isArray(competitors)
-      ? competitors.filter((c): c is string => typeof c === 'string').slice(0, 3)
+      ? competitors.filter((c): c is string => typeof c === 'string').slice(0, 1)
       : [];
 
-    console.log(`Fetching social mentions for ${brandName}...`);
+    console.log(`Fetching Reddit mentions for ${brandName}...`);
 
     // Fetch mentions for your brand
-    const yourMentionsList = await fetchAllMentions(brandName, apiToken);
+    const yourMentionsList = await fetchRedditMentions(brandName, apiToken);
     const yourMentions = aggregateMentions(brandName, yourMentionsList);
 
     console.log(`Found ${yourMentions.totalMentions} mentions for ${brandName}`);
 
-    // Fetch mentions for competitors (sequentially to avoid rate limits)
+    // Fetch for one competitor only (to stay within timeout)
     const competitorMentionsData: BrandMentions[] = [];
 
     for (const competitor of validCompetitors) {
-      console.log(`Fetching social mentions for competitor: ${competitor}...`);
-      const compMentions = await fetchAllMentions(competitor, apiToken);
+      console.log(`Fetching Reddit mentions for: ${competitor}...`);
+      const compMentions = await fetchRedditMentions(competitor, apiToken);
       competitorMentionsData.push(aggregateMentions(competitor, compMentions));
     }
 
-    // Calculate SOV
     const sov = calculateSOV(yourMentions, competitorMentionsData);
 
     const response: SocialSOVResponse = {
@@ -434,6 +326,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       competitors: competitorMentionsData,
       sov,
       timestamp: new Date().toISOString(),
+      note: 'Currently tracking Reddit mentions only. Instagram/TikTok/YouTube require different scraper subscriptions.'
     };
 
     return res.status(200).json(response);

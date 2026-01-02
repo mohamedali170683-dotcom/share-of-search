@@ -4,7 +4,9 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
  * Social Mentions API
  * Fetches brand mentions from Reddit using Apify actors
  *
- * Uses trudax/reddit-scraper-lite which has a free tier and supports keyword search
+ * Tries multiple actors in fallback order:
+ * 1. comchat/reddit-api-scraper (free tier, keyword search)
+ * 2. trudax/reddit-scraper (paid, URL-based search)
  */
 
 interface SocialMention {
@@ -62,7 +64,7 @@ async function runApifyActor(
     );
 
     const responseText = await runResponse.text();
-    console.log(`Actor ${encodedActorId} response (${runResponse.status}):`, responseText.substring(0, 300));
+    console.log(`Actor ${encodedActorId} response (${runResponse.status}):`, responseText.substring(0, 500));
 
     if (!runResponse.ok) {
       console.error(`Actor ${encodedActorId} failed: ${runResponse.status}`);
@@ -134,79 +136,104 @@ async function runApifyActor(
 }
 
 /**
- * Fetch Reddit mentions using trudax/reddit-scraper-lite
- * This actor has a free tier and supports keyword search via 'searches' array
+ * Parse Reddit results from various actor output formats
+ */
+function parseRedditResults(results: unknown[]): SocialMention[] {
+  const mentions: SocialMention[] = [];
+
+  for (const item of results) {
+    if (!item || typeof item !== 'object') continue;
+
+    const r = item as Record<string, unknown>;
+
+    // Skip comments, only want posts
+    if (r.dataType === 'comment' || r.type === 'comment') continue;
+
+    // Try multiple field name variations
+    const text = (r.title || r.body || r.selftext || r.text || r.content || '') as string;
+    if (!text) continue;
+
+    // URL variations
+    let url = (r.url || r.link || r.postUrl) as string | undefined;
+    if (!url && r.permalink) {
+      url = `https://reddit.com${r.permalink}`;
+    }
+
+    // Score/likes variations
+    const likes = (r.score || r.ups || r.upvotes || r.upVotes || 0) as number;
+
+    // Comments count variations
+    const comments = (r.numComments || r.num_comments || r.numberOfComments || r.commentCount || r.comments || 0) as number;
+
+    // Timestamp variations
+    let timestamp: string | undefined;
+    if (r.createdAt) timestamp = r.createdAt as string;
+    else if (r.postedAt) timestamp = r.postedAt as string;
+    else if (r.timestamp) timestamp = r.timestamp as string;
+    else if (r.created_utc) timestamp = new Date((r.created_utc as number) * 1000).toISOString();
+    else if (r.created) timestamp = new Date((r.created as number) * 1000).toISOString();
+
+    mentions.push({
+      platform: 'reddit',
+      text,
+      url,
+      engagement: { likes, comments },
+      author: (r.author || r.authorName || r.username) as string | undefined,
+      subreddit: (r.subreddit || r.subredditName || r.community) as string | undefined,
+      timestamp,
+    });
+  }
+
+  return mentions;
+}
+
+/**
+ * Fetch Reddit mentions - tries multiple actors
  */
 async function fetchRedditMentions(
   brandName: string,
   apiToken: string
 ): Promise<SocialMention[]> {
-  const mentions: SocialMention[] = [];
+  // Actor 1: comchat/reddit-api-scraper - free tier, uses keyword parameter
+  console.log(`Trying comchat/reddit-api-scraper for "${brandName}"...`);
+  let results = await runApifyActor(
+    'comchat/reddit-api-scraper',
+    {
+      keyword: brandName,
+      maxItems: 15,
+      sort: 'relevance',
+      time: 'month',
+    },
+    apiToken,
+    22000
+  );
 
-  try {
-    // trudax/reddit-scraper-lite uses 'searches' array for keyword search
-    const results = await runApifyActor(
-      'trudax/reddit-scraper-lite',
-      {
-        searches: [brandName],
-        maxPostCount: 20,
-        maxComments: 0,
-        skipComments: true,
-        proxy: {
-          useApifyProxy: true,
-        }
-      },
-      apiToken,
-      25000
-    ) as Array<{
-      title?: string;
-      body?: string;
-      selftext?: string;
-      text?: string;
-      url?: string;
-      permalink?: string;
-      score?: number;
-      ups?: number;
-      upvotes?: number;
-      numComments?: number;
-      num_comments?: number;
-      author?: string;
-      subreddit?: string;
-      subredditName?: string;
-      createdAt?: string;
-      created_utc?: number;
-      postedAt?: string;
-      dataType?: string;
-    }>;
-
-    console.log(`Reddit scraper returned ${results.length} items for "${brandName}"`);
-
-    for (const item of results) {
-      // Skip if this is a comment, only want posts
-      if (item.dataType === 'comment') continue;
-
-      const text = item.title || item.body || item.selftext || item.text || '';
-      if (!text) continue;
-
-      mentions.push({
-        platform: 'reddit',
-        text,
-        url: item.url || (item.permalink ? `https://reddit.com${item.permalink}` : undefined),
-        engagement: {
-          likes: item.score || item.ups || item.upvotes || 0,
-          comments: item.numComments || item.num_comments || 0,
-        },
-        author: item.author,
-        subreddit: item.subreddit || item.subredditName,
-        timestamp: item.createdAt || item.postedAt ||
-          (item.created_utc ? new Date(item.created_utc * 1000).toISOString() : undefined),
-      });
-    }
-  } catch (error) {
-    console.error('Reddit scraper error:', error);
+  if (results.length > 0) {
+    console.log(`comchat actor returned ${results.length} results`);
+    return parseRedditResults(results);
   }
 
-  return mentions;
+  // Actor 2: Try with startUrls for Reddit search
+  console.log(`Trying trudax/reddit-scraper with search URL for "${brandName}"...`);
+  const searchUrl = `https://www.reddit.com/search/?q=${encodeURIComponent(brandName)}&sort=relevance&t=month`;
+  results = await runApifyActor(
+    'trudax/reddit-scraper',
+    {
+      startUrls: [{ url: searchUrl }],
+      maxItems: 15,
+      proxy: { useApifyProxy: true },
+    },
+    apiToken,
+    22000
+  );
+
+  if (results.length > 0) {
+    console.log(`trudax actor returned ${results.length} results`);
+    return parseRedditResults(results);
+  }
+
+  console.log(`No results from any actor for "${brandName}"`);
+  return [];
 }
 
 /**
@@ -316,7 +343,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       competitors: competitorMentionsData,
       sov,
       timestamp: new Date().toISOString(),
-      note: 'Tracking Reddit mentions. Uses trudax/reddit-scraper-lite actor.'
+      note: 'Tracking Reddit mentions via Apify actors.'
     };
 
     return res.status(200).json(response);

@@ -138,6 +138,7 @@ async function runApifyActor(
 
 /**
  * Fetch Instagram mentions using hashtag scraper
+ * Actor: apify/instagram-hashtag-scraper
  */
 async function fetchInstagramMentions(
   brandName: string,
@@ -146,16 +147,17 @@ async function fetchInstagramMentions(
   const mentions: SocialMention[] = [];
 
   try {
-    // Use Instagram Hashtag Scraper
+    // Use official Apify Instagram Hashtag Scraper
     const hashtag = brandName.toLowerCase().replace(/[^a-z0-9]/g, '');
     const results = await runApifyActor(
-      'apify/instagram-hashtag-scraper',
+      'apify~instagram-hashtag-scraper',
       {
         hashtags: [hashtag],
         resultsLimit: 20,
+        resultsType: 'posts',
       },
       apiToken,
-      45000
+      60000
     ) as Array<{
       caption?: string;
       shortCode?: string;
@@ -164,7 +166,10 @@ async function fetchInstagramMentions(
       videoViewCount?: number;
       ownerUsername?: string;
       timestamp?: string;
+      displayUrl?: string;
     }>;
+
+    console.log(`Instagram scraper returned ${results.length} raw items`);
 
     for (const item of results) {
       mentions.push({
@@ -189,6 +194,7 @@ async function fetchInstagramMentions(
 
 /**
  * Fetch TikTok mentions
+ * Actor: apify/tiktok-scraper (official)
  */
 async function fetchTikTokMentions(
   brandName: string,
@@ -197,39 +203,44 @@ async function fetchTikTokMentions(
   const mentions: SocialMention[] = [];
 
   try {
-    // Use TikTok Scraper
+    // Use official Apify TikTok Scraper
     const results = await runApifyActor(
-      'clockworks/free-tiktok-scraper',
+      'apify~tiktok-scraper',
       {
         searchQueries: [brandName],
         resultsPerPage: 20,
+        shouldDownloadVideos: false,
+        shouldDownloadCovers: false,
       },
       apiToken,
-      45000
+      60000
     ) as Array<{
       text?: string;
       desc?: string;
       webVideoUrl?: string;
+      videoUrl?: string;
       diggCount?: number;
       commentCount?: number;
       shareCount?: number;
       playCount?: number;
-      authorMeta?: { name?: string };
+      authorMeta?: { name?: string; nickName?: string };
       createTime?: number;
     }>;
+
+    console.log(`TikTok scraper returned ${results.length} raw items`);
 
     for (const item of results) {
       mentions.push({
         platform: 'tiktok',
         text: item.text || item.desc || '',
-        url: item.webVideoUrl,
+        url: item.webVideoUrl || item.videoUrl,
         engagement: {
           likes: item.diggCount || 0,
           comments: item.commentCount || 0,
           shares: item.shareCount || 0,
           views: item.playCount || 0,
         },
-        author: item.authorMeta?.name,
+        author: item.authorMeta?.nickName || item.authorMeta?.name,
         timestamp: item.createTime ? new Date(item.createTime * 1000).toISOString() : undefined,
       });
     }
@@ -242,6 +253,7 @@ async function fetchTikTokMentions(
 
 /**
  * Fetch Reddit mentions
+ * Actor: apify/reddit-scraper (official)
  */
 async function fetchRedditMentions(
   brandName: string,
@@ -250,37 +262,47 @@ async function fetchRedditMentions(
   const mentions: SocialMention[] = [];
 
   try {
-    // Use Reddit Scraper Lite (free)
+    // Use official Apify Reddit Scraper
     const results = await runApifyActor(
-      'trudax/reddit-scraper-lite',
+      'apify~reddit-scraper',
       {
-        searches: [{ term: brandName, sort: 'relevance', time: 'month' }],
+        searches: [brandName],
         maxItems: 20,
-        type: 'posts',
+        maxPostCount: 20,
+        maxComments: 0,
+        sort: 'relevance',
+        time: 'month',
       },
       apiToken,
-      45000
+      60000
     ) as Array<{
       title?: string;
       body?: string;
+      selftext?: string;
       url?: string;
+      permalink?: string;
       score?: number;
+      ups?: number;
       numComments?: number;
+      num_comments?: number;
       author?: string;
       createdAt?: string;
+      created_utc?: number;
     }>;
+
+    console.log(`Reddit scraper returned ${results.length} raw items`);
 
     for (const item of results) {
       mentions.push({
         platform: 'reddit',
-        text: item.title || item.body || '',
-        url: item.url,
+        text: item.title || item.body || item.selftext || '',
+        url: item.url || (item.permalink ? `https://reddit.com${item.permalink}` : undefined),
         engagement: {
-          likes: item.score || 0,
-          comments: item.numComments || 0,
+          likes: item.score || item.ups || 0,
+          comments: item.numComments || item.num_comments || 0,
         },
         author: item.author,
-        timestamp: item.createdAt,
+        timestamp: item.createdAt || (item.created_utc ? new Date(item.created_utc * 1000).toISOString() : undefined),
       });
     }
   } catch (error) {

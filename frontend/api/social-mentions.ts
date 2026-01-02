@@ -52,6 +52,8 @@ async function runApifyActor(
   timeoutMs: number = 60000
 ): Promise<unknown[]> {
   try {
+    console.log(`Starting actor ${actorId} with input:`, JSON.stringify(input));
+
     // Start the actor run
     const runResponse = await fetch(
       `https://api.apify.com/v2/acts/${actorId}/runs?token=${apiToken}`,
@@ -62,13 +64,22 @@ async function runApifyActor(
       }
     );
 
+    const responseText = await runResponse.text();
+    console.log(`Actor ${actorId} start response (${runResponse.status}):`, responseText.substring(0, 500));
+
     if (!runResponse.ok) {
-      const errorText = await runResponse.text();
-      console.error(`Actor ${actorId} start failed:`, errorText);
+      console.error(`Actor ${actorId} start failed with status ${runResponse.status}`);
       return [];
     }
 
-    const runData = await runResponse.json();
+    let runData;
+    try {
+      runData = JSON.parse(responseText);
+    } catch {
+      console.error(`Actor ${actorId} returned invalid JSON`);
+      return [];
+    }
+
     const runId = runData.data?.id;
 
     if (!runId) {
@@ -95,14 +106,20 @@ async function runApifyActor(
 
       if (status === 'SUCCEEDED') {
         const datasetId = statusData.data?.defaultDatasetId;
+        console.log(`Actor ${actorId} succeeded, dataset: ${datasetId}`);
         if (!datasetId) return [];
 
         const datasetResponse = await fetch(
           `https://api.apify.com/v2/datasets/${datasetId}/items?token=${apiToken}&limit=50`
         );
 
-        if (!datasetResponse.ok) return [];
-        return await datasetResponse.json();
+        if (!datasetResponse.ok) {
+          console.error(`Failed to fetch dataset for ${actorId}`);
+          return [];
+        }
+        const items = await datasetResponse.json();
+        console.log(`Actor ${actorId} returned ${items.length} items`);
+        return items;
       }
 
       if (status === 'FAILED' || status === 'ABORTED' || status === 'TIMED-OUT') {

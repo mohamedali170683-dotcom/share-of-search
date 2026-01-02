@@ -1,28 +1,63 @@
 import React, { useState, useEffect } from 'react';
 import type { CompetitorStrength, BrandContext } from '../types';
+import { getCompetitorAnalysis, type CompetitorKeywordAnalysis } from '../services/api';
 
 interface CompetitorStrengthPanelProps {
   competitors: CompetitorStrength[];
   yourBrand: string;
   brandContext?: BrandContext;
+  domain?: string;
+  locationCode?: number;
+  languageCode?: string;
 }
 
 export const CompetitorStrengthPanel: React.FC<CompetitorStrengthPanelProps> = ({
   competitors,
   yourBrand,
-  brandContext
+  brandContext,
+  domain,
+  locationCode,
+  languageCode
 }) => {
   const [strategicInsight, setStrategicInsight] = useState<string>('');
   const [isGeneratingInsight, setIsGeneratingInsight] = useState(false);
   const [insightGenerated, setInsightGenerated] = useState(false);
 
+  // Deep competitor analysis state
+  const [competitorAnalysis, setCompetitorAnalysis] = useState<CompetitorKeywordAnalysis[]>([]);
+  const [isLoadingAnalysis, setIsLoadingAnalysis] = useState(false);
+  const [analysisError, setAnalysisError] = useState<string | null>(null);
+  const [selectedCompetitor, setSelectedCompetitor] = useState<string | null>(null);
+
   // Get your SOS from the remaining percentage
   const competitorTotalSOV = competitors.reduce((sum, c) => sum + c.estimatedSOV, 0);
   const yourSOV = Math.max(0, 100 - competitorTotalSOV);
 
-  // Get your performance metrics from first competitor (they all have the same data since it's YOUR data)
-  const yourMetrics = competitors[0]?.yourMetrics || { strongKeywords: 0, moderateKeywords: 0, weakKeywords: 0 };
-  const totalKeywords = yourMetrics.strongKeywords + yourMetrics.moderateKeywords + yourMetrics.weakKeywords;
+  // Fetch deep competitor analysis
+  useEffect(() => {
+    const fetchAnalysis = async () => {
+      if (!domain || !locationCode || !languageCode || competitors.length === 0) return;
+
+      setIsLoadingAnalysis(true);
+      setAnalysisError(null);
+
+      try {
+        const topCompetitors = competitors.slice(0, 3).map(c => c.competitor);
+        const result = await getCompetitorAnalysis(domain, locationCode, languageCode, topCompetitors);
+        setCompetitorAnalysis(result.competitors);
+        if (result.competitors.length > 0) {
+          setSelectedCompetitor(result.competitors[0].competitor);
+        }
+      } catch (err) {
+        console.error('Failed to fetch competitor analysis:', err);
+        setAnalysisError(err instanceof Error ? err.message : 'Failed to analyze competitors');
+      } finally {
+        setIsLoadingAnalysis(false);
+      }
+    };
+
+    fetchAnalysis();
+  }, [domain, locationCode, languageCode, competitors]);
 
   // Generate strategic insight
   useEffect(() => {
@@ -34,6 +69,21 @@ export const CompetitorStrengthPanel: React.FC<CompetitorStrengthPanelProps> = (
         const competitorSummary = competitors.map(c =>
           `${c.competitor}: ${c.estimatedSOV}% share of search, ${c.brandSearchVolume.toLocaleString()} brand search volume`
         ).join('\n');
+
+        // Include threat/gap data if available
+        let threatSummary = '';
+        if (competitorAnalysis.length > 0) {
+          const topThreats = competitorAnalysis
+            .flatMap(c => c.threats.slice(0, 3))
+            .sort((a, b) => b.opportunityScore - a.opportunityScore)
+            .slice(0, 5);
+
+          if (topThreats.length > 0) {
+            threatSummary = `\n\nTop competitive threats (keywords where competitors rank better):\n${
+              topThreats.map(t => `- "${t.keyword}": You #${t.yourPosition || 'not ranking'} vs competitor #${t.competitorPosition}`).join('\n')
+            }`;
+          }
+        }
 
         const response = await fetch('/api/generate-reasoning', {
           method: 'POST',
@@ -56,6 +106,7 @@ Your brand has ${yourSOV.toFixed(1)}% Share of Search.
 
 Competitor Share of Search (based on brand keyword search volumes):
 ${competitorSummary}
+${threatSummary}
 
 Write 2-3 sentences of strategic insight about:
 1. Who is your biggest competitor by brand awareness
@@ -80,7 +131,7 @@ Write 2-3 sentences of strategic insight about:
     };
 
     generateInsight();
-  }, [brandContext, competitors, yourBrand, yourSOV, insightGenerated]);
+  }, [brandContext, competitors, yourBrand, yourSOV, insightGenerated, competitorAnalysis]);
 
   if (competitors.length === 0) {
     return (
@@ -103,6 +154,8 @@ Write 2-3 sentences of strategic insight about:
   ].sort((a, b) => b.sov - a.sov);
 
   const maxSOV = Math.max(...allBrands.map(b => b.sov), 1);
+
+  const selectedAnalysis = competitorAnalysis.find(c => c.competitor === selectedCompetitor);
 
   return (
     <div className="space-y-6">
@@ -190,137 +243,242 @@ Write 2-3 sentences of strategic insight about:
         </div>
       </div>
 
-      {/* Competitor Details Table */}
+      {/* Deep Competitor Analysis Section */}
       <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm overflow-hidden">
         <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
-          <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Competitor Brand Search Volumes</h3>
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+            <svg className="w-5 h-5 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+            </svg>
+            Competitive Keyword Analysis
+          </h3>
           <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-            Monthly branded search volume for each competitor
-          </p>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead className="bg-gray-50 dark:bg-gray-700/50">
-              <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                  Competitor
-                </th>
-                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                  Brand Search Volume
-                </th>
-                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                  Share of Search
-                </th>
-                <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                  Relative Size
-                </th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-              {competitors.map((comp, idx) => {
-                const relativeToYou = yourSOV > 0 ? (comp.estimatedSOV / yourSOV) : 0;
-                return (
-                  <tr key={idx} className="hover:bg-gray-50 dark:hover:bg-gray-700/50">
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className="font-medium text-gray-900 dark:text-white">{comp.competitor}</span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-right">
-                      <span className="text-gray-900 dark:text-white font-medium">
-                        {comp.brandSearchVolume.toLocaleString()}
-                      </span>
-                      <span className="text-gray-500 dark:text-gray-400 text-sm ml-1">/mo</span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-right">
-                      <span className={`font-bold ${
-                        comp.estimatedSOV > yourSOV ? 'text-red-600 dark:text-red-400' : 'text-gray-900 dark:text-white'
-                      }`}>
-                        {comp.estimatedSOV.toFixed(1)}%
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-center">
-                      <span className={`px-3 py-1 rounded-full text-sm font-medium ${
-                        relativeToYou > 1.5 ? 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300' :
-                        relativeToYou > 1 ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300' :
-                        relativeToYou > 0.5 ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300' :
-                        'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300'
-                      }`}>
-                        {relativeToYou > 1 ? `${relativeToYou.toFixed(1)}x larger` :
-                         relativeToYou > 0 ? `${(1/relativeToYou).toFixed(1)}x smaller` : 'N/A'}
-                      </span>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      {/* Your SEO Performance Summary */}
-      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm overflow-hidden">
-        <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
-          <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Your SEO Performance</h3>
-          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-            Your keyword rankings across {totalKeywords} tracked keywords
+            Keywords where competitors rank better than you (real ranking data)
           </p>
         </div>
 
-        <div className="px-6 py-6">
-          <div className="grid grid-cols-3 gap-4 mb-6">
-            <div className="text-center p-4 bg-emerald-50 dark:bg-emerald-900/20 rounded-xl border border-emerald-200 dark:border-emerald-800">
-              <div className="text-3xl font-bold text-emerald-600 dark:text-emerald-400">{yourMetrics.strongKeywords}</div>
-              <div className="text-sm text-emerald-700 dark:text-emerald-300 font-medium">Top 3 Positions</div>
-              <div className="text-xs text-emerald-600 dark:text-emerald-400">High visibility</div>
-            </div>
-            <div className="text-center p-4 bg-amber-50 dark:bg-amber-900/20 rounded-xl border border-amber-200 dark:border-amber-800">
-              <div className="text-3xl font-bold text-amber-600 dark:text-amber-400">{yourMetrics.moderateKeywords}</div>
-              <div className="text-sm text-amber-700 dark:text-amber-300 font-medium">Positions 4-10</div>
-              <div className="text-xs text-amber-600 dark:text-amber-400">Page 1</div>
-            </div>
-            <div className="text-center p-4 bg-red-50 dark:bg-red-900/20 rounded-xl border border-red-200 dark:border-red-800">
-              <div className="text-3xl font-bold text-red-600 dark:text-red-400">{yourMetrics.weakKeywords}</div>
-              <div className="text-sm text-red-700 dark:text-red-300 font-medium">Position 11+</div>
-              <div className="text-xs text-red-600 dark:text-red-400">Need improvement</div>
-            </div>
+        {isLoadingAnalysis ? (
+          <div className="px-6 py-12 text-center">
+            <svg className="w-8 h-8 text-indigo-500 animate-spin mx-auto mb-4" fill="none" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+            </svg>
+            <p className="text-gray-600 dark:text-gray-400">Analyzing competitor rankings...</p>
+            <p className="text-sm text-gray-500 dark:text-gray-500 mt-1">This may take a minute</p>
           </div>
+        ) : analysisError ? (
+          <div className="px-6 py-8 text-center">
+            <svg className="w-12 h-12 text-gray-300 dark:text-gray-600 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+            <p className="text-gray-600 dark:text-gray-400">{analysisError}</p>
+          </div>
+        ) : competitorAnalysis.length > 0 ? (
+          <>
+            {/* Competitor Tabs */}
+            <div className="px-6 pt-4 flex gap-2 flex-wrap">
+              {competitorAnalysis.map((comp) => (
+                <button
+                  key={comp.competitor}
+                  onClick={() => setSelectedCompetitor(comp.competitor)}
+                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                    selectedCompetitor === comp.competitor
+                      ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/50 dark:text-indigo-300'
+                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-400 dark:hover:bg-gray-600'
+                  }`}
+                >
+                  {comp.competitor}
+                  <span className="ml-2 text-xs opacity-75">
+                    {comp.summary.threatsCount} threats
+                  </span>
+                </button>
+              ))}
+            </div>
 
-          {/* Position Distribution Bar */}
-          {totalKeywords > 0 && (
-            <>
-              <div className="h-6 rounded-full overflow-hidden flex bg-gray-200 dark:bg-gray-700">
-                {yourMetrics.strongKeywords > 0 && (
-                  <div
-                    className="h-full bg-emerald-500 flex items-center justify-center text-xs text-white font-medium"
-                    style={{ width: `${(yourMetrics.strongKeywords / totalKeywords) * 100}%` }}
-                  >
-                    {Math.round((yourMetrics.strongKeywords / totalKeywords) * 100)}%
+            {selectedAnalysis && (
+              <div className="p-6 space-y-6">
+                {/* Summary Stats */}
+                <div className="grid grid-cols-4 gap-4">
+                  <div className="text-center p-3 bg-red-50 dark:bg-red-900/20 rounded-lg">
+                    <div className="text-2xl font-bold text-red-600 dark:text-red-400">{selectedAnalysis.summary.threatsCount}</div>
+                    <div className="text-xs text-red-700 dark:text-red-300">Threats</div>
+                  </div>
+                  <div className="text-center p-3 bg-amber-50 dark:bg-amber-900/20 rounded-lg">
+                    <div className="text-2xl font-bold text-amber-600 dark:text-amber-400">{selectedAnalysis.summary.gapsCount}</div>
+                    <div className="text-xs text-amber-700 dark:text-amber-300">Content Gaps</div>
+                  </div>
+                  <div className="text-center p-3 bg-emerald-50 dark:bg-emerald-900/20 rounded-lg">
+                    <div className="text-2xl font-bold text-emerald-600 dark:text-emerald-400">{selectedAnalysis.summary.winsCount}</div>
+                    <div className="text-xs text-emerald-700 dark:text-emerald-300">Your Wins</div>
+                  </div>
+                  <div className="text-center p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+                    <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">{selectedAnalysis.summary.totalOverlap}</div>
+                    <div className="text-xs text-blue-700 dark:text-blue-300">Keyword Overlap</div>
+                  </div>
+                </div>
+
+                {/* Threats - Keywords where competitor ranks better */}
+                {selectedAnalysis.threats.length > 0 && (
+                  <div>
+                    <h4 className="text-sm font-semibold text-red-700 dark:text-red-400 mb-3 flex items-center gap-2">
+                      <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                      </svg>
+                      Competitive Threats - Keywords to Improve
+                    </h4>
+                    <div className="bg-red-50 dark:bg-red-900/10 rounded-lg overflow-hidden">
+                      <table className="w-full text-sm">
+                        <thead className="bg-red-100 dark:bg-red-900/30">
+                          <tr>
+                            <th className="px-4 py-2 text-left text-xs font-medium text-red-800 dark:text-red-300">Keyword</th>
+                            <th className="px-4 py-2 text-right text-xs font-medium text-red-800 dark:text-red-300">Volume</th>
+                            <th className="px-4 py-2 text-center text-xs font-medium text-red-800 dark:text-red-300">You</th>
+                            <th className="px-4 py-2 text-center text-xs font-medium text-red-800 dark:text-red-300">{selectedAnalysis.competitor}</th>
+                            <th className="px-4 py-2 text-right text-xs font-medium text-red-800 dark:text-red-300">Gap</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-red-200 dark:divide-red-800">
+                          {selectedAnalysis.threats.map((threat, idx) => (
+                            <tr key={idx} className="hover:bg-red-100/50 dark:hover:bg-red-900/20">
+                              <td className="px-4 py-3">
+                                <div className="font-medium text-gray-900 dark:text-white">{threat.keyword}</div>
+                                {threat.competitorUrl && (
+                                  <div className="text-xs text-gray-500 dark:text-gray-400 truncate max-w-xs">{threat.competitorUrl}</div>
+                                )}
+                              </td>
+                              <td className="px-4 py-3 text-right text-gray-600 dark:text-gray-400">
+                                {threat.searchVolume.toLocaleString()}
+                              </td>
+                              <td className="px-4 py-3 text-center">
+                                <span className="px-2 py-1 bg-gray-200 dark:bg-gray-700 rounded text-gray-700 dark:text-gray-300 font-medium">
+                                  #{threat.yourPosition || '—'}
+                                </span>
+                              </td>
+                              <td className="px-4 py-3 text-center">
+                                <span className="px-2 py-1 bg-red-200 dark:bg-red-800 rounded text-red-800 dark:text-red-200 font-medium">
+                                  #{threat.competitorPosition}
+                                </span>
+                              </td>
+                              <td className="px-4 py-3 text-right">
+                                <span className="text-red-600 dark:text-red-400 font-bold">
+                                  -{threat.positionDiff}
+                                </span>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
                   </div>
                 )}
-                {yourMetrics.moderateKeywords > 0 && (
-                  <div
-                    className="h-full bg-amber-500 flex items-center justify-center text-xs text-white font-medium"
-                    style={{ width: `${(yourMetrics.moderateKeywords / totalKeywords) * 100}%` }}
-                  >
-                    {Math.round((yourMetrics.moderateKeywords / totalKeywords) * 100)}%
+
+                {/* Content Gaps - Keywords competitor ranks for but you don't */}
+                {selectedAnalysis.gaps.length > 0 && (
+                  <div>
+                    <h4 className="text-sm font-semibold text-amber-700 dark:text-amber-400 mb-3 flex items-center gap-2">
+                      <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-11a1 1 0 10-2 0v2H7a1 1 0 100 2h2v2a1 1 0 102 0v-2h2a1 1 0 100-2h-2V7z" clipRule="evenodd" />
+                      </svg>
+                      Content Gaps - New Keyword Opportunities
+                    </h4>
+                    <div className="bg-amber-50 dark:bg-amber-900/10 rounded-lg overflow-hidden">
+                      <table className="w-full text-sm">
+                        <thead className="bg-amber-100 dark:bg-amber-900/30">
+                          <tr>
+                            <th className="px-4 py-2 text-left text-xs font-medium text-amber-800 dark:text-amber-300">Keyword</th>
+                            <th className="px-4 py-2 text-right text-xs font-medium text-amber-800 dark:text-amber-300">Volume</th>
+                            <th className="px-4 py-2 text-center text-xs font-medium text-amber-800 dark:text-amber-300">{selectedAnalysis.competitor} Rank</th>
+                            <th className="px-4 py-2 text-right text-xs font-medium text-amber-800 dark:text-amber-300">Opportunity</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-amber-200 dark:divide-amber-800">
+                          {selectedAnalysis.gaps.map((gap, idx) => (
+                            <tr key={idx} className="hover:bg-amber-100/50 dark:hover:bg-amber-900/20">
+                              <td className="px-4 py-3">
+                                <div className="font-medium text-gray-900 dark:text-white">{gap.keyword}</div>
+                                {gap.competitorUrl && (
+                                  <div className="text-xs text-gray-500 dark:text-gray-400 truncate max-w-xs">{gap.competitorUrl}</div>
+                                )}
+                              </td>
+                              <td className="px-4 py-3 text-right text-gray-600 dark:text-gray-400">
+                                {gap.searchVolume.toLocaleString()}
+                              </td>
+                              <td className="px-4 py-3 text-center">
+                                <span className="px-2 py-1 bg-amber-200 dark:bg-amber-800 rounded text-amber-800 dark:text-amber-200 font-medium">
+                                  #{gap.competitorPosition}
+                                </span>
+                              </td>
+                              <td className="px-4 py-3 text-right">
+                                <span className="text-amber-600 dark:text-amber-400 font-bold">
+                                  {gap.opportunityScore.toLocaleString()}
+                                </span>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
                   </div>
                 )}
-                {yourMetrics.weakKeywords > 0 && (
-                  <div
-                    className="h-full bg-red-500 flex items-center justify-center text-xs text-white font-medium"
-                    style={{ width: `${(yourMetrics.weakKeywords / totalKeywords) * 100}%` }}
-                  >
-                    {Math.round((yourMetrics.weakKeywords / totalKeywords) * 100)}%
+
+                {/* Your Wins */}
+                {selectedAnalysis.yourWins.length > 0 && (
+                  <div>
+                    <h4 className="text-sm font-semibold text-emerald-700 dark:text-emerald-400 mb-3 flex items-center gap-2">
+                      <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                      </svg>
+                      Your Wins - Keywords Where You Lead
+                    </h4>
+                    <div className="bg-emerald-50 dark:bg-emerald-900/10 rounded-lg overflow-hidden">
+                      <table className="w-full text-sm">
+                        <thead className="bg-emerald-100 dark:bg-emerald-900/30">
+                          <tr>
+                            <th className="px-4 py-2 text-left text-xs font-medium text-emerald-800 dark:text-emerald-300">Keyword</th>
+                            <th className="px-4 py-2 text-right text-xs font-medium text-emerald-800 dark:text-emerald-300">Volume</th>
+                            <th className="px-4 py-2 text-center text-xs font-medium text-emerald-800 dark:text-emerald-300">You</th>
+                            <th className="px-4 py-2 text-center text-xs font-medium text-emerald-800 dark:text-emerald-300">{selectedAnalysis.competitor}</th>
+                            <th className="px-4 py-2 text-right text-xs font-medium text-emerald-800 dark:text-emerald-300">Lead</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-emerald-200 dark:divide-emerald-800">
+                          {selectedAnalysis.yourWins.map((win, idx) => (
+                            <tr key={idx} className="hover:bg-emerald-100/50 dark:hover:bg-emerald-900/20">
+                              <td className="px-4 py-3 font-medium text-gray-900 dark:text-white">{win.keyword}</td>
+                              <td className="px-4 py-3 text-right text-gray-600 dark:text-gray-400">
+                                {win.searchVolume.toLocaleString()}
+                              </td>
+                              <td className="px-4 py-3 text-center">
+                                <span className="px-2 py-1 bg-emerald-200 dark:bg-emerald-800 rounded text-emerald-800 dark:text-emerald-200 font-medium">
+                                  #{win.yourPosition}
+                                </span>
+                              </td>
+                              <td className="px-4 py-3 text-center">
+                                <span className="px-2 py-1 bg-gray-200 dark:bg-gray-700 rounded text-gray-700 dark:text-gray-300 font-medium">
+                                  #{win.competitorPosition}
+                                </span>
+                              </td>
+                              <td className="px-4 py-3 text-right">
+                                <span className="text-emerald-600 dark:text-emerald-400 font-bold">
+                                  +{win.positionDiff}
+                                </span>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
                   </div>
                 )}
               </div>
-              <div className="flex justify-between text-xs text-gray-500 dark:text-gray-400 mt-2">
-                <span>Strong (1-3)</span>
-                <span>Moderate (4-10)</span>
-                <span>Weak (11+)</span>
-              </div>
-            </>
-          )}
-        </div>
+            )}
+          </>
+        ) : (
+          <div className="px-6 py-8 text-center text-gray-500 dark:text-gray-400">
+            <p>No competitor analysis data available.</p>
+            <p className="text-sm mt-1">Deep analysis requires domain configuration.</p>
+          </div>
+        )}
       </div>
 
       {/* Data Explanation */}
@@ -330,15 +488,12 @@ Write 2-3 sentences of strategic insight about:
             <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
           </svg>
           <div>
-            <h5 className="text-sm font-medium text-blue-800 dark:text-blue-300">What is Share of Search?</h5>
-            <p className="text-xs text-blue-700 dark:text-blue-400 mt-1">
-              Share of Search measures brand awareness by comparing how often people search for each brand name.
-              This is calculated from actual Google search volume data for branded keywords (e.g., "Continental tires", "Michelin reviews").
-              A higher Share of Search indicates stronger brand recognition in the market.
-            </p>
-            <p className="text-xs text-blue-600 dark:text-blue-500 mt-2">
-              <strong>Note:</strong> To see competitor keyword rankings, run a separate analysis on their domain.
-            </p>
+            <h5 className="text-sm font-medium text-blue-800 dark:text-blue-300">How to Use This Data</h5>
+            <ul className="text-xs text-blue-700 dark:text-blue-400 mt-1 space-y-1 list-disc list-inside">
+              <li><strong>Threats:</strong> Keywords where competitors outrank you - prioritize improving these</li>
+              <li><strong>Content Gaps:</strong> Keywords competitors rank for but you don't - create new content</li>
+              <li><strong>Your Wins:</strong> Keywords where you lead - protect these positions</li>
+            </ul>
           </div>
         </div>
       </div>

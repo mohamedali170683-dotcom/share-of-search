@@ -270,6 +270,81 @@ export async function calculateProjectMetrics(projectId: string): Promise<Calcul
   return response.json();
 }
 
+// Competitor Analysis types and API
+export interface CompetitorThreat {
+  keyword: string;
+  searchVolume: number;
+  yourPosition: number | null;
+  competitorPosition: number;
+  positionDiff: number;
+  yourUrl?: string;
+  competitorUrl: string;
+  opportunityScore: number;
+}
+
+export interface CompetitorGap {
+  keyword: string;
+  searchVolume: number;
+  competitorPosition: number;
+  competitorUrl: string;
+  opportunityScore: number;
+}
+
+export interface CompetitorWin {
+  keyword: string;
+  searchVolume: number;
+  yourPosition: number;
+  competitorPosition: number;
+  positionDiff: number;
+}
+
+export interface CompetitorKeywordAnalysis {
+  competitor: string;
+  competitorDomain: string;
+  threats: CompetitorThreat[];
+  gaps: CompetitorGap[];
+  yourWins: CompetitorWin[];
+  summary: {
+    totalOverlap: number;
+    threatsCount: number;
+    gapsCount: number;
+    winsCount: number;
+    threatVolume: number;
+    gapVolume: number;
+  };
+}
+
+export interface CompetitorAnalysisResponse {
+  yourDomain: string;
+  yourKeywordsCount: number;
+  competitors: CompetitorKeywordAnalysis[];
+}
+
+export async function getCompetitorAnalysis(
+  domain: string,
+  locationCode: number,
+  languageCode: string,
+  competitors: string[]
+): Promise<CompetitorAnalysisResponse> {
+  const response = await fetchWithTimeout(`${API_BASE}/competitor-analysis`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ domain, locationCode, languageCode, competitors })
+  }, 120000); // 2 minute timeout for this heavy operation
+
+  if (!response.ok) {
+    let errorMessage = 'Failed to analyze competitors';
+    try {
+      const error = await response.json();
+      errorMessage = error.error || errorMessage;
+    } catch {
+      // Ignore parse errors
+    }
+    throw new Error(errorMessage);
+  }
+  return response.json();
+}
+
 export function exportToCSV(
   brandKeywords: BrandKeyword[],
   rankedKeywords: RankedKeyword[],

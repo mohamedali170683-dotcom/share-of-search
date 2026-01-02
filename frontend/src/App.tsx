@@ -738,6 +738,9 @@ function App() {
           competitors={actionableInsights.competitorStrengths}
           yourBrand={brandName}
           brandContext={brandContext}
+          domain={currentDomain}
+          locationCode={currentLocation.code}
+          languageCode={currentLanguage}
         />
       )}
     </main>

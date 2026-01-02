@@ -188,7 +188,7 @@ async function fetchPaidCompetitors(
   try {
     console.log(`Fetching paid competitors for ${domain}`);
 
-    // First try competitors_domain without item_types filter
+    // Use competitors_domain with item_types to get paid competitors
     const response = await fetch(
       'https://api.dataforseo.com/v3/dataforseo_labs/google/competitors_domain/live',
       {
@@ -201,8 +201,8 @@ async function fetchPaidCompetitors(
           target: domain,
           location_code: locationCode,
           language_code: languageCode,
+          item_types: ['paid'],
           limit: 30,
-          filters: ['metrics.paid.count', '>', 0],
           order_by: ['metrics.paid.etv,desc'],
         }]),
       }

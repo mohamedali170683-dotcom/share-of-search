@@ -51,11 +51,14 @@ async function runApifyActor(
   timeoutMs: number = 60000
 ): Promise<unknown[]> {
   try {
-    console.log(`Starting actor ${actorId} with input:`, JSON.stringify(input));
+    // Convert actor ID format: "owner/actor" or "owner~actor" -> URL encoded
+    // Apify API expects the format: owner~actor-name in the URL
+    const encodedActorId = actorId.replace('/', '~');
+    console.log(`Starting actor ${encodedActorId} with input:`, JSON.stringify(input));
 
     // Start the actor run
     const runResponse = await fetch(
-      `https://api.apify.com/v2/acts/${actorId}/runs?token=${apiToken}`,
+      `https://api.apify.com/v2/acts/${encodedActorId}/runs?token=${apiToken}`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -64,10 +67,10 @@ async function runApifyActor(
     );
 
     const responseText = await runResponse.text();
-    console.log(`Actor ${actorId} start response (${runResponse.status}):`, responseText.substring(0, 500));
+    console.log(`Actor ${encodedActorId} start response (${runResponse.status}):`, responseText.substring(0, 500));
 
     if (!runResponse.ok) {
-      console.error(`Actor ${actorId} start failed with status ${runResponse.status}`);
+      console.error(`Actor ${encodedActorId} start failed with status ${runResponse.status}`);
       return [];
     }
 
@@ -75,14 +78,14 @@ async function runApifyActor(
     try {
       runData = JSON.parse(responseText);
     } catch {
-      console.error(`Actor ${actorId} returned invalid JSON`);
+      console.error(`Actor ${encodedActorId} returned invalid JSON`);
       return [];
     }
 
     const runId = runData.data?.id;
 
     if (!runId) {
-      console.error(`No run ID returned for actor ${actorId}`);
+      console.error(`No run ID returned for actor ${encodedActorId}`);
       return [];
     }
 
@@ -105,7 +108,7 @@ async function runApifyActor(
 
       if (status === 'SUCCEEDED') {
         const datasetId = statusData.data?.defaultDatasetId;
-        console.log(`Actor ${actorId} succeeded, dataset: ${datasetId}`);
+        console.log(`Actor ${encodedActorId} succeeded, dataset: ${datasetId}`);
         if (!datasetId) return [];
 
         const datasetResponse = await fetch(
@@ -113,21 +116,21 @@ async function runApifyActor(
         );
 
         if (!datasetResponse.ok) {
-          console.error(`Failed to fetch dataset for ${actorId}`);
+          console.error(`Failed to fetch dataset for ${encodedActorId}`);
           return [];
         }
         const items = await datasetResponse.json();
-        console.log(`Actor ${actorId} returned ${items.length} items`);
+        console.log(`Actor ${encodedActorId} returned ${items.length} items`);
         return items;
       }
 
       if (status === 'FAILED' || status === 'ABORTED' || status === 'TIMED-OUT') {
-        console.error(`Actor ${actorId} run ${status}`);
+        console.error(`Actor ${encodedActorId} run ${status}`);
         return [];
       }
     }
 
-    console.error(`Actor ${actorId} timed out`);
+    console.error(`Actor ${encodedActorId} timed out`);
     return [];
   } catch (error) {
     console.error(`Actor ${actorId} error:`, error);

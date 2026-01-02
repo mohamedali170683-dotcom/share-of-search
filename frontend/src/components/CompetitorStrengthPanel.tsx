@@ -145,7 +145,13 @@ ${filteredGaps.length > 0 ? filteredGaps.map(g => `- "${g.keyword}" (${g.searchV
             brandContext,
             customPrompt: `You are an SEO strategist. Analyze the competitive landscape for ${yourBrand || brandContext.brandName}.
 
-IMPORTANT: Share of Search (SOS%) measures brand awareness - the higher the percentage, the more dominant the brand.
+UNDERSTANDING THE METRICS:
+- Share of Search (SOS%) = Brand awareness metric (how often people search for your brand vs competitors)
+- Share of Voice (SOV) = Visibility on generic/non-branded keywords (your rankings on terms like "winter tires")
+
+STRATEGIC INSIGHT (Les Binet's research): There's an 83% correlation between Share of Search and market share.
+Improving your Share of Voice (ranking better on generic keywords) builds brand awareness over time, which INCREASES your Share of Search.
+This is because: Users who discover your brand through generic searches → become aware of your brand → later search for your brand directly.
 
 BRAND AWARENESS (Share of Search - who leads):
 - ${yourBrand || brandContext.brandName} (YOUR BRAND): ${yourSOV.toFixed(1)}% SOS
@@ -156,13 +162,13 @@ ${analysisDetails}
 
 IMPORTANT RULES:
 1. NEVER recommend targeting competitor brand keywords (like "michelin tires" or "goodyear tires") - those belong to competitors
-2. Only recommend GENERIC keywords (like "winter tires", "all season tires", "tire reviews")
-3. Focus on the threats and gaps data provided - these are real opportunities
+2. Only recommend GENERIC keywords - improving visibility on these builds brand awareness and future Share of Search
+3. Focus on the threats and gaps data provided - these are real opportunities to improve Share of Voice
 
-Write 2-3 sentences about:
-1. State who leads in brand awareness (by SOS%) - if it's the user's brand, congratulate them
-2. Identify the #1 priority generic keyword to improve (from the threats or gaps list)
-3. Give ONE specific, actionable recommendation for that keyword`
+Write 2-3 sentences:
+1. State who leads in brand awareness (by SOS%) - if it's the user's brand, acknowledge their strong position
+2. Explain how improving on the top generic keyword threat/gap will help build Share of Voice, which leads to stronger Share of Search over time
+3. Give ONE specific, actionable recommendation for the #1 priority generic keyword (from threats or gaps list)`
           })
         });
 
@@ -546,7 +552,7 @@ Write 2-3 sentences about:
               AI Strategic Recommendations
             </h3>
             <p className="text-xs text-purple-600 dark:text-purple-400 mt-1">
-              Based on generic keyword analysis (excluding brand keywords)
+              Improve Share of Voice on generic keywords → Build brand awareness → Grow Share of Search
             </p>
           </div>
           <div className="p-6">

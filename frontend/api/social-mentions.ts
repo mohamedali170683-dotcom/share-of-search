@@ -4,8 +4,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
  * Social Mentions API
  * Fetches brand mentions from Reddit using Apify actors
  *
- * Currently only Reddit is supported. Other platforms (Instagram, TikTok, YouTube)
- * require scrapers that support keyword/hashtag search, which the current actors don't.
+ * Uses trudax/reddit-scraper-lite which has a free tier and supports keyword search
  */
 
 interface SocialMention {
@@ -47,13 +46,12 @@ async function runApifyActor(
   actorId: string,
   input: Record<string, unknown>,
   apiToken: string,
-  timeoutMs: number = 25000 // Keep under Vercel's 30s limit
+  timeoutMs: number = 25000
 ): Promise<unknown[]> {
   const encodedActorId = actorId.replace('/', '~');
   console.log(`Starting actor ${encodedActorId} with input:`, JSON.stringify(input));
 
   try {
-    // Start the actor run
     const runResponse = await fetch(
       `https://api.apify.com/v2/acts/${encodedActorId}/runs?token=${apiToken}`,
       {
@@ -85,7 +83,6 @@ async function runApifyActor(
       return [];
     }
 
-    // Poll for completion with shorter intervals
     const pollInterval = 2000;
     let elapsed = 0;
 
@@ -120,7 +117,6 @@ async function runApifyActor(
       }
 
       if (status === 'FAILED' || status === 'ABORTED' || status === 'TIMED-OUT') {
-        // Try to get error details
         const errorLog = statusData.data?.stats?.runTimeSecs
           ? `ran for ${statusData.data.stats.runTimeSecs}s`
           : '';
@@ -138,7 +134,8 @@ async function runApifyActor(
 }
 
 /**
- * Fetch Reddit mentions using harshmaur's Reddit Scraper
+ * Fetch Reddit mentions using trudax/reddit-scraper-lite
+ * This actor has a free tier and supports keyword search via 'searches' array
  */
 async function fetchRedditMentions(
   brandName: string,
@@ -147,18 +144,14 @@ async function fetchRedditMentions(
   const mentions: SocialMention[] = [];
 
   try {
-    // Try the regular reddit-scraper (not pro) with search functionality
-    // Based on documentation, it expects 'searchPosts' and 'keywords' parameters
+    // trudax/reddit-scraper-lite uses 'searches' array for keyword search
     const results = await runApifyActor(
-      'harshmaur/reddit-scraper',
+      'trudax/reddit-scraper-lite',
       {
-        type: 'search',
-        searchPosts: true,
-        keyword: brandName,
-        maxItems: 15,
-        sort: 'relevance',
-        time: 'month',
-        // Include proxy config for reliability
+        searches: [brandName],
+        maxPostCount: 20,
+        maxComments: 0,
+        skipComments: true,
         proxy: {
           useApifyProxy: true,
         }
@@ -170,45 +163,42 @@ async function fetchRedditMentions(
       body?: string;
       selftext?: string;
       text?: string;
-      content?: string;
       url?: string;
       permalink?: string;
-      link?: string;
       score?: number;
       ups?: number;
       upvotes?: number;
-      upVotes?: number;
       numComments?: number;
       num_comments?: number;
-      numberOfComments?: number;
-      commentCount?: number;
       author?: string;
-      authorName?: string;
       subreddit?: string;
       subredditName?: string;
       createdAt?: string;
       created_utc?: number;
       postedAt?: string;
-      timestamp?: string;
+      dataType?: string;
     }>;
 
     console.log(`Reddit scraper returned ${results.length} items for "${brandName}"`);
 
     for (const item of results) {
-      const text = item.title || item.body || item.selftext || item.text || item.content || '';
+      // Skip if this is a comment, only want posts
+      if (item.dataType === 'comment') continue;
+
+      const text = item.title || item.body || item.selftext || item.text || '';
       if (!text) continue;
 
       mentions.push({
         platform: 'reddit',
         text,
-        url: item.url || item.link || (item.permalink ? `https://reddit.com${item.permalink}` : undefined),
+        url: item.url || (item.permalink ? `https://reddit.com${item.permalink}` : undefined),
         engagement: {
-          likes: item.score || item.ups || item.upvotes || item.upVotes || 0,
-          comments: item.numComments || item.num_comments || item.numberOfComments || item.commentCount || 0,
+          likes: item.score || item.ups || item.upvotes || 0,
+          comments: item.numComments || item.num_comments || 0,
         },
-        author: item.author || item.authorName,
+        author: item.author,
         subreddit: item.subreddit || item.subredditName,
-        timestamp: item.createdAt || item.postedAt || item.timestamp ||
+        timestamp: item.createdAt || item.postedAt ||
           (item.created_utc ? new Date(item.created_utc * 1000).toISOString() : undefined),
       });
     }
@@ -326,7 +316,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       competitors: competitorMentionsData,
       sov,
       timestamp: new Date().toISOString(),
-      note: 'Currently tracking Reddit mentions only. Instagram/TikTok/YouTube require different scraper subscriptions.'
+      note: 'Tracking Reddit mentions. Uses trudax/reddit-scraper-lite actor.'
     };
 
     return res.status(200).json(response);

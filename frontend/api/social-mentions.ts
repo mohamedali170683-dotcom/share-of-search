@@ -4,10 +4,9 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
  * Social Mentions API
  * Fetches brand mentions from social media platforms using Apify actors
  *
- * Uses free/affordable actors:
- * - apify/instagram-hashtag-scraper (free tier available)
- * - clockworks/tiktok-scraper (free tier available)
- * - streamers/reddit-scraper-lite (free tier available)
+ * Uses the following actors:
+ * - insiteco/social-insight-scraper ($30/mo) - Instagram, TikTok, YouTube
+ * - harshmaur/reddit-scraper-pro ($20/mo) - Reddit
  */
 
 interface SocialMention {
@@ -137,123 +136,109 @@ async function runApifyActor(
 }
 
 /**
- * Fetch Instagram mentions using hashtag scraper
- * Actor: apify/instagram-hashtag-scraper
+ * Fetch social media insights using Social Insight Scraper
+ * Actor: insiteco/social-insight-scraper
+ * Supports Instagram, TikTok, and YouTube via direct URL scraping
  */
-async function fetchInstagramMentions(
+async function fetchSocialInsights(
   brandName: string,
+  platform: 'instagram' | 'tiktok' | 'youtube',
   apiToken: string
 ): Promise<SocialMention[]> {
   const mentions: SocialMention[] = [];
 
   try {
-    // Use official Apify Instagram Hashtag Scraper
-    const hashtag = brandName.toLowerCase().replace(/[^a-z0-9]/g, '');
+    // Social Insight Scraper requires direct URLs
+    // We'll search for brand-related content URLs first
+    // For now, construct search URLs that the scraper can process
+    const searchUrls: { url: string; inputId: string }[] = [];
+
+    // Generate unique IDs for each input
+    const generateId = () => Math.random().toString(36).substring(2, 15);
+
+    if (platform === 'instagram') {
+      // Instagram hashtag search URL
+      searchUrls.push({
+        url: `https://www.instagram.com/explore/tags/${brandName.toLowerCase().replace(/[^a-z0-9]/g, '')}/`,
+        inputId: generateId()
+      });
+    } else if (platform === 'tiktok') {
+      // TikTok search URL
+      searchUrls.push({
+        url: `https://www.tiktok.com/search?q=${encodeURIComponent(brandName)}`,
+        inputId: generateId()
+      });
+    } else if (platform === 'youtube') {
+      // YouTube search URL
+      searchUrls.push({
+        url: `https://www.youtube.com/results?search_query=${encodeURIComponent(brandName)}`,
+        inputId: generateId()
+      });
+    }
+
+    if (searchUrls.length === 0) {
+      console.log(`No URLs to scrape for ${platform}`);
+      return mentions;
+    }
+
     const results = await runApifyActor(
-      'apify~instagram-hashtag-scraper',
+      'insiteco~social-insight-scraper',
       {
-        hashtags: [hashtag],
-        resultsLimit: 20,
-        resultsType: 'posts',
+        input: searchUrls
       },
       apiToken,
-      60000
+      90000 // 90 second timeout
     ) as Array<{
+      url?: string;
+      title?: string;
+      description?: string;
+      text?: string;
       caption?: string;
-      shortCode?: string;
+      likes?: number;
       likesCount?: number;
+      comments?: number;
       commentsCount?: number;
-      videoViewCount?: number;
+      shares?: number;
+      shareCount?: number;
+      views?: number;
+      viewCount?: number;
+      playCount?: number;
+      author?: string;
+      username?: string;
       ownerUsername?: string;
       timestamp?: string;
-      displayUrl?: string;
-    }>;
-
-    console.log(`Instagram scraper returned ${results.length} raw items`);
-
-    for (const item of results) {
-      mentions.push({
-        platform: 'instagram',
-        text: item.caption || '',
-        url: item.shortCode ? `https://instagram.com/p/${item.shortCode}` : undefined,
-        engagement: {
-          likes: item.likesCount || 0,
-          comments: item.commentsCount || 0,
-          views: item.videoViewCount || 0,
-        },
-        author: item.ownerUsername,
-        timestamp: item.timestamp,
-      });
-    }
-  } catch (error) {
-    console.error('Instagram scraper error:', error);
-  }
-
-  return mentions;
-}
-
-/**
- * Fetch TikTok mentions
- * Actor: apify/tiktok-scraper (official)
- */
-async function fetchTikTokMentions(
-  brandName: string,
-  apiToken: string
-): Promise<SocialMention[]> {
-  const mentions: SocialMention[] = [];
-
-  try {
-    // Use official Apify TikTok Scraper
-    const results = await runApifyActor(
-      'apify~tiktok-scraper',
-      {
-        searchQueries: [brandName],
-        resultsPerPage: 20,
-        shouldDownloadVideos: false,
-        shouldDownloadCovers: false,
-      },
-      apiToken,
-      60000
-    ) as Array<{
-      text?: string;
-      desc?: string;
-      webVideoUrl?: string;
-      videoUrl?: string;
-      diggCount?: number;
-      commentCount?: number;
-      shareCount?: number;
-      playCount?: number;
-      authorMeta?: { name?: string; nickName?: string };
       createTime?: number;
+      publishedAt?: string;
     }>;
 
-    console.log(`TikTok scraper returned ${results.length} raw items`);
+    console.log(`Social Insight Scraper (${platform}) returned ${results.length} raw items`);
 
     for (const item of results) {
       mentions.push({
-        platform: 'tiktok',
-        text: item.text || item.desc || '',
-        url: item.webVideoUrl || item.videoUrl,
+        platform,
+        text: item.caption || item.description || item.title || item.text || '',
+        url: item.url,
         engagement: {
-          likes: item.diggCount || 0,
-          comments: item.commentCount || 0,
-          shares: item.shareCount || 0,
-          views: item.playCount || 0,
+          likes: item.likes || item.likesCount || 0,
+          comments: item.comments || item.commentsCount || 0,
+          shares: item.shares || item.shareCount || 0,
+          views: item.views || item.viewCount || item.playCount || 0,
         },
-        author: item.authorMeta?.nickName || item.authorMeta?.name,
-        timestamp: item.createTime ? new Date(item.createTime * 1000).toISOString() : undefined,
+        author: item.author || item.username || item.ownerUsername,
+        timestamp: item.timestamp || item.publishedAt ||
+          (item.createTime ? new Date(item.createTime * 1000).toISOString() : undefined),
       });
     }
   } catch (error) {
-    console.error('TikTok scraper error:', error);
+    console.error(`Social Insight Scraper (${platform}) error:`, error);
   }
 
   return mentions;
 }
 
 /**
- * Fetch Reddit mentions
- * Actor: apify/reddit-scraper (official)
+ * Fetch Reddit mentions using Reddit Scraper Pro
+ * Actor: harshmaur/reddit-scraper-pro
  */
 async function fetchRedditMentions(
   brandName: string,
@@ -262,51 +247,54 @@ async function fetchRedditMentions(
   const mentions: SocialMention[] = [];
 
   try {
-    // Use official Apify Reddit Scraper
+    // Use harshmaur's Reddit Scraper Pro
     const results = await runApifyActor(
-      'apify~reddit-scraper',
+      'harshmaur~reddit-scraper-pro',
       {
-        searches: [brandName],
-        maxItems: 20,
-        maxPostCount: 20,
-        maxComments: 0,
+        keywords: [brandName],
+        maxPosts: 20,
         sort: 'relevance',
         time: 'month',
       },
       apiToken,
-      60000
+      90000 // 90 second timeout
     ) as Array<{
       title?: string;
       body?: string;
       selftext?: string;
+      text?: string;
       url?: string;
       permalink?: string;
       score?: number;
       ups?: number;
+      upvotes?: number;
       numComments?: number;
       num_comments?: number;
+      commentCount?: number;
       author?: string;
       createdAt?: string;
       created_utc?: number;
+      timestamp?: string;
     }>;
 
-    console.log(`Reddit scraper returned ${results.length} raw items`);
+    console.log(`Reddit Scraper Pro returned ${results.length} raw items`);
 
     for (const item of results) {
       mentions.push({
         platform: 'reddit',
-        text: item.title || item.body || item.selftext || '',
+        text: item.title || item.body || item.selftext || item.text || '',
         url: item.url || (item.permalink ? `https://reddit.com${item.permalink}` : undefined),
         engagement: {
-          likes: item.score || item.ups || 0,
-          comments: item.numComments || item.num_comments || 0,
+          likes: item.score || item.ups || item.upvotes || 0,
+          comments: item.numComments || item.num_comments || item.commentCount || 0,
         },
         author: item.author,
-        timestamp: item.createdAt || (item.created_utc ? new Date(item.created_utc * 1000).toISOString() : undefined),
+        timestamp: item.createdAt || item.timestamp ||
+          (item.created_utc ? new Date(item.created_utc * 1000).toISOString() : undefined),
       });
     }
   } catch (error) {
-    console.error('Reddit scraper error:', error);
+    console.error('Reddit Scraper Pro error:', error);
   }
 
   return mentions;
@@ -372,13 +360,16 @@ function calculateSOV(
  */
 async function fetchAllMentions(brandName: string, apiToken: string): Promise<SocialMention[]> {
   // Run all scrapers in parallel
-  const [instagram, tiktok, reddit] = await Promise.all([
-    fetchInstagramMentions(brandName, apiToken),
-    fetchTikTokMentions(brandName, apiToken),
+  // Using Social Insight Scraper for Instagram, TikTok, YouTube
+  // Using Reddit Scraper Pro for Reddit
+  const [instagram, tiktok, youtube, reddit] = await Promise.all([
+    fetchSocialInsights(brandName, 'instagram', apiToken),
+    fetchSocialInsights(brandName, 'tiktok', apiToken),
+    fetchSocialInsights(brandName, 'youtube', apiToken),
     fetchRedditMentions(brandName, apiToken),
   ]);
 
-  return [...instagram, ...tiktok, ...reddit];
+  return [...instagram, ...tiktok, ...youtube, ...reddit];
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {

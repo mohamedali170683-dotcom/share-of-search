@@ -333,41 +333,45 @@ export function generateCategoryActionReasoning(
 
 /**
  * Generate reasoning for competitor-related actions
+ * Uses real data about your keyword performance, not fake competitor positions
  */
 export function generateCompetitorActionReasoning(
   competitor: CompetitorStrength,
   _brandContext?: BrandContext
 ): string {
   const parts: string[] = [];
-  const netResult = competitor.headToHead.youWin - competitor.headToHead.theyWin;
+  const { strongKeywords, moderateKeywords, weakKeywords } = competitor.yourMetrics;
+  const totalKeywords = strongKeywords + moderateKeywords + weakKeywords;
+  const strongPercentage = totalKeywords > 0 ? Math.round((strongKeywords / totalKeywords) * 100) : 0;
 
-  // Competitive position summary
-  if (netResult > 5) {
-    parts.push(`You're outperforming ${competitor.competitor} overall, winning ${competitor.headToHead.youWin} keyword battles versus their ${competitor.headToHead.theyWin}. However, analyzing their wins reveals defensive opportunities.`);
-  } else if (netResult < -5) {
-    parts.push(`${competitor.competitor} currently dominates your shared keyword space, winning ${competitor.headToHead.theyWin} terms to your ${competitor.headToHead.youWin}. Understanding their strategy is critical for closing this gap.`);
+  // Your performance summary
+  if (strongPercentage >= 30) {
+    parts.push(`You have a solid competitive position with ${strongKeywords} keywords in top 3 positions (${strongPercentage}% of your portfolio). This gives you a strong foundation against ${competitor.competitor}.`);
+  } else if (strongPercentage >= 15) {
+    parts.push(`Your competitive position against ${competitor.competitor} is moderate, with ${strongKeywords} keywords in top 3 positions. There's room to strengthen your visibility.`);
   } else {
-    parts.push(`You and ${competitor.competitor} are closely matched with ${competitor.headToHead.youWin} vs ${competitor.headToHead.theyWin} keyword wins. Small improvements could tip the competitive balance in your favor.`);
+    parts.push(`Your visibility could be stronger when competing with ${competitor.competitor}. Only ${strongKeywords} of your ${totalKeywords} keywords rank in top 3 positions.`);
   }
 
-  // Their estimated strength
-  parts.push(`With an estimated ${competitor.estimatedSOV}% share of voice based on brand search volume, ${competitor.competitor} represents ${competitor.estimatedSOV > 20 ? 'a major' : competitor.estimatedSOV > 10 ? 'a significant' : 'a notable'} competitive presence.`);
+  // Their estimated strength based on brand search volume
+  parts.push(`${competitor.competitor} has ${competitor.brandSearchVolume.toLocaleString()} monthly brand searches, representing ${competitor.estimatedSOV}% of the total brand search landscape—${competitor.estimatedSOV > 20 ? 'a major' : competitor.estimatedSOV > 10 ? 'a significant' : 'a notable'} competitive presence.`);
 
-  // Category dominance insight
-  if (competitor.dominantCategories.length > 0) {
-    const cats = competitor.dominantCategories.slice(0, 3).join('", "');
-    parts.push(`They particularly dominate in "${cats}"—consider whether to compete directly or differentiate by focusing on adjacent categories where you can establish leadership.`);
+  // Vulnerable categories insight
+  if (competitor.vulnerableCategories.length > 0) {
+    const cats = competitor.vulnerableCategories.slice(0, 3).join('", "');
+    parts.push(`You have weaker positions in "${cats}"—consider strengthening these categories to reduce vulnerability.`);
   }
 
-  // Specific keyword insights
-  if (competitor.topLosingKeywords.length > 0) {
-    const topLoss = competitor.topLosingKeywords[0];
-    parts.push(`Your biggest competitive loss is "${topLoss.keyword}" (${topLoss.searchVolume.toLocaleString()} volume) where you rank #${topLoss.yourPosition} versus their #${topLoss.competitorPosition}.`);
+  // Your strong keywords insight
+  if (competitor.topStrongKeywords.length > 0) {
+    const topStrong = competitor.topStrongKeywords[0];
+    parts.push(`Protect your advantage on "${topStrong.keyword}" where your #${topStrong.yourPosition} position drives ${topStrong.visibleVolume.toLocaleString()} visible clicks.`);
   }
 
-  if (competitor.topWinningKeywords.length > 0) {
-    const topWin = competitor.topWinningKeywords[0];
-    parts.push(`Protect your advantage on "${topWin.keyword}" where your #${topWin.yourPosition} position outranks their #${topWin.competitorPosition}.`);
+  // Keywords needing improvement
+  if (competitor.keywordsToImprove.length > 0) {
+    const topWeak = competitor.keywordsToImprove[0];
+    parts.push(`Priority improvement: "${topWeak.keyword}" (${topWeak.searchVolume.toLocaleString()} volume) currently ranks #${topWeak.yourPosition}—moving to page 1 would significantly boost visibility.`);
   }
 
   return parts.join(' ');

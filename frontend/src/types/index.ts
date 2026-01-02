@@ -128,29 +128,35 @@ export interface CompetitorCategoryAnalysis {
   keywordsLost: number;
 }
 
-// Head-to-head keyword battle
-export interface KeywordBattle {
+// Keyword strength indicator
+export interface KeywordStrength {
   keyword: string;
   searchVolume: number;
-  yourPosition: number | null;
-  competitorPosition: number;
-  winner: 'you' | 'competitor' | 'tie';
-  visibilityDifference: number;
+  yourPosition: number;
+  url?: string;
+  category?: string;
+  visibleVolume: number;
+  status: 'strong' | 'moderate' | 'weak'; // Position-based status
 }
 
 // Competitor Strength Data
 export interface CompetitorStrength {
   competitor: string;
-  estimatedSOV: number;
+  brandSearchVolume: number; // Actual competitor brand search volume
+  estimatedSOV: number; // Share of Voice percentage
   keywordsAnalyzed: number;
-  headToHead: {
-    youWin: number;
-    theyWin: number;
-    ties: number;
+  // Your performance metrics (actual data)
+  yourMetrics: {
+    strongKeywords: number; // Position 1-3
+    moderateKeywords: number; // Position 4-10
+    weakKeywords: number; // Position 11+
   };
-  dominantCategories: string[];
-  topWinningKeywords: KeywordBattle[];
-  topLosingKeywords: KeywordBattle[];
+  // Categories where you're weak (potential competitor strength)
+  vulnerableCategories: string[];
+  // Your top performing keywords (actual data with URLs)
+  topStrongKeywords: KeywordStrength[];
+  // Keywords needing improvement (actual data with URLs)
+  keywordsToImprove: KeywordStrength[];
 }
 
 // Prioritized Action Item

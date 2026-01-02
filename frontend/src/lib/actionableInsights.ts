@@ -7,7 +7,6 @@ import type {
   CompetitorStrength,
   ActionItem,
   ActionableInsights,
-  KeywordBattle,
   HiddenGem,
   CannibalizationIssue,
   ContentGap,
@@ -204,13 +203,13 @@ export function calculateCategorySOV(
 
 /**
  * Analyze competitor strength based on brand keywords and your rankings
- * Note: This is an estimation based on available data
+ * Shows REAL data about your performance, not fake competitor positions
  */
 export function calculateCompetitorStrength(
   brandKeywords: BrandKeyword[],
   rankedKeywords: RankedKeyword[]
 ): CompetitorStrength[] {
-  // Get competitor brands
+  // Get competitor brands from brand keywords
   const competitors = brandKeywords
     .filter(k => !k.isOwnBrand)
     .reduce((acc, k) => {
@@ -230,71 +229,69 @@ export function calculateCompetitorStrength(
   // Calculate total brand volume for SOS estimation
   const totalBrandVolume = brandKeywords.reduce((sum, k) => sum + k.searchVolume, 0);
 
+  // Categorize YOUR keywords by position (real data)
+  const strongKeywords = rankedKeywords.filter(k => k.position <= 3);
+  const moderateKeywords = rankedKeywords.filter(k => k.position > 3 && k.position <= 10);
+  const weakKeywords = rankedKeywords.filter(k => k.position > 10);
+
+  // Get categories where you're weak
+  const categories = calculateCategorySOV(rankedKeywords);
+  const vulnerableCategories = categories
+    .filter(c => c.status === 'weak' || c.status === 'trailing')
+    .map(c => c.category);
+
+  // Your top strong keywords (real data with URLs)
+  const topStrongKeywords = strongKeywords
+    .sort((a, b) => b.searchVolume - a.searchVolume)
+    .slice(0, 5)
+    .map(k => ({
+      keyword: k.keyword,
+      searchVolume: k.searchVolume,
+      yourPosition: k.position,
+      url: k.url,
+      category: k.category,
+      visibleVolume: Math.round(k.searchVolume * getCTR(k.position)),
+      status: 'strong' as const
+    }));
+
+  // Keywords needing improvement (real data with URLs)
+  const keywordsToImprove = weakKeywords
+    .sort((a, b) => b.searchVolume - a.searchVolume)
+    .slice(0, 5)
+    .map(k => ({
+      keyword: k.keyword,
+      searchVolume: k.searchVolume,
+      yourPosition: k.position,
+      url: k.url,
+      category: k.category,
+      visibleVolume: Math.round(k.searchVolume * getCTR(k.position)),
+      status: 'weak' as const
+    }));
+
   for (const [competitor, data] of competitors) {
-    // Estimate competitor SOV based on brand search share
+    // Calculate competitor's Share of Search based on brand keyword volume
     const estimatedSOV = totalBrandVolume > 0
       ? Math.round((data.volume / totalBrandVolume) * 100 * 10) / 10
       : 0;
 
-    // Simulate head-to-head based on your ranking distribution
-    const positionDistribution = {
-      top3: rankedKeywords.filter(k => k.position <= 3).length,
-      top10: rankedKeywords.filter(k => k.position <= 10).length,
-      page2: rankedKeywords.filter(k => k.position > 10 && k.position <= 20).length
-    };
-
-    // Estimate wins/losses (simplified - would need actual competitor ranking data)
-    const youWin = Math.round(positionDistribution.top3 * 0.7);
-    const theyWin = Math.round(positionDistribution.page2 * 0.6);
-    const ties = Math.round(positionDistribution.top10 * 0.2);
-
-    // Get categories where you might be losing
-    const categories = calculateCategorySOV(rankedKeywords);
-    const weakCategories = categories
-      .filter(c => c.status === 'weak' || c.status === 'trailing')
-      .map(c => c.category);
-
-    // Simulated keyword battles (top losing)
-    const topLosingKeywords: KeywordBattle[] = rankedKeywords
-      .filter(k => k.position > 10)
-      .sort((a, b) => b.searchVolume - a.searchVolume)
-      .slice(0, 3)
-      .map(k => ({
-        keyword: k.keyword,
-        searchVolume: k.searchVolume,
-        yourPosition: k.position,
-        competitorPosition: Math.max(1, k.position - Math.floor(Math.random() * 8)),
-        winner: 'competitor' as const,
-        visibilityDifference: Math.round(k.searchVolume * (getCTR(k.position - 5) - getCTR(k.position)))
-      }));
-
-    // Simulated keyword battles (top winning)
-    const topWinningKeywords: KeywordBattle[] = rankedKeywords
-      .filter(k => k.position <= 5)
-      .sort((a, b) => b.searchVolume - a.searchVolume)
-      .slice(0, 3)
-      .map(k => ({
-        keyword: k.keyword,
-        searchVolume: k.searchVolume,
-        yourPosition: k.position,
-        competitorPosition: k.position + Math.floor(Math.random() * 10) + 3,
-        winner: 'you' as const,
-        visibilityDifference: Math.round(k.searchVolume * getCTR(k.position))
-      }));
-
     results.push({
       competitor: competitor.charAt(0).toUpperCase() + competitor.slice(1),
+      brandSearchVolume: data.volume,
       estimatedSOV,
       keywordsAnalyzed: rankedKeywords.length,
-      headToHead: { youWin, theyWin, ties },
-      dominantCategories: weakCategories.slice(0, 3),
-      topWinningKeywords,
-      topLosingKeywords
+      yourMetrics: {
+        strongKeywords: strongKeywords.length,
+        moderateKeywords: moderateKeywords.length,
+        weakKeywords: weakKeywords.length
+      },
+      vulnerableCategories: vulnerableCategories.slice(0, 3),
+      topStrongKeywords,
+      keywordsToImprove
     });
   }
 
-  // Sort by estimated SOV (strongest competitors first)
-  return results.sort((a, b) => b.estimatedSOV - a.estimatedSOV);
+  // Sort by brand search volume (strongest competitors first)
+  return results.sort((a, b) => b.brandSearchVolume - a.brandSearchVolume);
 }
 
 // ==========================================
@@ -675,14 +672,16 @@ export function generateActionList(
   }
 
   // Add competitive response actions with unique reasoning
+  // Focus on competitors with high brand search volume
   for (const comp of competitors.slice(0, 2)) {
-    if (comp.headToHead.theyWin > comp.headToHead.youWin) {
+    // Only suggest investigation for significant competitors
+    if (comp.estimatedSOV >= 10 && comp.yourMetrics.weakKeywords > comp.yourMetrics.strongKeywords) {
       actions.push({
         id: `action-${id++}`,
         actionType: 'investigate',
         priority: 60,
         title: `Analyze ${comp.competitor}'s content strategy`,
-        description: `Competitive gap: they win ${comp.headToHead.theyWin} keywords vs your ${comp.headToHead.youWin}`,
+        description: `${comp.competitor} has ${comp.estimatedSOV}% SOS. You have ${comp.yourMetrics.weakKeywords} weak keywords vs ${comp.yourMetrics.strongKeywords} strong.`,
         impact: 'medium',
         effort: 'low',
         estimatedUplift: 0,

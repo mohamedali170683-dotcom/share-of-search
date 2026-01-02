@@ -285,15 +285,20 @@ describe('generateCategoryActionReasoning', () => {
 describe('generateCompetitorActionReasoning', () => {
   const baseCompetitor: CompetitorStrength = {
     competitor: 'Michelin',
+    brandSearchVolume: 50000,
     estimatedSOV: 25,
     keywordsAnalyzed: 50,
-    headToHead: { youWin: 15, theyWin: 25, ties: 10 },
-    dominantCategories: ['Premium Tires', 'Performance Tires'],
-    topWinningKeywords: [
-      { keyword: 'eco tires', searchVolume: 3000, yourPosition: 2, competitorPosition: 8, winner: 'you', visibilityDifference: 400 },
+    yourMetrics: {
+      strongKeywords: 15,
+      moderateKeywords: 20,
+      weakKeywords: 15,
+    },
+    vulnerableCategories: ['Premium Tires', 'Performance Tires'],
+    topStrongKeywords: [
+      { keyword: 'eco tires', searchVolume: 3000, yourPosition: 2, url: '/eco-tires', category: 'Eco', visibleVolume: 400, status: 'strong' },
     ],
-    topLosingKeywords: [
-      { keyword: 'performance tires', searchVolume: 8000, yourPosition: 12, competitorPosition: 3, winner: 'competitor', visibilityDifference: -600 },
+    keywordsToImprove: [
+      { keyword: 'performance tires', searchVolume: 8000, yourPosition: 12, url: '/performance', category: 'Performance', visibleVolume: 100, status: 'weak' },
     ],
   };
 
@@ -301,16 +306,16 @@ describe('generateCompetitorActionReasoning', () => {
     const reasoning = generateCompetitorActionReasoning(baseCompetitor);
 
     expect(reasoning).toContain('Michelin');
-    expect(reasoning).toContain('15');
-    expect(reasoning).toContain('25');
+    expect(reasoning).toContain('15'); // strongKeywords count
+    expect(reasoning).toContain('25'); // estimatedSOV
   });
 
-  it('mentions dominant categories', () => {
+  it('mentions vulnerable categories', () => {
     const reasoning = generateCompetitorActionReasoning(baseCompetitor);
     expect(reasoning).toContain('Premium Tires');
   });
 
-  it('highlights specific keyword battles', () => {
+  it('highlights strong and weak keywords', () => {
     const reasoning = generateCompetitorActionReasoning(baseCompetitor);
 
     expect(reasoning).toContain('performance tires');

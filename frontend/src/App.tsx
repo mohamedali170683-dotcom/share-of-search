@@ -1,7 +1,8 @@
 import { useState, useEffect, useMemo } from 'react';
 import { MetricCard, KeywordTable, TrendsPanel, MethodologyPage, FAQ, ProjectCard, AnalysisForm, CategoryBreakdownPanel, CompetitorStrengthPanel } from './components';
 import { OpportunitiesPanel } from './components/OpportunitiesPanel';
-import { SocialSOVPanel } from './components/SocialSOVPanel';
+import { YouTubeSOVPanel } from './components/YouTubeSOVPanel';
+import { PaidAdsPanel } from './components/PaidAdsPanel';
 import type { BrandKeyword, RankedKeyword, SOSResult, SOVResult, GrowthGapResult, Project, ActionableInsights, BrandContext, Opportunity } from './types';
 import { calculateMetrics, getRankedKeywords, getBrandKeywords, getTrends, exportToCSV } from './services/api';
 import { getProjects, saveProject, deleteProject } from './services/projectStorage';
@@ -10,7 +11,7 @@ import type { TrendsData } from './services/api';
 import { generateActionableInsights } from './lib/actionableInsights';
 
 type ViewMode = 'dashboard' | 'analysis' | 'project';
-type AnalysisTab = 'overview' | 'opportunities' | 'categories' | 'competitors' | 'social';
+type AnalysisTab = 'overview' | 'opportunities' | 'categories' | 'competitors' | 'youtube' | 'paidAds';
 
 function App() {
   const { toggleTheme, isDark } = useTheme();
@@ -488,11 +489,20 @@ function App() {
       badge: actionableInsights?.competitorStrengths.length
     },
     {
-      id: 'social',
-      label: 'Social',
+      id: 'youtube',
+      label: 'YouTube',
+      icon: (
+        <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+          <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
+        </svg>
+      )
+    },
+    {
+      id: 'paidAds',
+      label: 'Paid Ads',
       icon: (
         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 8h2a2 2 0 012 2v6a2 2 0 01-2 2h-2v4l-4-4H9a1.994 1.994 0 01-1.414-.586m0 0L11 14h4a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2v4l.586-.586z" />
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
         </svg>
       )
     }
@@ -754,10 +764,20 @@ function App() {
         />
       )}
 
-      {analysisTab === 'social' && (
-        <SocialSOVPanel
+      {analysisTab === 'youtube' && (
+        <YouTubeSOVPanel
           brandName={brandName}
           competitors={actualCompetitors}
+          locationCode={currentLocation.code}
+          languageCode={currentLanguage}
+        />
+      )}
+
+      {analysisTab === 'paidAds' && (
+        <PaidAdsPanel
+          domain={currentDomain}
+          locationCode={currentLocation.code}
+          languageCode={currentLanguage}
         />
       )}
     </main>

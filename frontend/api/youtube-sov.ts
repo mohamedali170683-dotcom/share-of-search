@@ -3,7 +3,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 /**
  * YouTube SOV API
  * Fetches YouTube video rankings using DataForSEO SERP API
- * Calculates Share of Voice based on video presence and engagement
+ * Shows all videos in search results and identifies brand-owned ones
  */
 
 interface YouTubeVideo {
@@ -17,6 +17,7 @@ interface YouTubeVideo {
   publishedDate: string;
   rank: number;
   thumbnail?: string;
+  isBrandOwned?: boolean;
 }
 
 interface BrandYouTubeData {
@@ -29,12 +30,17 @@ interface BrandYouTubeData {
 interface YouTubeSOVResponse {
   yourBrand: BrandYouTubeData;
   competitors: BrandYouTubeData[];
+  allVideos: YouTubeVideo[];
   sov: {
     byCount: number;
     byViews: number;
   };
   searchedKeywords: string[];
   timestamp: string;
+  debug?: {
+    totalVideosFetched: number;
+    apiStatus: string;
+  };
 }
 
 /**
@@ -45,10 +51,12 @@ async function fetchYouTubeSERP(
   locationCode: number,
   languageCode: string,
   auth: string
-): Promise<YouTubeVideo[]> {
+): Promise<{ videos: YouTubeVideo[]; status: string }> {
   const videos: YouTubeVideo[] = [];
 
   try {
+    console.log(`Calling YouTube SERP API for "${keyword}" (location: ${locationCode}, lang: ${languageCode})`);
+
     const response = await fetch(
       'https://api.dataforseo.com/v3/serp/youtube/organic/live/advanced',
       {
@@ -68,12 +76,20 @@ async function fetchYouTubeSERP(
     );
 
     if (!response.ok) {
-      console.error(`YouTube SERP failed for "${keyword}": ${response.status}`);
-      return [];
+      const errorText = await response.text();
+      console.error(`YouTube SERP failed for "${keyword}": ${response.status} - ${errorText}`);
+      return { videos: [], status: `API error: ${response.status}` };
     }
 
     const data = await response.json();
+
+    // Log full response for debugging
+    console.log(`YouTube API response for "${keyword}":`, JSON.stringify(data).substring(0, 500));
+
+    const taskStatus = data?.tasks?.[0]?.status_message || 'unknown';
     const items = data?.tasks?.[0]?.result?.[0]?.items || [];
+
+    console.log(`YouTube SERP for "${keyword}": status=${taskStatus}, items=${items.length}`);
 
     for (const item of items) {
       if (item.type === 'youtube_video') {
@@ -92,12 +108,11 @@ async function fetchYouTubeSERP(
       }
     }
 
-    console.log(`YouTube SERP for "${keyword}": ${videos.length} videos found`);
+    return { videos, status: taskStatus };
   } catch (error) {
     console.error(`YouTube SERP error for "${keyword}":`, error);
+    return { videos: [], status: `Exception: ${error}` };
   }
-
-  return videos;
 }
 
 /**
@@ -105,16 +120,20 @@ async function fetchYouTubeSERP(
  */
 function videoBelongsToBrand(video: YouTubeVideo, brandName: string): boolean {
   const channelLower = video.channelName.toLowerCase();
+  const titleLower = video.title.toLowerCase();
   const brandLower = brandName.toLowerCase();
 
-  // Direct match
+  // Direct channel name match
   if (channelLower.includes(brandLower)) return true;
 
-  // Handle common brand variations
+  // Brand words in channel name (words > 3 chars)
   const brandWords = brandLower.split(/\s+/);
   if (brandWords.some(word => word.length > 3 && channelLower.includes(word))) {
     return true;
   }
+
+  // Check if title contains brand (secondary indicator)
+  if (titleLower.includes(brandLower)) return true;
 
   return false;
 }
@@ -138,7 +157,7 @@ function aggregateBrandVideos(
 
   return {
     name: brandName,
-    videos: top20Videos.slice(0, 10), // Return top 10 for display
+    videos: top20Videos.slice(0, 10),
     totalVideosInTop20: top20Videos.length,
     totalViews,
   };
@@ -156,13 +175,11 @@ function calculateYouTubeSOV(
     (sum, c) => sum + c.totalVideosInTop20, 0
   );
 
-  // Count-based SOV
   const totalIdentifiedVideos = yourVideosInTop20 + competitorVideosInTop20;
   const byCount = totalIdentifiedVideos > 0
     ? Math.round((yourVideosInTop20 / totalIdentifiedVideos) * 100 * 10) / 10
     : 0;
 
-  // Views-based SOV (engagement weighted)
   const yourViews = yourBrand.totalViews;
   const competitorViews = competitors.reduce((sum, c) => sum + c.totalViews, 0);
   const totalViews = yourViews + competitorViews;
@@ -204,7 +221,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const auth = Buffer.from(`${login}:${password}`).toString('base64');
 
-    // Prepare search keywords (brand + competitors)
     const validCompetitors = Array.isArray(competitors)
       ? competitors.filter((c): c is string => typeof c === 'string').slice(0, 4)
       : [];
@@ -215,13 +231,28 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     // Fetch YouTube results for each keyword
     const allVideos: YouTubeVideo[] = [];
+    let apiStatus = 'ok';
 
     for (const keyword of searchKeywords) {
-      const videos = await fetchYouTubeSERP(keyword, locationCode, languageCode, auth);
-      allVideos.push(...videos);
+      const result = await fetchYouTubeSERP(keyword, locationCode, languageCode, auth);
+      allVideos.push(...result.videos);
+      if (result.status !== 'Ok.' && result.status !== 'ok') {
+        apiStatus = result.status;
+      }
     }
 
     console.log(`Total videos collected: ${allVideos.length}`);
+
+    // Deduplicate all videos by ID
+    const uniqueAllVideos = Array.from(
+      new Map(allVideos.map(v => [v.videoId, v])).values()
+    ).sort((a, b) => a.rank - b.rank);
+
+    // Mark brand-owned videos
+    const videosWithOwnership = uniqueAllVideos.map(v => ({
+      ...v,
+      isBrandOwned: videoBelongsToBrand(v, brandName),
+    }));
 
     // Aggregate by brand
     const yourBrandData = aggregateBrandVideos(allVideos, brandName);
@@ -235,9 +266,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const response: YouTubeSOVResponse = {
       yourBrand: yourBrandData,
       competitors: competitorData,
+      allVideos: videosWithOwnership.slice(0, 20), // Top 20 for display
       sov,
       searchedKeywords: searchKeywords,
       timestamp: new Date().toISOString(),
+      debug: {
+        totalVideosFetched: allVideos.length,
+        apiStatus,
+      },
     };
 
     return res.status(200).json(response);

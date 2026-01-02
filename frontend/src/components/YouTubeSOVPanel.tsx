@@ -11,6 +11,7 @@ interface YouTubeVideo {
   publishedDate: string;
   rank: number;
   thumbnail?: string;
+  isBrandOwned?: boolean;
 }
 
 interface BrandYouTubeData {
@@ -23,11 +24,17 @@ interface BrandYouTubeData {
 interface YouTubeSOVResponse {
   yourBrand: BrandYouTubeData;
   competitors: BrandYouTubeData[];
+  allVideos: YouTubeVideo[];
   sov: {
     byCount: number;
     byViews: number;
   };
+  searchedKeywords: string[];
   timestamp: string;
+  debug?: {
+    totalVideosFetched: number;
+    apiStatus: string;
+  };
 }
 
 interface YouTubeSOVPanelProps {
@@ -158,10 +165,28 @@ export function YouTubeSOVPanel({ brandName, competitors, locationCode = 2840, l
   if (!data) return null;
 
   const allBrands = [data.yourBrand, ...data.competitors];
-  const maxViews = Math.max(...allBrands.map(b => b.totalViews));
+  const maxViews = Math.max(...allBrands.map(b => b.totalViews), 1);
+  const hasVideos = data.allVideos && data.allVideos.length > 0;
 
   return (
     <div className="space-y-6">
+      {/* Debug info if no videos found */}
+      {data.debug && data.debug.totalVideosFetched === 0 && (
+        <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-xl p-4">
+          <div className="flex items-start gap-3">
+            <svg className="w-5 h-5 text-yellow-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+            <div>
+              <p className="text-sm font-medium text-yellow-800 dark:text-yellow-200">No YouTube videos found</p>
+              <p className="text-xs text-yellow-700 dark:text-yellow-300 mt-1">
+                API Status: {data.debug.apiStatus}. Searched for: {data.searchedKeywords?.join(', ')}
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* SOV Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6 border-l-4 border-red-500">
@@ -177,7 +202,7 @@ export function YouTubeSOVPanel({ brandName, competitors, locationCode = 2840, l
             </div>
           </div>
           <p className="text-xs text-gray-500 dark:text-gray-400">
-            {data.yourBrand.totalVideosInTop20} videos in top 20 results
+            {data.yourBrand.totalVideosInTop20} brand videos identified in search results
           </p>
         </div>
 
@@ -195,72 +220,79 @@ export function YouTubeSOVPanel({ brandName, competitors, locationCode = 2840, l
             </div>
           </div>
           <p className="text-xs text-gray-500 dark:text-gray-400">
-            {formatViews(data.yourBrand.totalViews)} total views on ranking videos
+            {formatViews(data.yourBrand.totalViews)} total views on brand videos
           </p>
         </div>
       </div>
 
       {/* Brand Comparison */}
-      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6">
-        <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-          Brand Comparison
-        </h3>
-        <div className="space-y-4">
-          {allBrands.map((brand, idx) => {
-            const isYourBrand = idx === 0;
-            const viewsPercentage = maxViews > 0 ? (brand.totalViews / maxViews) * 100 : 0;
-
-            return (
-              <div key={brand.name} className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <span className={`font-medium ${isYourBrand ? 'text-red-600 dark:text-red-400' : 'text-gray-700 dark:text-gray-300'}`}>
-                      {brand.name}
-                    </span>
-                    {isYourBrand && (
-                      <span className="px-2 py-0.5 bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 text-xs rounded-full">
-                        Your Brand
-                      </span>
-                    )}
-                  </div>
-                  <div className="text-right">
-                    <span className="font-semibold text-gray-900 dark:text-white">
-                      {brand.totalVideosInTop20} videos
-                    </span>
-                    <span className="text-gray-500 dark:text-gray-400 text-sm ml-2">
-                      ({formatViews(brand.totalViews)} views)
-                    </span>
-                  </div>
-                </div>
-                <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
-                  <div
-                    className={`h-2 rounded-full transition-all ${isYourBrand ? 'bg-red-500' : 'bg-gray-400 dark:bg-gray-500'}`}
-                    style={{ width: `${viewsPercentage}%` }}
-                  />
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* Your Brand's Videos */}
-      {data.yourBrand.videos.length > 0 && (
+      {allBrands.some(b => b.totalVideosInTop20 > 0) && (
         <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6">
           <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-            Your Ranking Videos
+            Brand Comparison
+          </h3>
+          <div className="space-y-4">
+            {allBrands.map((brand, idx) => {
+              const isYourBrand = idx === 0;
+              const viewsPercentage = maxViews > 0 ? (brand.totalViews / maxViews) * 100 : 0;
+
+              return (
+                <div key={brand.name} className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className={`font-medium ${isYourBrand ? 'text-red-600 dark:text-red-400' : 'text-gray-700 dark:text-gray-300'}`}>
+                        {brand.name}
+                      </span>
+                      {isYourBrand && (
+                        <span className="px-2 py-0.5 bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 text-xs rounded-full">
+                          Your Brand
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-right">
+                      <span className="font-semibold text-gray-900 dark:text-white">
+                        {brand.totalVideosInTop20} videos
+                      </span>
+                      <span className="text-gray-500 dark:text-gray-400 text-sm ml-2">
+                        ({formatViews(brand.totalViews)} views)
+                      </span>
+                    </div>
+                  </div>
+                  <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                    <div
+                      className={`h-2 rounded-full transition-all ${isYourBrand ? 'bg-red-500' : 'bg-gray-400 dark:bg-gray-500'}`}
+                      style={{ width: `${viewsPercentage}%` }}
+                    />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* All Videos in Search Results */}
+      {hasVideos && (
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6">
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+            Top Videos in Search Results
+            <span className="text-sm font-normal text-gray-500 dark:text-gray-400 ml-2">
+              ({data.allVideos.length} videos found)
+            </span>
           </h3>
           <div className="space-y-3">
-            {data.yourBrand.videos.map((video) => (
+            {data.allVideos.map((video) => (
               <a
                 key={video.videoId}
                 href={video.url}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex items-start gap-4 p-3 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
+                className={`flex items-start gap-4 p-3 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors ${
+                  video.isBrandOwned ? 'bg-red-50 dark:bg-red-900/10 border border-red-200 dark:border-red-800' : ''
+                }`}
               >
-                <div className="flex-shrink-0 w-8 h-8 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center">
-                  <span className="text-sm font-bold text-red-600 dark:text-red-400">#{video.rank}</span>
+                <div className="flex-shrink-0 w-8 h-8 bg-gray-100 dark:bg-gray-700 rounded-full flex items-center justify-center">
+                  <span className="text-sm font-bold text-gray-600 dark:text-gray-300">#{video.rank}</span>
                 </div>
                 {video.thumbnail && (
                   <img
@@ -270,9 +302,16 @@ export function YouTubeSOVPanel({ brandName, competitors, locationCode = 2840, l
                   />
                 )}
                 <div className="flex-1 min-w-0">
-                  <h4 className="font-medium text-gray-900 dark:text-white text-sm truncate">
-                    {video.title}
-                  </h4>
+                  <div className="flex items-center gap-2">
+                    <h4 className="font-medium text-gray-900 dark:text-white text-sm truncate">
+                      {video.title}
+                    </h4>
+                    {video.isBrandOwned && (
+                      <span className="px-2 py-0.5 bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 text-xs rounded-full flex-shrink-0">
+                        Your Brand
+                      </span>
+                    )}
+                  </div>
                   <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                     {video.channelName} • {formatViews(video.viewsCount)} views • {video.duration}
                   </p>
@@ -289,19 +328,24 @@ export function YouTubeSOVPanel({ brandName, competitors, locationCode = 2840, l
         </div>
       )}
 
-      {/* No videos found */}
-      {data.yourBrand.videos.length === 0 && (
+      {/* No videos found message */}
+      {!hasVideos && (
         <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-xl p-6">
           <div className="flex items-start gap-3">
             <svg className="w-6 h-6 text-yellow-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
             </svg>
             <div>
-              <h4 className="font-medium text-yellow-800 dark:text-yellow-200">No Videos Found</h4>
+              <h4 className="font-medium text-yellow-800 dark:text-yellow-200">No Videos Found in Search Results</h4>
               <p className="text-sm text-yellow-700 dark:text-yellow-300 mt-1">
-                No videos from your brand's channel were found in the top 20 YouTube results for "{brandName}".
-                Consider creating more YouTube content to improve your presence.
+                The YouTube API didn't return any video results for the searched keywords.
+                This could mean the API doesn't have data for this region or the keywords didn't match any videos.
               </p>
+              {data.searchedKeywords && (
+                <p className="text-xs text-yellow-600 dark:text-yellow-400 mt-2">
+                  Searched for: {data.searchedKeywords.join(', ')}
+                </p>
+              )}
             </div>
           </div>
         </div>

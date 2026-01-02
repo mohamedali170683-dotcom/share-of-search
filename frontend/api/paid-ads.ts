@@ -2,8 +2,8 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 
 /**
  * Paid Ads SOV API
- * Fetches paid search competitor data using DataForSEO Labs API
- * Calculates Share of Voice based on estimated traffic and ad spend
+ * Fetches paid search data using DataForSEO Labs API
+ * Uses domain_metrics for your domain + competitors_domain for market context
  */
 
 interface PaidCompetitor {
@@ -13,11 +13,6 @@ interface PaidCompetitor {
   estimatedAdSpend: number;
   avgPosition: number;
   intersections: number;
-  positionDistribution: {
-    pos1: number;
-    pos2_3: number;
-    pos4_10: number;
-  };
 }
 
 interface PaidAdsResponse {
@@ -34,10 +29,148 @@ interface PaidAdsResponse {
     totalSpend: number;
   };
   timestamp: string;
+  debug?: {
+    apiStatus: string;
+    metricsFound: boolean;
+    competitorsFound: number;
+  };
 }
 
 /**
- * Fetch paid search competitors from DataForSEO Labs
+ * Fetch domain metrics (your own domain's data)
+ */
+async function fetchDomainMetrics(
+  domain: string,
+  locationCode: number,
+  languageCode: string,
+  auth: string
+): Promise<PaidCompetitor | null> {
+  try {
+    console.log(`Fetching domain metrics for ${domain}`);
+
+    const response = await fetch(
+      'https://api.dataforseo.com/v3/dataforseo_labs/google/domain_metrics_by_categories/live',
+      {
+        method: 'POST',
+        headers: {
+          'Authorization': `Basic ${auth}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify([{
+          target: domain,
+          location_code: locationCode,
+          language_code: languageCode,
+        }]),
+      }
+    );
+
+    if (!response.ok) {
+      console.error(`Domain metrics API error: ${response.status}`);
+      // Try alternative endpoint
+      return await fetchDomainRankedKeywords(domain, locationCode, languageCode, auth);
+    }
+
+    const data = await response.json();
+    console.log(`Domain metrics response:`, JSON.stringify(data).substring(0, 500));
+
+    const metrics = data?.tasks?.[0]?.result?.[0]?.metrics?.paid;
+
+    if (metrics) {
+      return {
+        domain,
+        paidETV: metrics.etv || 0,
+        paidKeywordsCount: metrics.count || 0,
+        estimatedAdSpend: metrics.estimated_paid_traffic_cost || 0,
+        avgPosition: metrics.avg_position || 0,
+        intersections: 0,
+      };
+    }
+
+    // Fallback to ranked keywords
+    return await fetchDomainRankedKeywords(domain, locationCode, languageCode, auth);
+  } catch (error) {
+    console.error('Domain metrics error:', error);
+    return null;
+  }
+}
+
+/**
+ * Fallback: Get paid data from ranked_keywords endpoint
+ */
+async function fetchDomainRankedKeywords(
+  domain: string,
+  locationCode: number,
+  languageCode: string,
+  auth: string
+): Promise<PaidCompetitor | null> {
+  try {
+    console.log(`Fetching ranked keywords (paid) for ${domain}`);
+
+    const response = await fetch(
+      'https://api.dataforseo.com/v3/dataforseo_labs/google/ranked_keywords/live',
+      {
+        method: 'POST',
+        headers: {
+          'Authorization': `Basic ${auth}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify([{
+          target: domain,
+          location_code: locationCode,
+          language_code: languageCode,
+          item_types: ['paid'],
+          limit: 100,
+        }]),
+      }
+    );
+
+    if (!response.ok) {
+      console.error(`Ranked keywords API error: ${response.status}`);
+      return null;
+    }
+
+    const data = await response.json();
+    console.log(`Ranked keywords response:`, JSON.stringify(data).substring(0, 500));
+
+    const result = data?.tasks?.[0]?.result?.[0];
+    const items = result?.items || [];
+    const totalCount = result?.total_count || 0;
+
+    if (items.length > 0 || totalCount > 0) {
+      // Calculate metrics from items
+      let totalETV = 0;
+      let totalSpend = 0;
+      let totalPosition = 0;
+
+      for (const item of items) {
+        const searchVolume = item.keyword_data?.keyword_info?.search_volume || 0;
+        const position = item.ranked_serp_element?.serp_item?.rank_group || 50;
+        // Estimate CTR based on position
+        const ctr = position <= 3 ? 0.1 : position <= 5 ? 0.05 : 0.02;
+        totalETV += searchVolume * ctr;
+        totalSpend += item.keyword_data?.keyword_info?.cpc || 0;
+        totalPosition += position;
+      }
+
+      return {
+        domain,
+        paidETV: Math.round(totalETV),
+        paidKeywordsCount: totalCount || items.length,
+        estimatedAdSpend: Math.round(totalSpend * totalETV),
+        avgPosition: items.length > 0 ? totalPosition / items.length : 0,
+        intersections: 0,
+      };
+    }
+
+    return null;
+  } catch (error) {
+    console.error('Ranked keywords error:', error);
+    return null;
+  }
+}
+
+/**
+ * Fetch paid search competitors
  */
 async function fetchPaidCompetitors(
   domain: string,
@@ -48,6 +181,8 @@ async function fetchPaidCompetitors(
   const competitors: PaidCompetitor[] = [];
 
   try {
+    console.log(`Fetching paid competitors for ${domain}`);
+
     const response = await fetch(
       'https://api.dataforseo.com/v3/dataforseo_labs/google/competitors_domain/live',
       {
@@ -73,27 +208,26 @@ async function fetchPaidCompetitors(
     }
 
     const data = await response.json();
+    console.log(`Competitors response:`, JSON.stringify(data).substring(0, 500));
+
     const items = data?.tasks?.[0]?.result?.[0]?.items || [];
 
     for (const item of items) {
       const paidMetrics = item.metrics?.paid || {};
 
-      competitors.push({
-        domain: item.domain || '',
-        paidETV: paidMetrics.etv || 0,
-        paidKeywordsCount: paidMetrics.count || 0,
-        estimatedAdSpend: paidMetrics.estimated_paid_traffic_cost || 0,
-        avgPosition: paidMetrics.avg_position || 0,
-        intersections: item.intersections || 0,
-        positionDistribution: {
-          pos1: paidMetrics.pos_1 || 0,
-          pos2_3: (paidMetrics.pos_2_3 || 0),
-          pos4_10: (paidMetrics.pos_4_10 || 0),
-        },
-      });
+      if (paidMetrics.etv > 0 || paidMetrics.count > 0) {
+        competitors.push({
+          domain: item.domain || '',
+          paidETV: paidMetrics.etv || 0,
+          paidKeywordsCount: paidMetrics.count || 0,
+          estimatedAdSpend: paidMetrics.estimated_paid_traffic_cost || 0,
+          avgPosition: paidMetrics.avg_position || 0,
+          intersections: item.intersections || 0,
+        });
+      }
     }
 
-    console.log(`Found ${competitors.length} paid search competitors for ${domain}`);
+    console.log(`Found ${competitors.length} paid search competitors`);
   } catch (error) {
     console.error('Competitors Domain API error:', error);
   }
@@ -174,24 +308,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     console.log(`Fetching paid ads data for ${domain}`);
 
-    // Fetch paid search competitors
-    const allCompetitors = await fetchPaidCompetitors(
-      domain,
-      locationCode,
-      languageCode,
-      auth
-    );
+    // Fetch your domain's metrics and competitors in parallel
+    const [yourDomainData, allCompetitors] = await Promise.all([
+      fetchDomainMetrics(domain, locationCode, languageCode, auth),
+      fetchPaidCompetitors(domain, locationCode, languageCode, auth),
+    ]);
 
-    // Find your domain in the results (it should be included)
-    const yourDomainData = allCompetitors.find(
-      c => c.domain.toLowerCase().includes(domain.toLowerCase()) ||
-           domain.toLowerCase().includes(c.domain.toLowerCase())
-    ) || null;
-
-    // Filter out your domain from competitors list
+    // Filter competitors to exclude your domain
     const competitors = allCompetitors.filter(
-      c => c.domain !== yourDomainData?.domain
-    ).slice(0, 10); // Top 10 competitors
+      c => !c.domain.toLowerCase().includes(domain.toLowerCase()) &&
+           !domain.toLowerCase().includes(c.domain.toLowerCase())
+    ).slice(0, 10);
 
     // Calculate SOV
     const { sov, totalMarket } = calculatePaidSOV(yourDomainData, competitors);
@@ -202,6 +329,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       sov,
       totalMarket,
       timestamp: new Date().toISOString(),
+      debug: {
+        apiStatus: 'ok',
+        metricsFound: yourDomainData !== null,
+        competitorsFound: competitors.length,
+      },
     };
 
     return res.status(200).json(response);

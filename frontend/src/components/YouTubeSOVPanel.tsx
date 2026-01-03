@@ -243,12 +243,41 @@ export function YouTubeSOVPanel({ brandName, competitors, locationCode = 2840, l
   const deleteCurrentAnalysis = () => {
     if (!brandName) return;
 
-    const filtered = savedAnalyses.filter(
+    // Read directly from localStorage to ensure we have the latest data
+    const saved = localStorage.getItem(STORAGE_KEY);
+    let currentAnalyses: SavedAnalysis[] = [];
+    if (saved) {
+      try {
+        currentAnalyses = JSON.parse(saved);
+      } catch {
+        // If parse fails, treat as empty
+      }
+    }
+
+    // Clear saved analyses for this brand
+    const filtered = currentAnalyses.filter(
       a => a && a.brandName && a.brandName.toLowerCase() !== brandName.toLowerCase()
     );
     setSavedAnalyses(filtered);
     localStorage.setItem(STORAGE_KEY, JSON.stringify(filtered));
+
+    // Also clear the channel info for this brand
+    const existingChannelInfo = localStorage.getItem(CHANNEL_STORAGE_KEY);
+    if (existingChannelInfo) {
+      try {
+        const channelInfo = JSON.parse(existingChannelInfo);
+        delete channelInfo[brandName.toLowerCase()];
+        localStorage.setItem(CHANNEL_STORAGE_KEY, JSON.stringify(channelInfo));
+      } catch {
+        // Ignore parse errors
+      }
+    }
+
+    // Reset state
+    setOwnedChannelId(null);
+    setOwnedChannelName(null);
     setData(null);
+    setError(null);
   };
 
   const fetchYouTubeSOV = async () => {

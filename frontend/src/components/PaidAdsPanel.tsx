@@ -118,12 +118,24 @@ export function PaidAdsPanel({ domain, brandName: _brandName, competitors, locat
   const deleteCurrentAnalysis = () => {
     if (!domain) return;
 
-    const filtered = savedAnalyses.filter(
+    // Read directly from localStorage to ensure we have the latest data
+    const saved = localStorage.getItem(STORAGE_KEY);
+    let currentAnalyses: SavedAnalysis[] = [];
+    if (saved) {
+      try {
+        currentAnalyses = JSON.parse(saved);
+      } catch {
+        // If parse fails, treat as empty
+      }
+    }
+
+    const filtered = currentAnalyses.filter(
       a => a && a.domain && a.domain.toLowerCase() !== domain.toLowerCase()
     );
     setSavedAnalyses(filtered);
     localStorage.setItem(STORAGE_KEY, JSON.stringify(filtered));
     setData(null);
+    setError(null);
   };
 
   const fetchPaidAds = async () => {

@@ -2,146 +2,75 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 
 /**
  * Paid Ads SOV API
- * Uses DataForSEO Google Ads Transparency API (SERP API)
- * This provides actual Google Ads data from Google's Ads Transparency Center
+ * Uses DataForSEO Labs API to get actual paid search performance data
  *
- * Two-step approach:
- * 1. Find advertisers using ads_advertisers endpoint (search by brand keyword)
- * 2. Get their ads using ads_search endpoint
+ * Metrics:
+ * - Paid keywords count and top keywords
+ * - Estimated paid traffic (ETV)
+ * - Estimated ad spend
+ * - Competitor comparison
  */
 
-interface AdvertiserInfo {
-  advertiserId: string;
-  name: string;
-  domain?: string;
-  verificationStatus?: string;
-  adCount: number;
+interface PaidKeyword {
+  keyword: string;
+  searchVolume: number;
+  cpc: number;
+  position: number;
+  url: string;
+  competition: number;
 }
 
-interface AdInfo {
-  advertiserName: string;
-  advertiserId: string;
-  domain?: string;
-  format: string;
-  platform: string;
-  firstShown?: string;
-  lastShown?: string;
-}
-
-interface PaidAdsData {
-  name: string;
-  advertiserId?: string;
-  adCount: number;
-  platforms: string[];
-  formats: string[];
-  isVerified: boolean;
+interface DomainPaidData {
+  domain: string;
+  paidKeywordsCount: number;
+  estimatedTraffic: number;
+  estimatedSpend: number;
+  avgPosition: number;
+  topKeywords: PaidKeyword[];
+  positionDistribution: {
+    pos1: number;
+    pos2_3: number;
+    pos4_10: number;
+    pos11_plus: number;
+  };
 }
 
 interface PaidAdsResponse {
-  yourBrand: PaidAdsData | null;
-  competitors: PaidAdsData[];
+  yourDomain: DomainPaidData | null;
+  competitors: DomainPaidData[];
   sov: {
-    byAdCount: number;
+    byTraffic: number;
+    byKeywords: number;
+    bySpend: number;
   };
   totalMarket: {
-    totalAds: number;
+    totalTraffic: number;
+    totalKeywords: number;
+    totalSpend: number;
   };
-  allAdvertisers: AdvertiserInfo[];
   timestamp: string;
   debug?: {
     apiStatus: string;
-    advertisersFound: number;
     method: string;
+    yourKeywordsFound: number;
+    competitorsAnalyzed: number;
   };
 }
 
 /**
- * Fetch advertisers by keyword using Google Ads Transparency API
- * This searches the Google Ads Transparency Center for advertisers
+ * Fetch paid keywords for a domain using ranked_keywords endpoint
  */
-async function fetchAdvertisersByKeyword(
-  keyword: string,
-  locationCode: number,
-  auth: string
-): Promise<{ advertisers: AdvertiserInfo[]; status: string }> {
-  const advertisers: AdvertiserInfo[] = [];
-
-  try {
-    console.log(`Searching advertisers for keyword: "${keyword}" (location: ${locationCode})`);
-
-    const response = await fetch(
-      'https://api.dataforseo.com/v3/serp/google/ads_advertisers/live/advanced',
-      {
-        method: 'POST',
-        headers: {
-          'Authorization': `Basic ${auth}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify([{
-          keyword,
-          location_code: locationCode,
-        }]),
-      }
-    );
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error(`Ads advertisers API error: ${response.status} - ${errorText}`);
-      return { advertisers: [], status: `API error: ${response.status}` };
-    }
-
-    const data = await response.json();
-    console.log(`Ads advertisers response:`, JSON.stringify(data).substring(0, 1500));
-
-    const taskStatus = data?.tasks?.[0]?.status_message || 'unknown';
-    const items = data?.tasks?.[0]?.result?.[0]?.items || [];
-
-    console.log(`Found ${items.length} advertiser items for "${keyword}"`);
-
-    for (const item of items) {
-      // Handle different item types from the API
-      if (item.type === 'ads_advertiser' || item.type === 'ads_multi_account_advertiser') {
-        advertisers.push({
-          advertiserId: item.advertiser_id || '',
-          name: item.title || item.advertiser_name || '',
-          domain: item.domain || '',
-          verificationStatus: item.verification_status || 'unknown',
-          adCount: item.ads_count || item.approximate_ads_count || 0,
-        });
-      } else if (item.type === 'ads_domain') {
-        advertisers.push({
-          advertiserId: item.advertiser_id || '',
-          name: item.domain || '',
-          domain: item.domain || '',
-          verificationStatus: item.verification_status || 'unknown',
-          adCount: item.ads_count || 0,
-        });
-      }
-    }
-
-    return { advertisers, status: taskStatus };
-  } catch (error) {
-    console.error(`Advertisers API exception for "${keyword}":`, error);
-    return { advertisers: [], status: `Exception: ${error}` };
-  }
-}
-
-/**
- * Fetch ads for a specific domain using Google Ads Search API
- * This searches the Google Ads Transparency Center for ads by domain
- */
-async function fetchAdsByDomain(
+async function fetchPaidKeywords(
   domain: string,
   locationCode: number,
+  languageCode: string,
   auth: string
-): Promise<{ ads: AdInfo[]; status: string }> {
-  const ads: AdInfo[] = [];
-
+): Promise<DomainPaidData | null> {
   try {
-    console.log(`Fetching ads for domain: "${domain}"`);
+    console.log(`Fetching paid keywords for ${domain}`);
 
     const response = await fetch(
-      'https://api.dataforseo.com/v3/serp/google/ads_search/live/advanced',
+      'https://api.dataforseo.com/v3/dataforseo_labs/google/ranked_keywords/live',
       {
         method: 'POST',
         headers: {
@@ -151,119 +80,125 @@ async function fetchAdsByDomain(
         body: JSON.stringify([{
           target: domain,
           location_code: locationCode,
-          depth: 100,
-          platform: 'all',
-          format: 'all',
+          language_code: languageCode,
+          item_types: ['paid'],
+          limit: 100,
+          order_by: ['keyword_data.keyword_info.search_volume,desc'],
         }]),
       }
     );
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error(`Ads search API error: ${response.status} - ${errorText}`);
-      return { ads: [], status: `API error: ${response.status}` };
+      console.error(`Paid keywords API error for ${domain}: ${response.status} - ${errorText}`);
+      return null;
     }
 
     const data = await response.json();
-    console.log(`Ads search response for ${domain}:`, JSON.stringify(data).substring(0, 1000));
+    console.log(`Paid keywords response for ${domain}:`, JSON.stringify(data).substring(0, 800));
 
-    const taskStatus = data?.tasks?.[0]?.status_message || 'unknown';
-    const items = data?.tasks?.[0]?.result?.[0]?.items || [];
-
-    console.log(`Found ${items.length} ads for domain "${domain}"`);
-
-    for (const item of items) {
-      ads.push({
-        advertiserName: item.advertiser_name || '',
-        advertiserId: item.advertiser_id || '',
-        domain: item.domain || domain,
-        format: item.format || 'unknown',
-        platform: item.platform || 'unknown',
-        firstShown: item.first_shown || '',
-        lastShown: item.last_shown || '',
-      });
+    const task = data?.tasks?.[0];
+    if (task?.status_message !== 'Ok.') {
+      console.log(`API status for ${domain}: ${task?.status_message}`);
     }
 
-    return { ads, status: taskStatus };
+    const result = task?.result?.[0];
+    const items = result?.items || [];
+    const totalCount = result?.total_count || 0;
+    const metrics = result?.metrics?.paid || {};
+
+    // Extract top keywords
+    const topKeywords: PaidKeyword[] = items.slice(0, 20).map((item: any) => ({
+      keyword: item.keyword_data?.keyword || '',
+      searchVolume: item.keyword_data?.keyword_info?.search_volume || 0,
+      cpc: item.keyword_data?.keyword_info?.cpc || 0,
+      position: item.ranked_serp_element?.serp_item?.rank_group || 0,
+      url: item.ranked_serp_element?.serp_item?.url || '',
+      competition: item.keyword_data?.keyword_info?.competition || 0,
+    }));
+
+    // Calculate estimated spend from keywords
+    let estimatedSpend = metrics.estimated_paid_traffic_cost || 0;
+    if (!estimatedSpend && topKeywords.length > 0) {
+      // Estimate from CPC and traffic
+      estimatedSpend = topKeywords.reduce((sum, kw) => {
+        const ctr = kw.position <= 1 ? 0.15 : kw.position <= 3 ? 0.08 : 0.03;
+        return sum + (kw.searchVolume * ctr * kw.cpc);
+      }, 0);
+    }
+
+    // Position distribution
+    const positionDistribution = {
+      pos1: metrics.pos_1 || 0,
+      pos2_3: metrics.pos_2_3 || 0,
+      pos4_10: metrics.pos_4_10 || 0,
+      pos11_plus: (metrics.pos_11_20 || 0) + (metrics.pos_21_30 || 0) + (metrics.pos_31_40 || 0),
+    };
+
+    // Calculate average position
+    let avgPosition = 0;
+    const totalPositions = positionDistribution.pos1 + positionDistribution.pos2_3 +
+                          positionDistribution.pos4_10 + positionDistribution.pos11_plus;
+    if (totalPositions > 0) {
+      avgPosition = (
+        positionDistribution.pos1 * 1 +
+        positionDistribution.pos2_3 * 2.5 +
+        positionDistribution.pos4_10 * 7 +
+        positionDistribution.pos11_plus * 20
+      ) / totalPositions;
+    }
+
+    return {
+      domain,
+      paidKeywordsCount: totalCount,
+      estimatedTraffic: metrics.etv || 0,
+      estimatedSpend: Math.round(estimatedSpend),
+      avgPosition: Math.round(avgPosition * 10) / 10,
+      topKeywords,
+      positionDistribution,
+    };
   } catch (error) {
-    console.error(`Ads search API exception for "${domain}":`, error);
-    return { ads: [], status: `Exception: ${error}` };
+    console.error(`Error fetching paid keywords for ${domain}:`, error);
+    return null;
   }
 }
 
 /**
- * Match advertiser to brand by name similarity
+ * Calculate SOV metrics
  */
-function matchAdvertiserToBrand(advertiser: AdvertiserInfo, brandName: string): boolean {
-  const advertiserLower = advertiser.name.toLowerCase();
-  const domainLower = (advertiser.domain || '').toLowerCase();
-  const brandLower = brandName.toLowerCase();
+function calculateSOV(
+  yourDomain: DomainPaidData | null,
+  competitors: DomainPaidData[]
+): {
+  sov: { byTraffic: number; byKeywords: number; bySpend: number };
+  totalMarket: { totalTraffic: number; totalKeywords: number; totalSpend: number };
+} {
+  const allDomains = yourDomain ? [yourDomain, ...competitors] : competitors;
 
-  // Direct name match
-  if (advertiserLower.includes(brandLower)) return true;
-  if (brandLower.includes(advertiserLower) && advertiserLower.length > 3) return true;
+  const totalTraffic = allDomains.reduce((sum, d) => sum + d.estimatedTraffic, 0);
+  const totalKeywords = allDomains.reduce((sum, d) => sum + d.paidKeywordsCount, 0);
+  const totalSpend = allDomains.reduce((sum, d) => sum + d.estimatedSpend, 0);
 
-  // Domain match
-  if (domainLower.includes(brandLower)) return true;
-
-  // Check individual brand words
-  const brandWords = brandLower.split(/\s+/);
-  if (brandWords.some(word => word.length > 3 && advertiserLower.includes(word))) {
-    return true;
-  }
-
-  return false;
-}
-
-/**
- * Aggregate advertiser data for a brand
- */
-function aggregateBrandData(
-  advertisers: AdvertiserInfo[],
-  ads: AdInfo[],
-  brandName: string
-): PaidAdsData {
-  const matchedAdvertisers = advertisers.filter(a => matchAdvertiserToBrand(a, brandName));
-  const totalAdCount = matchedAdvertisers.reduce((sum, a) => sum + a.adCount, 0);
-
-  // Get unique platforms and formats from ads
-  const platforms = [...new Set(ads.map(a => a.platform).filter(Boolean))];
-  const formats = [...new Set(ads.map(a => a.format).filter(Boolean))];
-
-  const isVerified = matchedAdvertisers.some(
-    a => a.verificationStatus === 'verified' || a.verificationStatus === 'VERIFIED'
-  );
-
-  return {
-    name: brandName,
-    advertiserId: matchedAdvertisers[0]?.advertiserId,
-    adCount: totalAdCount || ads.length,
-    platforms: platforms.length > 0 ? platforms : ['unknown'],
-    formats: formats.length > 0 ? formats : ['unknown'],
-    isVerified,
-  };
-}
-
-/**
- * Calculate Paid Ads SOV
- */
-function calculatePaidSOV(
-  yourBrand: PaidAdsData | null,
-  competitors: PaidAdsData[]
-): { sov: { byAdCount: number }; totalMarket: { totalAds: number } } {
-  const allBrands = yourBrand ? [yourBrand, ...competitors] : competitors;
-  const totalAds = allBrands.reduce((sum, b) => sum + b.adCount, 0);
-
-  const yourAds = yourBrand?.adCount || 0;
+  const yourTraffic = yourDomain?.estimatedTraffic || 0;
+  const yourKeywords = yourDomain?.paidKeywordsCount || 0;
+  const yourSpend = yourDomain?.estimatedSpend || 0;
 
   return {
     sov: {
-      byAdCount: totalAds > 0
-        ? Math.round((yourAds / totalAds) * 100 * 10) / 10
+      byTraffic: totalTraffic > 0
+        ? Math.round((yourTraffic / totalTraffic) * 100 * 10) / 10
+        : 0,
+      byKeywords: totalKeywords > 0
+        ? Math.round((yourKeywords / totalKeywords) * 100 * 10) / 10
+        : 0,
+      bySpend: totalSpend > 0
+        ? Math.round((yourSpend / totalSpend) * 100 * 10) / 10
         : 0,
     },
     totalMarket: {
-      totalAds,
+      totalTraffic,
+      totalKeywords,
+      totalSpend,
     },
   };
 }
@@ -282,13 +217,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
-    const { domain, brandName, competitors = [], locationCode = 2840 } = req.body;
+    const { domain, competitors = [], locationCode = 2840, languageCode = 'en' } = req.body;
 
-    // Use brandName for advertiser search, domain for ads search
-    const searchBrand = brandName || domain;
-
-    if (!searchBrand || typeof searchBrand !== 'string') {
-      return res.status(400).json({ error: 'brandName or domain is required' });
+    if (!domain || typeof domain !== 'string') {
+      return res.status(400).json({ error: 'domain is required' });
     }
 
     const login = process.env.DATAFORSEO_LOGIN;
@@ -302,66 +234,39 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const auth = Buffer.from(`${login}:${password}`).toString('base64');
 
-    console.log(`Fetching paid ads data for ${searchBrand}`);
+    console.log(`Fetching paid ads data for ${domain} and competitors`);
 
-    const validCompetitors = Array.isArray(competitors)
-      ? competitors.filter((c): c is string => typeof c === 'string').slice(0, 4)
+    // Get competitor domains - extract domain from brand names if needed
+    const competitorDomains = Array.isArray(competitors)
+      ? competitors
+          .filter((c): c is string => typeof c === 'string')
+          .slice(0, 4)
+          .map(c => c.toLowerCase().includes('.') ? c : `${c.toLowerCase()}.com`)
       : [];
 
-    // Search for all brands (yours + competitors)
-    const allBrandKeywords = [searchBrand, ...validCompetitors];
-
-    // Fetch advertisers for each brand keyword
-    const allAdvertisers: AdvertiserInfo[] = [];
-    let apiStatus = 'ok';
-
-    for (const keyword of allBrandKeywords) {
-      const result = await fetchAdvertisersByKeyword(keyword, locationCode, auth);
-      allAdvertisers.push(...result.advertisers);
-      if (result.status !== 'Ok.' && result.status !== 'ok') {
-        apiStatus = result.status;
-      }
-    }
-
-    // Deduplicate advertisers by ID
-    const uniqueAdvertisers = Array.from(
-      new Map(allAdvertisers.map(a => [a.advertiserId, a])).values()
+    // Fetch data for all domains in parallel
+    const allDomains = [domain, ...competitorDomains];
+    const results = await Promise.all(
+      allDomains.map(d => fetchPaidKeywords(d, locationCode, languageCode, auth))
     );
 
-    console.log(`Total unique advertisers found: ${uniqueAdvertisers.length}`);
-
-    // Fetch ads for the main domain if provided
-    let yourAds: AdInfo[] = [];
-    if (domain) {
-      const adsResult = await fetchAdsByDomain(domain, locationCode, auth);
-      yourAds = adsResult.ads;
-      if (adsResult.status !== 'Ok.' && adsResult.status !== 'ok') {
-        apiStatus = adsResult.status;
-      }
-    }
-
-    // Aggregate data for your brand
-    const yourBrandData = aggregateBrandData(uniqueAdvertisers, yourAds, searchBrand);
-
-    // Aggregate data for competitors
-    const competitorData = validCompetitors.map(comp =>
-      aggregateBrandData(uniqueAdvertisers, [], comp)
-    );
+    const yourDomainData = results[0];
+    const competitorData = results.slice(1).filter((d): d is DomainPaidData => d !== null);
 
     // Calculate SOV
-    const { sov, totalMarket } = calculatePaidSOV(yourBrandData, competitorData);
+    const { sov, totalMarket } = calculateSOV(yourDomainData, competitorData);
 
     const response: PaidAdsResponse = {
-      yourBrand: yourBrandData,
+      yourDomain: yourDomainData,
       competitors: competitorData,
       sov,
       totalMarket,
-      allAdvertisers: uniqueAdvertisers.slice(0, 20),
       timestamp: new Date().toISOString(),
       debug: {
-        apiStatus,
-        advertisersFound: uniqueAdvertisers.length,
-        method: 'Google Ads Transparency API',
+        apiStatus: 'ok',
+        method: 'DataForSEO Labs ranked_keywords (paid)',
+        yourKeywordsFound: yourDomainData?.paidKeywordsCount || 0,
+        competitorsAnalyzed: competitorData.length,
       },
     };
 

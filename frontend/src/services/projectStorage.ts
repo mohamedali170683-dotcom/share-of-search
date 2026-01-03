@@ -55,9 +55,10 @@ export const getProject = (id: string): Project | null => {
   return projects.find(p => p.id === id) || null;
 };
 
-// Delete a project
+// Delete a project and its related analyses (YouTube, Paid Ads)
 export const deleteProject = (id: string): boolean => {
   const projects = getProjects();
+  const projectToDelete = projects.find(p => p.id === id);
   const filteredProjects = projects.filter(p => p.id !== id);
 
   if (filteredProjects.length === projects.length) {
@@ -66,10 +67,62 @@ export const deleteProject = (id: string): boolean => {
 
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(filteredProjects));
+
+    // Also clean up related YouTube and Paid Ads analyses
+    if (projectToDelete) {
+      cleanupRelatedAnalyses(projectToDelete.brandName, projectToDelete.domain);
+    }
+
     return true;
   } catch (error) {
     console.error('Failed to delete project:', error);
     return false;
+  }
+};
+
+// Clean up YouTube and Paid Ads analyses when a project is deleted
+const cleanupRelatedAnalyses = (brandName: string, domain: string): void => {
+  const brandLower = brandName.toLowerCase();
+  const domainLower = domain.toLowerCase();
+
+  // Clean YouTube analyses
+  try {
+    const youtubeData = localStorage.getItem('youtube-sov-analyses');
+    if (youtubeData) {
+      const analyses = JSON.parse(youtubeData);
+      const filtered = analyses.filter((a: { brandName?: string }) =>
+        a && a.brandName && a.brandName.toLowerCase() !== brandLower
+      );
+      localStorage.setItem('youtube-sov-analyses', JSON.stringify(filtered));
+    }
+  } catch (e) {
+    console.error('Failed to clean YouTube analyses:', e);
+  }
+
+  // Clean YouTube channel info
+  try {
+    const channelData = localStorage.getItem('youtube-channel-info');
+    if (channelData) {
+      const channels = JSON.parse(channelData);
+      delete channels[brandLower];
+      localStorage.setItem('youtube-channel-info', JSON.stringify(channels));
+    }
+  } catch (e) {
+    console.error('Failed to clean YouTube channel info:', e);
+  }
+
+  // Clean Paid Ads analyses
+  try {
+    const paidData = localStorage.getItem('paid-ads-analyses');
+    if (paidData) {
+      const analyses = JSON.parse(paidData);
+      const filtered = analyses.filter((a: { domain?: string }) =>
+        a && a.domain && a.domain.toLowerCase() !== domainLower
+      );
+      localStorage.setItem('paid-ads-analyses', JSON.stringify(filtered));
+    }
+  } catch (e) {
+    console.error('Failed to clean Paid Ads analyses:', e);
   }
 };
 

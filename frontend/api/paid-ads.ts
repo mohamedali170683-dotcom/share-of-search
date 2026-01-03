@@ -127,17 +127,25 @@ async function fetchPaidKeywords(
     }
 
     const data = await response.json();
-    console.log(`Paid keywords response for ${domain}:`, JSON.stringify(data).substring(0, 800));
+    console.log(`Paid keywords response for ${domain}:`, JSON.stringify(data).substring(0, 1500));
 
     const task = data?.tasks?.[0];
-    if (task?.status_message !== 'Ok.') {
-      console.log(`API status for ${domain}: ${task?.status_message}`);
+    if (task?.status_code !== 20000) {
+      console.error(`API error for ${domain}: status_code=${task?.status_code}, message=${task?.status_message}`);
+      return null;
     }
 
     const result = task?.result?.[0];
+    if (!result) {
+      console.log(`No result data for ${domain}`);
+      return null;
+    }
+
     const items = result?.items || [];
     const totalCount = result?.total_count || 0;
     const metrics = result?.metrics?.paid || {};
+
+    console.log(`Domain ${domain}: total_count=${totalCount}, items=${items.length}, metrics=`, JSON.stringify(metrics).substring(0, 300));
 
     // Extract top keywords
     const topKeywords: PaidKeyword[] = items.slice(0, 20).map((item: any) => ({

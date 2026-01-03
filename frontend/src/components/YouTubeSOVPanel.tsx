@@ -141,20 +141,44 @@ export function YouTubeSOVPanel({ brandName, competitors, locationCode = 2840, l
     setOwnedChannelName(null);
   };
 
+  // Normalize a string for fuzzy matching (remove special chars, spaces, etc.)
+  const normalizeForMatch = (str: string): string => {
+    return str.toLowerCase()
+      .replace(/@/g, '')
+      .replace(/[^a-z0-9]/g, '') // Remove all non-alphanumeric
+      .trim();
+  };
+
   // Determine if a video is owned media (from brand's channel)
   const getMediaType = (video: YouTubeVideo): 'owned' | 'earned' | 'unknown' => {
     if (!ownedChannelId) return 'unknown';
 
     const channelIdLower = video.channelId?.toLowerCase() || '';
     const channelNameLower = video.channelName?.toLowerCase() || '';
+    const channelNameNormalized = normalizeForMatch(video.channelName || '');
     const ownedIdLower = ownedChannelId.toLowerCase();
+    const ownedIdNormalized = normalizeForMatch(ownedChannelId);
 
-    // Match by channel ID
+    // Match by exact channel ID
     if (channelIdLower === ownedIdLower) return 'owned';
+
+    // Match by channel ID contains
     if (channelIdLower.includes(ownedIdLower) || ownedIdLower.includes(channelIdLower)) return 'owned';
 
-    // Match by channel name/handle
+    // Match by normalized channel name (fuzzy match)
+    if (channelNameNormalized && ownedIdNormalized) {
+      if (channelNameNormalized.includes(ownedIdNormalized) || ownedIdNormalized.includes(channelNameNormalized)) {
+        return 'owned';
+      }
+    }
+
+    // Match by channel name/handle if provided separately
     if (ownedChannelName) {
+      const ownedNameNormalized = normalizeForMatch(ownedChannelName);
+      if (channelNameNormalized.includes(ownedNameNormalized) || ownedNameNormalized.includes(channelNameNormalized)) {
+        return 'owned';
+      }
+      // Also check raw lowercase match
       const ownedNameLower = ownedChannelName.toLowerCase().replace('@', '');
       if (channelNameLower.includes(ownedNameLower) || ownedNameLower.includes(channelNameLower)) {
         return 'owned';
@@ -750,7 +774,7 @@ export function YouTubeSOVPanel({ brandName, competitors, locationCode = 2840, l
               />
             </div>
             <p className="text-xs text-gray-500 dark:text-gray-400 mt-2 text-center">
-              Share of views from brand videos: Owned {ownedPercent}% vs Earned {earnedPercent}%
+              Share of views from {brandVideos.length} brand videos (mentioning "{data.yourBrand.name}" in title)
             </p>
           </div>
         );

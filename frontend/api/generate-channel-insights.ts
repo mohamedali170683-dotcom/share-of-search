@@ -1,0 +1,244 @@
+import type { VercelRequest, VercelResponse } from '@vercel/node';
+import Anthropic from '@anthropic-ai/sdk';
+
+interface YouTubeVideo {
+  title: string;
+  channelName: string;
+  viewsCount: number;
+  rank: number;
+  isBrandOwned?: boolean;
+}
+
+interface BrandYouTubeData {
+  name: string;
+  totalVideosInTop20: number;
+  totalViews: number;
+}
+
+interface YouTubeData {
+  yourBrand: BrandYouTubeData;
+  competitors: BrandYouTubeData[];
+  allVideos: YouTubeVideo[];
+  sov: {
+    byCount: number;
+    byViews: number;
+  };
+  ownedVideosCount?: number;
+  earnedVideosCount?: number;
+  ownedViews?: number;
+  earnedViews?: number;
+}
+
+interface PaidKeyword {
+  keyword: string;
+  searchVolume: number;
+  cpc: number;
+  position: number;
+}
+
+interface DomainPaidData {
+  domain: string;
+  paidKeywordsCount: number;
+  estimatedTraffic: number;
+  estimatedSpend: number;
+  avgPosition: number;
+  topKeywords: PaidKeyword[];
+  positionDistribution: {
+    pos1: number;
+    pos2_3: number;
+    pos4_10: number;
+    pos11_plus: number;
+  };
+}
+
+interface PaidAdsData {
+  yourDomain: DomainPaidData | null;
+  competitors: DomainPaidData[];
+  sov: {
+    byTraffic: number;
+    byKeywords: number;
+    bySpend: number;
+  };
+  totalMarket: {
+    totalTraffic: number;
+    totalKeywords: number;
+    totalSpend: number;
+  };
+}
+
+interface RequestBody {
+  type: 'youtube' | 'paid-ads';
+  brandName: string;
+  industry?: string;
+  youtubeData?: YouTubeData;
+  paidAdsData?: PaidAdsData;
+  competitors?: string[];
+}
+
+export default async function handler(req: VercelRequest, res: VercelResponse) {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+
+  if (req.method === 'OPTIONS') {
+    return res.status(200).end();
+  }
+
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Method not allowed' });
+  }
+
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) {
+    return res.status(500).json({ error: 'ANTHROPIC_API_KEY not configured', insights: null });
+  }
+
+  try {
+    const { type, brandName, industry, youtubeData, paidAdsData, competitors } = req.body as RequestBody;
+
+    if (!brandName) {
+      return res.status(400).json({ error: 'Brand name is required' });
+    }
+
+    let prompt: string;
+
+    if (type === 'youtube' && youtubeData) {
+      const competitorList = youtubeData.competitors
+        .map(c => `- ${c.name}: ${c.totalVideosInTop20} videos, ${c.totalViews.toLocaleString()} views`)
+        .join('\n');
+
+      const topVideos = youtubeData.allVideos
+        .slice(0, 10)
+        .map((v, i) => `${i + 1}. "${v.title}" by ${v.channelName} (${v.viewsCount.toLocaleString()} views)${v.isBrandOwned ? ' [Brand Mention]' : ''}`)
+        .join('\n');
+
+      const ownedEarnedContext = youtubeData.ownedVideosCount !== undefined
+        ? `\nOwned Media: ${youtubeData.ownedVideosCount} videos (${youtubeData.ownedViews?.toLocaleString() || 0} views)\nEarned Media: ${youtubeData.earnedVideosCount} videos (${youtubeData.earnedViews?.toLocaleString() || 0} views)`
+        : '';
+
+      prompt = `You are a strategic video marketing consultant analyzing YouTube Share of Voice data for ${brandName}${industry ? ` in the ${industry} industry` : ''}.
+
+YOUTUBE PERFORMANCE DATA:
+- Brand: ${brandName}
+- Videos mentioning brand in search results: ${youtubeData.yourBrand.totalVideosInTop20}
+- Total views on brand-related videos: ${youtubeData.yourBrand.totalViews.toLocaleString()}
+- Share of Voice by video count: ${youtubeData.sov.byCount}%
+- Share of Voice by views: ${youtubeData.sov.byViews}%${ownedEarnedContext}
+
+COMPETITOR ANALYSIS:
+${competitorList || 'No competitor data available'}
+
+TOP VIDEOS IN SEARCH RESULTS:
+${topVideos || 'No videos found'}
+
+Based on this data, provide strategic insights in JSON format with these EXACT keys:
+
+1. "summary": A 2-sentence executive summary of the brand's YouTube presence and competitive position
+2. "strengths": Array of 2-3 specific strengths (what's working well based on the data)
+3. "opportunities": Array of 2-3 actionable opportunities to improve YouTube SOV
+4. "competitorInsight": One key insight about competitor performance that ${brandName} should act on
+5. "contentRecommendation": One specific video content recommendation based on what's ranking well
+6. "priorityAction": The single most important action to take in the next 30 days
+
+Be specific and data-driven. Reference actual numbers from the data. Avoid generic advice.
+
+Return ONLY valid JSON:
+{"summary": "...", "strengths": ["...", "..."], "opportunities": ["...", "..."], "competitorInsight": "...", "contentRecommendation": "...", "priorityAction": "..."}`;
+
+    } else if (type === 'paid-ads' && paidAdsData) {
+      const yourData = paidAdsData.yourDomain;
+      const competitorList = paidAdsData.competitors
+        .map(c => `- ${c.domain}: ${c.paidKeywordsCount} keywords, $${c.estimatedSpend.toLocaleString()}/mo spend, avg pos ${c.avgPosition.toFixed(1)}`)
+        .join('\n');
+
+      const topKeywords = yourData?.topKeywords
+        .slice(0, 8)
+        .map((k, i) => `${i + 1}. "${k.keyword}" - Vol: ${k.searchVolume.toLocaleString()}, CPC: $${k.cpc.toFixed(2)}, Pos: #${k.position}`)
+        .join('\n') || 'No keywords found';
+
+      const positionDist = yourData?.positionDistribution
+        ? `Position Distribution: #1: ${yourData.positionDistribution.pos1}, #2-3: ${yourData.positionDistribution.pos2_3}, #4-10: ${yourData.positionDistribution.pos4_10}, #11+: ${yourData.positionDistribution.pos11_plus}`
+        : '';
+
+      const hasData = yourData && yourData.paidKeywordsCount > 0;
+
+      prompt = `You are a paid search strategist analyzing Google Ads Share of Voice data for ${brandName}${industry ? ` in the ${industry} industry` : ''}.
+
+PAID SEARCH PERFORMANCE DATA:
+- Brand: ${brandName}
+- Paid Keywords: ${yourData?.paidKeywordsCount || 0}
+- Estimated Monthly Traffic: ${yourData?.estimatedTraffic?.toLocaleString() || 0}
+- Estimated Monthly Spend: $${yourData?.estimatedSpend?.toLocaleString() || 0}
+- Average Ad Position: ${yourData?.avgPosition?.toFixed(1) || 'N/A'}
+${positionDist}
+
+SHARE OF VOICE:
+- By Traffic: ${paidAdsData.sov.byTraffic}%
+- By Keywords: ${paidAdsData.sov.byKeywords}%
+- By Spend: ${paidAdsData.sov.bySpend}%
+
+MARKET TOTALS:
+- Total Market Traffic: ${paidAdsData.totalMarket.totalTraffic.toLocaleString()}
+- Total Market Keywords: ${paidAdsData.totalMarket.totalKeywords.toLocaleString()}
+- Total Market Spend: $${paidAdsData.totalMarket.totalSpend.toLocaleString()}
+
+COMPETITOR ANALYSIS:
+${competitorList || 'No competitor data available'}
+
+TOP BIDDING KEYWORDS:
+${topKeywords}
+
+${!hasData ? 'NOTE: No paid keywords were found for this brand. They may not be running Google Ads or have minimal paid presence.' : ''}
+
+Based on this data, provide strategic insights in JSON format with these EXACT keys:
+
+1. "summary": A 2-sentence executive summary of the brand's paid search position and strategy assessment
+2. "strengths": Array of 2-3 specific strengths in their paid search approach (or what they could leverage)
+3. "opportunities": Array of 2-3 actionable opportunities to improve paid search ROI
+4. "competitorInsight": One key insight about competitor paid strategy that ${brandName} should consider
+5. "budgetRecommendation": Specific advice on budget allocation or bid strategy based on the data
+6. "priorityAction": The single most important paid search action to take in the next 30 days
+
+${!hasData ? 'Since no paid data exists, focus recommendations on whether/how they should start paid advertising based on competitor activity.' : 'Be specific and data-driven. Reference actual numbers from the data.'}
+
+Return ONLY valid JSON:
+{"summary": "...", "strengths": ["...", "..."], "opportunities": ["...", "..."], "competitorInsight": "...", "budgetRecommendation": "...", "priorityAction": "..."}`;
+
+    } else {
+      return res.status(400).json({ error: 'Invalid request type or missing data' });
+    }
+
+    const anthropic = new Anthropic({ apiKey });
+
+    const message = await anthropic.messages.create({
+      model: 'claude-3-haiku-20240307',
+      max_tokens: 2000,
+      messages: [{ role: 'user', content: prompt }]
+    });
+
+    const responseText = message.content[0].type === 'text' ? message.content[0].text : '';
+
+    let insights = null;
+    try {
+      const jsonMatch = responseText.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        insights = JSON.parse(jsonMatch[0]);
+      }
+    } catch (parseError) {
+      console.error('Failed to parse Claude response:', parseError);
+    }
+
+    return res.status(200).json({ insights });
+
+  } catch (error) {
+    console.error('Error generating insights:', error);
+
+    if (error instanceof Anthropic.APIError) {
+      if (error.status === 429) {
+        return res.status(429).json({ error: 'Rate limited. Please try again.', insights: null });
+      }
+    }
+
+    return res.status(500).json({ error: 'Failed to generate insights', insights: null });
+  }
+}

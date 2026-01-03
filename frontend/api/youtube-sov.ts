@@ -231,12 +231,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     console.log(`Fetching YouTube data for: ${searchKeywords.join(', ')}`);
 
-    // Fetch YouTube results for each keyword
+    // Fetch YouTube results for ALL keywords in PARALLEL to avoid timeout
+    // Vercel has 30s timeout, and each request takes 5-17s, so parallel is essential
+    const results = await Promise.all(
+      searchKeywords.map(keyword => fetchYouTubeSERP(keyword, locationCode, languageCode, auth))
+    );
+
+    // Collect all videos from parallel results
     const allVideos: YouTubeVideo[] = [];
     let apiStatus = 'ok';
 
-    for (const keyword of searchKeywords) {
-      const result = await fetchYouTubeSERP(keyword, locationCode, languageCode, auth);
+    for (const result of results) {
       allVideos.push(...result.videos);
       if (result.status !== 'Ok.' && result.status !== 'ok') {
         apiStatus = result.status;

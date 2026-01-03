@@ -11,6 +11,37 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
  * - Competitor comparison
  */
 
+// Map location codes to their primary language code for DataForSEO Labs API
+const LOCATION_LANGUAGE_MAP: Record<number, string> = {
+  2840: 'en', // United States
+  2826: 'en', // United Kingdom
+  2124: 'en', // Canada
+  2036: 'en', // Australia
+  2276: 'de', // Germany
+  2250: 'fr', // France
+  2380: 'it', // Italy
+  2724: 'es', // Spain
+  2528: 'nl', // Netherlands
+  2756: 'de', // Switzerland (German)
+  2040: 'de', // Austria
+  2056: 'nl', // Belgium (Dutch)
+  2616: 'pl', // Poland
+  2752: 'sv', // Sweden
+  2578: 'no', // Norway
+  2208: 'da', // Denmark
+  2246: 'fi', // Finland
+  2392: 'ja', // Japan
+  2410: 'ko', // South Korea
+  2156: 'zh', // China
+  2076: 'pt', // Brazil
+  2484: 'es', // Mexico
+  2356: 'en', // India
+};
+
+function getLanguageForLocation(locationCode: number): string {
+  return LOCATION_LANGUAGE_MAP[locationCode] || 'en';
+}
+
 interface PaidKeyword {
   keyword: string;
   searchVolume: number;
@@ -63,11 +94,12 @@ interface PaidAdsResponse {
 async function fetchPaidKeywords(
   domain: string,
   locationCode: number,
-  languageCode: string,
   auth: string
 ): Promise<DomainPaidData | null> {
   try {
-    console.log(`Fetching paid keywords for ${domain}`);
+    // Get the correct language for this location
+    const languageCode = getLanguageForLocation(locationCode);
+    console.log(`Fetching paid keywords for ${domain} (location: ${locationCode}, lang: ${languageCode})`);
 
     const response = await fetch(
       'https://api.dataforseo.com/v3/dataforseo_labs/google/ranked_keywords/live',
@@ -217,7 +249,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
-    const { domain, competitors = [], locationCode = 2840, languageCode = 'en' } = req.body;
+    const { domain, competitors = [], locationCode = 2840 } = req.body;
 
     if (!domain || typeof domain !== 'string') {
       return res.status(400).json({ error: 'domain is required' });
@@ -234,7 +266,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const auth = Buffer.from(`${login}:${password}`).toString('base64');
 
-    console.log(`Fetching paid ads data for ${domain} and competitors`);
+    console.log(`Fetching paid ads data for ${domain} and competitors (location: ${locationCode})`);
 
     // Get competitor domains - extract domain from brand names if needed
     const competitorDomains = Array.isArray(competitors)
@@ -247,7 +279,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // Fetch data for all domains in parallel
     const allDomains = [domain, ...competitorDomains];
     const results = await Promise.all(
-      allDomains.map(d => fetchPaidKeywords(d, locationCode, languageCode, auth))
+      allDomains.map(d => fetchPaidKeywords(d, locationCode, auth))
     );
 
     const yourDomainData = results[0];

@@ -138,6 +138,55 @@ const faqItems: FAQItem[] = [
         </ul>
       </div>
     )
+  },
+  {
+    question: 'What is YouTube Share of Voice?',
+    answer: (
+      <div className="space-y-3">
+        <p>
+          YouTube SOV measures your brand's presence and reach in YouTube search results compared to competitors.
+          We calculate two key metrics:
+        </p>
+        <div className="grid gap-2">
+          <div className="p-3 border dark:border-gray-600 rounded">
+            <span className="font-bold text-red-600 dark:text-red-400">Share of Search (by Video Count)</span>
+            <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+              How many videos in YouTube search mention your brand in the title vs competitors.
+            </p>
+            <div className="bg-gray-100 dark:bg-gray-700 p-2 rounded font-mono text-xs mt-2">
+              SOS = Your Brand Videos / Total Brand Videos × 100
+            </div>
+          </div>
+          <div className="p-3 border dark:border-gray-600 rounded">
+            <span className="font-bold text-purple-600 dark:text-purple-400">Share of Voice (by Views)</span>
+            <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+              Total views on videos mentioning your brand compared to all brand videos.
+            </p>
+            <div className="bg-gray-100 dark:bg-gray-700 p-2 rounded font-mono text-xs mt-2">
+              SOV = Your Brand Video Views / Total Brand Video Views × 100
+            </div>
+          </div>
+        </div>
+        <p className="text-sm text-gray-600 dark:text-gray-400">
+          Videos are matched based on <strong>video title</strong> containing the brand name (e.g., "Continental Tires Review" matches "Continental").
+        </p>
+      </div>
+    )
+  },
+  {
+    question: 'Can I get YouTube search volume data?',
+    answer: (
+      <div className="space-y-2">
+        <p>
+          Unfortunately, YouTube-specific search volume data is not available through our data provider (DataForSEO).
+          Unlike Google Search, YouTube doesn't provide an advertising platform that exposes keyword search volumes.
+        </p>
+        <p className="text-sm text-gray-600 dark:text-gray-400">
+          However, you can use the <strong>video view counts</strong> as a proxy for engagement and reach.
+          The Share of Voice by Views metric gives you insight into actual audience reach rather than search demand.
+        </p>
+      </div>
+    )
   }
 ];
 

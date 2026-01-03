@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 
 interface YouTubeVideo {
   videoId: string;
@@ -37,6 +37,13 @@ interface YouTubeSOVResponse {
   };
 }
 
+interface SavedAnalysis {
+  id: string;
+  brandName: string;
+  data: YouTubeSOVResponse;
+  createdAt: string;
+}
+
 interface YouTubeSOVPanelProps {
   brandName: string;
   competitors: string[];
@@ -44,10 +51,66 @@ interface YouTubeSOVPanelProps {
   languageCode?: string;
 }
 
+const STORAGE_KEY = 'youtube-sov-analyses';
+
 export function YouTubeSOVPanel({ brandName, competitors, locationCode = 2840, languageCode = 'en' }: YouTubeSOVPanelProps) {
   const [data, setData] = useState<YouTubeSOVResponse | null>(null);
+  const [savedAnalyses, setSavedAnalyses] = useState<SavedAnalysis[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showMethodology, setShowMethodology] = useState(false);
+
+  // Load saved analyses on mount
+  useEffect(() => {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if (saved) {
+      try {
+        const analyses: SavedAnalysis[] = JSON.parse(saved);
+        setSavedAnalyses(analyses);
+        // Load most recent analysis for current brand
+        const currentBrandAnalysis = analyses.find(a => a.brandName.toLowerCase() === brandName.toLowerCase());
+        if (currentBrandAnalysis) {
+          setData(currentBrandAnalysis.data);
+        }
+      } catch {
+        console.error('Failed to load saved analyses');
+      }
+    }
+  }, [brandName]);
+
+  const saveAnalysis = (analysisData: YouTubeSOVResponse) => {
+    const newAnalysis: SavedAnalysis = {
+      id: `${brandName}-${Date.now()}`,
+      brandName,
+      data: analysisData,
+      createdAt: new Date().toISOString(),
+    };
+
+    // Remove old analysis for same brand, keep max 10 analyses
+    const filtered = savedAnalyses
+      .filter(a => a.brandName.toLowerCase() !== brandName.toLowerCase())
+      .slice(0, 9);
+
+    const updated = [newAnalysis, ...filtered];
+    setSavedAnalyses(updated);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+  };
+
+  const deleteAnalysis = (id: string) => {
+    const updated = savedAnalyses.filter(a => a.id !== id);
+    setSavedAnalyses(updated);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+
+    // Clear current data if we deleted the current analysis
+    const deleted = savedAnalyses.find(a => a.id === id);
+    if (deleted && data && deleted.data.timestamp === data.timestamp) {
+      setData(null);
+    }
+  };
+
+  const loadAnalysis = (analysis: SavedAnalysis) => {
+    setData(analysis.data);
+  };
 
   const fetchYouTubeSOV = async () => {
     if (!brandName) return;
@@ -74,6 +137,7 @@ export function YouTubeSOVPanel({ brandName, competitors, locationCode = 2840, l
 
       const result = await response.json();
       setData(result);
+      saveAnalysis(result);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to fetch YouTube SOV');
     } finally {
@@ -93,32 +157,166 @@ export function YouTubeSOVPanel({ brandName, competitors, locationCode = 2840, l
     return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
   };
 
+  const formatDateTime = (dateStr: string): string => {
+    const date = new Date(dateStr);
+    return date.toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  };
+
+  // Methodology explanation component
+  const MethodologySection = () => (
+    <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl p-4 mb-6">
+      <button
+        onClick={() => setShowMethodology(!showMethodology)}
+        className="flex items-center justify-between w-full text-left"
+      >
+        <div className="flex items-center gap-2">
+          <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          <span className="font-medium text-blue-800 dark:text-blue-200">How is YouTube SOV Calculated?</span>
+        </div>
+        <svg className={`w-5 h-5 text-blue-600 transition-transform ${showMethodology ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+        </svg>
+      </button>
+
+      {showMethodology && (
+        <div className="mt-4 space-y-4 text-sm text-blue-800 dark:text-blue-200">
+          <div>
+            <h4 className="font-semibold mb-2">Share of Search (by Video Count)</h4>
+            <p className="text-blue-700 dark:text-blue-300 mb-2">
+              Measures how many videos in YouTube search results mention your brand in their title compared to competitors.
+            </p>
+            <div className="bg-white dark:bg-gray-800 rounded p-3 font-mono text-xs">
+              <p>SOS = (Your Brand Videos / Total Identified Brand Videos) × 100</p>
+              {data && (
+                <p className="mt-2 text-blue-600 dark:text-blue-400">
+                  = ({data.yourBrand.totalVideosInTop20} / {data.yourBrand.totalVideosInTop20 + data.competitors.reduce((sum, c) => sum + c.totalVideosInTop20, 0)}) × 100 = <strong>{data.sov.byCount}%</strong>
+                </p>
+              )}
+            </div>
+          </div>
+
+          <div>
+            <h4 className="font-semibold mb-2">Share of Voice (by Views)</h4>
+            <p className="text-blue-700 dark:text-blue-300 mb-2">
+              Measures your brand's audience reach based on total views on videos mentioning your brand.
+            </p>
+            <div className="bg-white dark:bg-gray-800 rounded p-3 font-mono text-xs">
+              <p>SOV = (Your Brand Video Views / Total Brand Video Views) × 100</p>
+              {data && (
+                <p className="mt-2 text-blue-600 dark:text-blue-400">
+                  = ({formatViews(data.yourBrand.totalViews)} / {formatViews(data.yourBrand.totalViews + data.competitors.reduce((sum, c) => sum + c.totalViews, 0))}) × 100 = <strong>{data.sov.byViews}%</strong>
+                </p>
+              )}
+            </div>
+          </div>
+
+          <div>
+            <h4 className="font-semibold mb-2">Brand Matching Method</h4>
+            <p className="text-blue-700 dark:text-blue-300">
+              Videos are matched to brands based on <strong>video title</strong> containing the brand name.
+              This ensures we capture videos that are explicitly about the brand, not just uploaded by the brand's channel.
+            </p>
+          </div>
+
+          <div>
+            <h4 className="font-semibold mb-2">Data Source</h4>
+            <p className="text-blue-700 dark:text-blue-300">
+              Results are fetched from YouTube search via DataForSEO SERP API.
+              We analyze up to 100 videos per search keyword for comprehensive coverage.
+            </p>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+
+  // Saved analyses section
+  const SavedAnalysesSection = () => {
+    if (savedAnalyses.length === 0) return null;
+
+    return (
+      <div className="bg-gray-50 dark:bg-gray-800/50 rounded-xl p-4 mb-6">
+        <h4 className="font-medium text-gray-900 dark:text-white mb-3 flex items-center gap-2">
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          Previous Analyses
+        </h4>
+        <div className="space-y-2">
+          {savedAnalyses.map((analysis) => (
+            <div
+              key={analysis.id}
+              className={`flex items-center justify-between p-3 rounded-lg border ${
+                data?.timestamp === analysis.data.timestamp
+                  ? 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800'
+                  : 'bg-white dark:bg-gray-700 border-gray-200 dark:border-gray-600'
+              }`}
+            >
+              <button
+                onClick={() => loadAnalysis(analysis)}
+                className="flex-1 text-left"
+              >
+                <p className="font-medium text-gray-900 dark:text-white text-sm">{analysis.brandName}</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400">
+                  {formatDateTime(analysis.createdAt)} • SOV: {analysis.data.sov.byViews}%
+                </p>
+              </button>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  deleteAnalysis(analysis.id);
+                }}
+                className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors"
+                title="Delete analysis"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                </svg>
+              </button>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  };
+
   // Initial state - show fetch button
   if (!data && !isLoading && !error) {
     return (
-      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6">
-        <div className="text-center">
-          <div className="w-16 h-16 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center mx-auto mb-4">
-            <svg className="w-8 h-8 text-red-600 dark:text-red-400" fill="currentColor" viewBox="0 0 24 24">
-              <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
-            </svg>
+      <div className="space-y-6">
+        <SavedAnalysesSection />
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6">
+          <div className="text-center">
+            <div className="w-16 h-16 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center mx-auto mb-4">
+              <svg className="w-8 h-8 text-red-600 dark:text-red-400" fill="currentColor" viewBox="0 0 24 24">
+                <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
+              </svg>
+            </div>
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+              YouTube Share of Voice
+            </h3>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mb-4 max-w-md mx-auto">
+              Analyze your brand's presence in YouTube search results compared to competitors.
+              See which videos rank for brand searches and measure your share of voice by views.
+            </p>
+            <button
+              onClick={fetchYouTubeSOV}
+              className="px-6 py-2.5 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-medium flex items-center gap-2 mx-auto"
+            >
+              <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
+              </svg>
+              Analyze YouTube Presence
+            </button>
           </div>
-          <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
-            YouTube Share of Voice
-          </h3>
-          <p className="text-sm text-gray-500 dark:text-gray-400 mb-4 max-w-md mx-auto">
-            Analyze your brand's presence in YouTube search results compared to competitors.
-            See which videos rank for brand searches.
-          </p>
-          <button
-            onClick={fetchYouTubeSOV}
-            className="px-6 py-2.5 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-medium flex items-center gap-2 mx-auto"
-          >
-            <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
-              <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
-            </svg>
-            Analyze YouTube Presence
-          </button>
         </div>
       </div>
     );
@@ -133,7 +331,7 @@ export function YouTubeSOVPanel({ brandName, competitors, locationCode = 2840, l
             <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
             <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
           </svg>
-          <span className="text-gray-600 dark:text-gray-300">Fetching YouTube data...</span>
+          <span className="text-gray-600 dark:text-gray-300">Fetching YouTube data (analyzing up to 100 videos per keyword)...</span>
         </div>
       </div>
     );
@@ -142,21 +340,24 @@ export function YouTubeSOVPanel({ brandName, competitors, locationCode = 2840, l
   // Error state
   if (error) {
     return (
-      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6">
-        <div className="text-center">
-          <div className="w-12 h-12 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center mx-auto mb-3">
-            <svg className="w-6 h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
+      <div className="space-y-6">
+        <SavedAnalysesSection />
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6">
+          <div className="text-center">
+            <div className="w-12 h-12 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center mx-auto mb-3">
+              <svg className="w-6 h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            </div>
+            <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-1">Failed to Fetch YouTube Data</h3>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">{error}</p>
+            <button
+              onClick={fetchYouTubeSOV}
+              className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors text-sm"
+            >
+              Try Again
+            </button>
           </div>
-          <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-1">Failed to Fetch YouTube Data</h3>
-          <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">{error}</p>
-          <button
-            onClick={fetchYouTubeSOV}
-            className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors text-sm"
-          >
-            Try Again
-          </button>
         </div>
       </div>
     );
@@ -170,6 +371,18 @@ export function YouTubeSOVPanel({ brandName, competitors, locationCode = 2840, l
 
   return (
     <div className="space-y-6">
+      {/* Methodology Explanation */}
+      <MethodologySection />
+
+      {/* Saved Analyses */}
+      <SavedAnalysesSection />
+
+      {/* Analysis timestamp */}
+      <div className="flex items-center justify-between text-sm text-gray-500 dark:text-gray-400">
+        <span>Analysis from: {formatDateTime(data.timestamp)}</span>
+        <span>Keywords: {data.searchedKeywords?.join(', ')}</span>
+      </div>
+
       {/* Debug info if no videos found */}
       {data.debug && data.debug.totalVideosFetched === 0 && (
         <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-xl p-4">
@@ -197,7 +410,7 @@ export function YouTubeSOVPanel({ brandName, competitors, locationCode = 2840, l
               </svg>
             </div>
             <div>
-              <p className="text-sm text-gray-500 dark:text-gray-400">YouTube SOV (by position)</p>
+              <p className="text-sm text-gray-500 dark:text-gray-400">Share of Search (by video count)</p>
               <p className="text-2xl font-bold text-gray-900 dark:text-white">{data.sov.byCount}%</p>
             </div>
           </div>
@@ -215,7 +428,7 @@ export function YouTubeSOVPanel({ brandName, competitors, locationCode = 2840, l
               </svg>
             </div>
             <div>
-              <p className="text-sm text-gray-500 dark:text-gray-400">SOV by Views</p>
+              <p className="text-sm text-gray-500 dark:text-gray-400">Share of Voice (by views)</p>
               <p className="text-2xl font-bold text-gray-900 dark:text-white">{data.sov.byViews}%</p>
             </div>
           </div>
@@ -275,12 +488,12 @@ export function YouTubeSOVPanel({ brandName, competitors, locationCode = 2840, l
       {hasVideos && (
         <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6">
           <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-            Top Videos in Search Results
+            Videos in Search Results
             <span className="text-sm font-normal text-gray-500 dark:text-gray-400 ml-2">
               ({data.allVideos.length} videos found)
             </span>
           </h3>
-          <div className="space-y-3">
+          <div className="space-y-3 max-h-[600px] overflow-y-auto">
             {data.allVideos.map((video) => (
               <a
                 key={video.videoId}
@@ -351,8 +564,8 @@ export function YouTubeSOVPanel({ brandName, competitors, locationCode = 2840, l
         </div>
       )}
 
-      {/* Refresh button */}
-      <div className="flex justify-center">
+      {/* Action buttons */}
+      <div className="flex justify-center gap-3">
         <button
           onClick={fetchYouTubeSOV}
           className="px-4 py-2 text-sm text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors flex items-center gap-2"
@@ -360,7 +573,7 @@ export function YouTubeSOVPanel({ brandName, competitors, locationCode = 2840, l
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
           </svg>
-          Refresh Data
+          Run New Analysis
         </button>
       </div>
     </div>

@@ -75,7 +75,7 @@ async function fetchYouTubeSERP(
           location_code: locationCode,
           language_code: languageCode,
           device: 'desktop',
-          block_depth: 20,
+          block_depth: 100,
         }]),
       }
     );
@@ -155,13 +155,12 @@ function aggregateBrandVideos(
     new Map(brandVideos.map(v => [v.videoId, v])).values()
   );
 
-  const top20Videos = uniqueVideos.filter(v => v.rank <= 20);
-  const totalViews = top20Videos.reduce((sum, v) => sum + v.viewsCount, 0);
+  const totalViews = uniqueVideos.reduce((sum, v) => sum + v.viewsCount, 0);
 
   return {
     name: brandName,
-    videos: top20Videos.slice(0, 10),
-    totalVideosInTop20: top20Videos.length,
+    videos: uniqueVideos.slice(0, 20),
+    totalVideosInTop20: uniqueVideos.length,
     totalViews,
   };
 }
@@ -269,7 +268,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const response: YouTubeSOVResponse = {
       yourBrand: yourBrandData,
       competitors: competitorData,
-      allVideos: videosWithOwnership.slice(0, 20), // Top 20 for display
+      allVideos: videosWithOwnership.slice(0, 100), // Top 100 for display
       sov,
       searchedKeywords: searchKeywords,
       timestamp: new Date().toISOString(),

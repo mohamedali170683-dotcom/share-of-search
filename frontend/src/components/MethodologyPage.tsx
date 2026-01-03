@@ -49,7 +49,15 @@ export const MethodologyPage: React.FC<MethodologyPageProps> = ({ onClose }) => 
                     <li><a href="#sov-drivers" className="hover:text-orange-600">What Drives SOV?</a></li>
                   </ul>
                 </div>
-                <div className="md:col-span-2">
+                <div>
+                  <h3 className="font-medium text-red-600 mb-2">YouTube SOV</h3>
+                  <ul className="space-y-1 text-sm text-gray-600 dark:text-gray-300 dark:text-gray-300">
+                    <li><a href="#youtube-what" className="hover:text-red-600">What is YouTube SOV?</a></li>
+                    <li><a href="#youtube-calculate" className="hover:text-red-600">How We Calculate It</a></li>
+                    <li><a href="#youtube-interpret" className="hover:text-red-600">How to Read Your YouTube SOV</a></li>
+                  </ul>
+                </div>
+                <div>
                   <h3 className="font-medium text-blue-600 mb-2">Growth Gap & Strategy</h3>
                   <ul className="space-y-1 text-sm text-gray-600 dark:text-gray-300 dark:text-gray-300">
                     <li><a href="#gap" className="hover:text-blue-600">The Growth Gap Formula</a></li>
@@ -470,6 +478,155 @@ export const MethodologyPage: React.FC<MethodologyPageProps> = ({ onClose }) => 
                     More keywords ranked = More total visible volume. Identify gaps where competitors rank but you don't.
                   </p>
                 </div>
+              </div>
+            </section>
+
+            {/* YOUTUBE SOV SECTION */}
+            <section id="youtube-what" className="border-t-4 border-red-200 pt-8">
+              <div className="flex items-center gap-3 mb-6">
+                <div className="w-10 h-10 bg-red-100 rounded-lg flex items-center justify-center">
+                  <svg className="w-6 h-6 text-red-600" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
+                  </svg>
+                </div>
+                <h2 className="text-2xl font-bold text-gray-900 dark:text-white">YouTube Share of Voice</h2>
+              </div>
+
+              <div className="bg-red-50 border-l-4 border-red-500 p-4 mb-6">
+                <p className="text-red-800 font-medium">
+                  YouTube SOV answers the question: "When people search for my brand or competitors on YouTube, how much of the audience reach do my videos capture?"
+                </p>
+              </div>
+
+              <div className="prose prose-gray max-w-none">
+                <p className="text-gray-600 dark:text-gray-300 mb-4">
+                  <strong>YouTube Share of Voice</strong> measures your brand's presence and reach in YouTube search results compared to competitors.
+                  Unlike traditional web search, YouTube SOV focuses on video content that mentions your brand.
+                </p>
+              </div>
+            </section>
+
+            {/* YouTube SOV Calculation */}
+            <section id="youtube-calculate" className="border-t border-gray-200 dark:border-gray-700 pt-8">
+              <h3 className="text-xl font-semibold text-gray-900 dark:text-white dark:text-white mb-4">How We Calculate YouTube SOV</h3>
+
+              <div className="space-y-6">
+                <div>
+                  <h4 className="font-semibold text-gray-800 dark:text-gray-200 mb-2">Share of Search (by Video Count)</h4>
+                  <div className="bg-gray-900 text-white p-4 rounded-lg font-mono text-center mb-4">
+                    SOS = Your Brand Videos / Total Identified Brand Videos × 100
+                  </div>
+                  <p className="text-gray-600 dark:text-gray-300 text-sm">
+                    Measures how many videos in YouTube search results mention your brand in their title compared to competitors.
+                    A higher count means more content about your brand is visible in search results.
+                  </p>
+                </div>
+
+                <div>
+                  <h4 className="font-semibold text-gray-800 dark:text-gray-200 mb-2">Share of Voice (by Views)</h4>
+                  <div className="bg-gray-900 text-white p-4 rounded-lg font-mono text-center mb-4">
+                    SOV = Your Brand Video Views / Total Brand Video Views × 100
+                  </div>
+                  <p className="text-gray-600 dark:text-gray-300 text-sm">
+                    Measures your brand's audience reach based on total views on videos mentioning your brand.
+                    This reflects actual audience engagement, not just content presence.
+                  </p>
+                </div>
+              </div>
+
+              <div className="overflow-x-auto mt-6 mb-6">
+                <table className="w-full border-collapse">
+                  <thead>
+                    <tr className="bg-red-50">
+                      <th className="border border-gray-200 dark:border-gray-600 px-4 py-2 text-left">Component</th>
+                      <th className="border border-gray-200 dark:border-gray-600 px-4 py-2 text-left">What It Measures</th>
+                      <th className="border border-gray-200 dark:border-gray-600 px-4 py-2 text-left">Example</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <td className="border border-gray-200 dark:border-gray-600 px-4 py-2 font-medium">Your Brand Videos</td>
+                      <td className="border border-gray-200 dark:border-gray-600 px-4 py-2">Videos with your brand name in the title</td>
+                      <td className="border border-gray-200 dark:border-gray-600 px-4 py-2">15 videos</td>
+                    </tr>
+                    <tr className="bg-gray-50 dark:bg-gray-700/30">
+                      <td className="border border-gray-200 dark:border-gray-600 px-4 py-2 font-medium">Total Brand Videos</td>
+                      <td className="border border-gray-200 dark:border-gray-600 px-4 py-2">All videos mentioning any brand (yours + competitors)</td>
+                      <td className="border border-gray-200 dark:border-gray-600 px-4 py-2">50 videos</td>
+                    </tr>
+                    <tr>
+                      <td className="border border-gray-200 dark:border-gray-600 px-4 py-2 font-medium">Your Brand Views</td>
+                      <td className="border border-gray-200 dark:border-gray-600 px-4 py-2">Total views on videos mentioning your brand</td>
+                      <td className="border border-gray-200 dark:border-gray-600 px-4 py-2">2.5M views</td>
+                    </tr>
+                    <tr className="bg-gray-50 dark:bg-gray-700/30">
+                      <td className="border border-gray-200 dark:border-gray-600 px-4 py-2 font-medium">Total Brand Views</td>
+                      <td className="border border-gray-200 dark:border-gray-600 px-4 py-2">Total views on all identified brand videos</td>
+                      <td className="border border-gray-200 dark:border-gray-600 px-4 py-2">10M views</td>
+                    </tr>
+                    <tr className="bg-red-50">
+                      <td className="border border-gray-200 dark:border-gray-600 px-4 py-2 font-medium">Share of Search</td>
+                      <td className="border border-gray-200 dark:border-gray-600 px-4 py-2">15 / 50 × 100</td>
+                      <td className="border border-gray-200 dark:border-gray-600 px-4 py-2 text-red-600 font-bold">30%</td>
+                    </tr>
+                    <tr className="bg-red-50">
+                      <td className="border border-gray-200 dark:border-gray-600 px-4 py-2 font-medium">Share of Voice</td>
+                      <td className="border border-gray-200 dark:border-gray-600 px-4 py-2">2.5M / 10M × 100</td>
+                      <td className="border border-gray-200 dark:border-gray-600 px-4 py-2 text-red-600 font-bold">25%</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="bg-yellow-50 border border-yellow-200 p-4 rounded-lg mb-6">
+                <h4 className="font-semibold text-yellow-800 mb-2">Brand Matching Method</h4>
+                <p className="text-yellow-700 text-sm">
+                  Videos are matched to brands based on <strong>video title</strong> containing the brand name.
+                  This ensures we capture videos that are explicitly about the brand, not just videos uploaded by the brand's channel.
+                  For example, a video titled "Continental Tires Review 2024" would be matched to "Continental".
+                </p>
+              </div>
+
+              <div className="bg-blue-50 p-4 rounded-lg">
+                <h4 className="font-semibold text-blue-900 mb-2">Data Source</h4>
+                <p className="text-blue-800 text-sm">
+                  Results are fetched from YouTube search via DataForSEO SERP API.
+                  We analyze up to 100 videos per search keyword (your brand + competitors) for comprehensive coverage.
+                </p>
+              </div>
+            </section>
+
+            {/* YouTube SOV Interpretation */}
+            <section id="youtube-interpret" className="border-t border-gray-200 dark:border-gray-700 pt-8">
+              <h3 className="text-xl font-semibold text-gray-900 dark:text-white dark:text-white mb-4">How to Read Your YouTube SOV</h3>
+
+              <div className="grid md:grid-cols-2 gap-4 mb-6">
+                <div className="bg-red-50 p-4 rounded-lg">
+                  <h4 className="font-semibold text-red-800 mb-2">Share of Search (Video Count)</h4>
+                  <ul className="text-sm text-red-700 space-y-1">
+                    <li><strong>High SOS:</strong> More content about your brand exists on YouTube</li>
+                    <li><strong>Low SOS:</strong> Competitors have more video content coverage</li>
+                    <li><strong>Action:</strong> Create or encourage more brand-related video content</li>
+                  </ul>
+                </div>
+                <div className="bg-purple-50 p-4 rounded-lg">
+                  <h4 className="font-semibold text-purple-800 mb-2">Share of Voice (by Views)</h4>
+                  <ul className="text-sm text-purple-700 space-y-1">
+                    <li><strong>High SOV:</strong> Your brand videos reach more viewers</li>
+                    <li><strong>Low SOV:</strong> Competitor videos have higher engagement</li>
+                    <li><strong>Action:</strong> Focus on video quality and promotion to increase views</li>
+                  </ul>
+                </div>
+              </div>
+
+              <div className="bg-gray-50 dark:bg-gray-700/30 p-4 rounded-lg">
+                <h4 className="font-semibold text-gray-800 mb-2">SOS vs SOV on YouTube</h4>
+                <p className="text-sm text-gray-600 dark:text-gray-300">
+                  <strong>Share of Search</strong> = Content presence (how many videos mention you)<br/>
+                  <strong>Share of Voice</strong> = Audience reach (how many people watch those videos)<br/><br/>
+                  A brand can have high SOS but low SOV if there are many videos about them, but those videos don't get many views.
+                  Conversely, a brand can have low SOS but high SOV if they have fewer videos, but those videos are very popular.
+                </p>
               </div>
             </section>
 

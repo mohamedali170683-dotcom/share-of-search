@@ -174,8 +174,8 @@ async function fetchDomainRankedKeywords(
 }
 
 /**
- * Fetch paid search competitors using competitors_domain endpoint
- * Note: This requires the domain to have some organic presence
+ * Fetch competitors and their paid metrics using competitors_domain endpoint
+ * Gets organic competitors first, then filters by paid activity
  */
 async function fetchPaidCompetitors(
   domain: string,
@@ -186,9 +186,9 @@ async function fetchPaidCompetitors(
   const competitors: PaidCompetitor[] = [];
 
   try {
-    console.log(`Fetching paid competitors for ${domain}`);
+    console.log(`Fetching competitors for ${domain}`);
 
-    // Use competitors_domain with item_types to get paid competitors
+    // Get organic competitors (they return paid metrics too)
     const response = await fetch(
       'https://api.dataforseo.com/v3/dataforseo_labs/google/competitors_domain/live',
       {
@@ -201,15 +201,13 @@ async function fetchPaidCompetitors(
           target: domain,
           location_code: locationCode,
           language_code: languageCode,
-          item_types: ['paid'],
-          limit: 30,
-          order_by: ['metrics.paid.etv,desc'],
+          limit: 50,
         }]),
       }
     );
 
     const data = await response.json();
-    console.log(`Competitors response:`, JSON.stringify(data).substring(0, 1000));
+    console.log(`Competitors response:`, JSON.stringify(data).substring(0, 1500));
 
     // Check for API errors
     const taskError = data?.tasks?.[0]?.status_message;
@@ -236,7 +234,10 @@ async function fetchPaidCompetitors(
       }
     }
 
-    console.log(`Found ${competitors.length} paid search competitors after filtering`);
+    // Sort by paid ETV descending
+    competitors.sort((a, b) => b.paidETV - a.paidETV);
+
+    console.log(`Found ${competitors.length} competitors with paid activity`);
   } catch (error) {
     console.error('Competitors Domain API error:', error);
   }

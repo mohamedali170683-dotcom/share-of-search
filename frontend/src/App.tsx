@@ -776,8 +776,9 @@ function App() {
       {analysisTab === 'paidAds' && (
         <PaidAdsPanel
           domain={currentDomain}
+          brandName={brandName}
+          competitors={actualCompetitors}
           locationCode={currentLocation.code}
-          languageCode={currentLanguage}
         />
       )}
     </main>

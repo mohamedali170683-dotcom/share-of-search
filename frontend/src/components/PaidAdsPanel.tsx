@@ -108,6 +108,14 @@ export function PaidAdsPanel({ domain, brandName, competitors, locationCode = 28
     }
   }, [domain]);
 
+  // Generate AI insights when data is loaded (either from fetch or localStorage)
+  useEffect(() => {
+    // Only generate if we have data, no existing insights, and not already loading
+    if (data && !insights && !isLoadingInsights) {
+      fetchAIInsights(data);
+    }
+  }, [data, insights, isLoadingInsights]);
+
   const saveAnalysis = (analysisData: PaidAdsResponse) => {
     if (!domain) return;
 

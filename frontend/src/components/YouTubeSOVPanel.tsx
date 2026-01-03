@@ -220,6 +220,28 @@ export function YouTubeSOVPanel({ brandName, competitors, locationCode = 2840, l
     }
   }, [brandName]);
 
+  // Generate AI insights when data is loaded (either from fetch or localStorage)
+  useEffect(() => {
+    // Only generate if we have data, no existing insights, and not already loading
+    if (data && !insights && !isLoadingInsights && data.allVideos && data.allVideos.length > 0) {
+      const brandVideos = data.allVideos.filter((v: YouTubeVideo) => v.isBrandOwned);
+      const ownedVideos = ownedChannelId ? brandVideos.filter((v: YouTubeVideo) => {
+        const channelIdLower = v.channelId?.toLowerCase() || '';
+        const channelNameNormalized = (v.channelName || '').toLowerCase().replace(/@/g, '').replace(/[^a-z0-9]/g, '');
+        const ownedIdLower = ownedChannelId.toLowerCase();
+        const ownedIdNormalized = ownedChannelId.toLowerCase().replace(/@/g, '').replace(/[^a-z0-9]/g, '');
+        return channelIdLower === ownedIdLower ||
+               channelIdLower.includes(ownedIdLower) ||
+               channelNameNormalized.includes(ownedIdNormalized) ||
+               ownedIdNormalized.includes(channelNameNormalized);
+      }) : [];
+      const earnedVideos = ownedChannelId ? brandVideos.filter((v: YouTubeVideo) => !ownedVideos.includes(v)) : [];
+      const ownedViewsCount = ownedVideos.reduce((sum: number, v: YouTubeVideo) => sum + v.viewsCount, 0);
+      const earnedViewsCount = earnedVideos.reduce((sum: number, v: YouTubeVideo) => sum + v.viewsCount, 0);
+      fetchAIInsights(data, ownedVideos.length, earnedVideos.length, ownedViewsCount, earnedViewsCount);
+    }
+  }, [data, insights, isLoadingInsights, ownedChannelId]);
+
   const saveAnalysis = (analysisData: YouTubeSOVResponse) => {
     const newAnalysis: SavedAnalysis = {
       id: `${brandName}-${Date.now()}`,
@@ -252,6 +274,24 @@ export function YouTubeSOVPanel({ brandName, competitors, locationCode = 2840, l
 
   const loadAnalysis = (analysis: SavedAnalysis) => {
     setData(analysis.data);
+    // Also generate AI insights for loaded analysis
+    if (analysis.data.allVideos && analysis.data.allVideos.length > 0) {
+      const brandVideos = analysis.data.allVideos.filter((v: YouTubeVideo) => v.isBrandOwned);
+      const ownedVideos = ownedChannelId ? brandVideos.filter((v: YouTubeVideo) => {
+        const channelIdLower = v.channelId?.toLowerCase() || '';
+        const channelNameNormalized = (v.channelName || '').toLowerCase().replace(/@/g, '').replace(/[^a-z0-9]/g, '');
+        const ownedIdLower = ownedChannelId.toLowerCase();
+        const ownedIdNormalized = ownedChannelId.toLowerCase().replace(/@/g, '').replace(/[^a-z0-9]/g, '');
+        return channelIdLower === ownedIdLower ||
+               channelIdLower.includes(ownedIdLower) ||
+               channelNameNormalized.includes(ownedIdNormalized) ||
+               ownedIdNormalized.includes(channelNameNormalized);
+      }) : [];
+      const earnedVideos = ownedChannelId ? brandVideos.filter((v: YouTubeVideo) => !ownedVideos.includes(v)) : [];
+      const ownedViewsCount = ownedVideos.reduce((sum: number, v: YouTubeVideo) => sum + v.viewsCount, 0);
+      const earnedViewsCount = earnedVideos.reduce((sum: number, v: YouTubeVideo) => sum + v.viewsCount, 0);
+      fetchAIInsights(analysis.data, ownedVideos.length, earnedVideos.length, ownedViewsCount, earnedViewsCount);
+    }
   };
 
   const deleteCurrentAnalysis = () => {

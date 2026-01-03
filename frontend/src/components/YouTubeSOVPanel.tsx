@@ -364,6 +364,27 @@ export function YouTubeSOVPanel({ brandName, competitors, locationCode = 2840, l
       const result = await response.json();
       setData(result);
       saveAnalysis(result);
+
+      // Auto-generate AI insights after successful fetch
+      if (result.allVideos && result.allVideos.length > 0) {
+        // Calculate owned/earned for insights (using current channel if set)
+        const brandVideos = result.allVideos.filter((v: YouTubeVideo) => v.isBrandOwned);
+        const ownedVideos = ownedChannelId ? brandVideos.filter((v: YouTubeVideo) => {
+          const channelIdLower = v.channelId?.toLowerCase() || '';
+          const channelNameNormalized = (v.channelName || '').toLowerCase().replace(/@/g, '').replace(/[^a-z0-9]/g, '');
+          const ownedIdLower = ownedChannelId.toLowerCase();
+          const ownedIdNormalized = ownedChannelId.toLowerCase().replace(/@/g, '').replace(/[^a-z0-9]/g, '');
+          return channelIdLower === ownedIdLower ||
+                 channelIdLower.includes(ownedIdLower) ||
+                 channelNameNormalized.includes(ownedIdNormalized) ||
+                 ownedIdNormalized.includes(channelNameNormalized);
+        }) : [];
+        const earnedVideos = ownedChannelId ? brandVideos.filter((v: YouTubeVideo) => !ownedVideos.includes(v)) : [];
+        const ownedViewsCount = ownedVideos.reduce((sum: number, v: YouTubeVideo) => sum + v.viewsCount, 0);
+        const earnedViewsCount = earnedVideos.reduce((sum: number, v: YouTubeVideo) => sum + v.viewsCount, 0);
+
+        fetchAIInsights(result, ownedVideos.length, earnedVideos.length, ownedViewsCount, earnedViewsCount);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to fetch YouTube SOV');
     } finally {
@@ -822,7 +843,7 @@ export function YouTubeSOVPanel({ brandName, competitors, locationCode = 2840, l
       )}
 
       {/* AI Strategic Insights */}
-      {hasVideos && (
+      {hasVideos && (isLoadingInsights || insights || insightsError) && (
         <div className="bg-gradient-to-br from-indigo-50 to-purple-50 dark:from-indigo-900/20 dark:to-purple-900/20 rounded-xl shadow-sm p-6 border border-indigo-200 dark:border-indigo-800">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
@@ -830,25 +851,10 @@ export function YouTubeSOVPanel({ brandName, competitors, locationCode = 2840, l
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
               </svg>
               AI Strategic Insights
+              {isLoadingInsights && (
+                <span className="text-xs font-normal text-indigo-600 dark:text-indigo-400">(generating...)</span>
+              )}
             </h3>
-            {!insights && !isLoadingInsights && (
-              <button
-                onClick={() => {
-                  const brandVideos = data.allVideos.filter(v => v.isBrandOwned);
-                  const ownedVideos = ownedChannelId ? brandVideos.filter(v => getMediaType(v) === 'owned') : [];
-                  const earnedVideos = ownedChannelId ? brandVideos.filter(v => getMediaType(v) === 'earned') : [];
-                  const ownedViews = ownedVideos.reduce((sum, v) => sum + v.viewsCount, 0);
-                  const earnedViews = earnedVideos.reduce((sum, v) => sum + v.viewsCount, 0);
-                  fetchAIInsights(data, ownedVideos.length, earnedVideos.length, ownedViews, earnedViews);
-                }}
-                className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors text-sm font-medium flex items-center gap-2"
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                </svg>
-                Generate Insights
-              </button>
-            )}
           </div>
 
           {isLoadingInsights && (
@@ -857,7 +863,7 @@ export function YouTubeSOVPanel({ brandName, competitors, locationCode = 2840, l
                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
               </svg>
-              <span className="text-gray-600 dark:text-gray-300">Analyzing your YouTube presence...</span>
+              <span className="text-gray-600 dark:text-gray-300">Generating strategic insights based on your YouTube data...</span>
             </div>
           )}
 
@@ -878,12 +884,6 @@ export function YouTubeSOVPanel({ brandName, competitors, locationCode = 2840, l
                 Try Again
               </button>
             </div>
-          )}
-
-          {!insights && !isLoadingInsights && !insightsError && (
-            <p className="text-sm text-gray-600 dark:text-gray-400 text-center py-4">
-              Get AI-powered strategic recommendations based on your YouTube performance data
-            </p>
           )}
 
           {insights && (

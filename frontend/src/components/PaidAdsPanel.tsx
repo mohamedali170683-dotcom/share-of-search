@@ -216,6 +216,10 @@ export function PaidAdsPanel({ domain, brandName, competitors, locationCode = 28
       const result = await response.json();
       setData(result);
       saveAnalysis(result);
+
+      // Auto-generate AI insights after successful fetch
+      // Generate insights even if no paid keywords - AI will provide recommendations
+      fetchAIInsights(result);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to fetch paid ads data');
     } finally {
@@ -717,56 +721,43 @@ export function PaidAdsPanel({ domain, brandName, competitors, locationCode = 28
       </div>
 
       {/* AI Strategic Insights */}
-      <div className="bg-gradient-to-br from-indigo-50 to-blue-50 dark:from-indigo-900/20 dark:to-blue-900/20 rounded-xl shadow-sm p-6 border border-indigo-200 dark:border-indigo-800">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
-            <svg className="w-5 h-5 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
-            </svg>
-            AI Strategic Insights
-          </h3>
-          {!insights && !isLoadingInsights && (
-            <button
-              onClick={() => fetchAIInsights(data)}
-              className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors text-sm font-medium flex items-center gap-2"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+      {(isLoadingInsights || insights || insightsError) && (
+        <div className="bg-gradient-to-br from-indigo-50 to-blue-50 dark:from-indigo-900/20 dark:to-blue-900/20 rounded-xl shadow-sm p-6 border border-indigo-200 dark:border-indigo-800">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+              <svg className="w-5 h-5 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
               </svg>
-              Generate Insights
-            </button>
+              AI Strategic Insights
+              {isLoadingInsights && (
+                <span className="text-xs font-normal text-indigo-600 dark:text-indigo-400">(generating...)</span>
+              )}
+            </h3>
+          </div>
+
+          {isLoadingInsights && (
+            <div className="flex items-center justify-center py-8">
+              <svg className="w-6 h-6 animate-spin text-indigo-600 mr-3" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+              </svg>
+              <span className="text-gray-600 dark:text-gray-300">Generating strategic insights based on your paid search data...</span>
+            </div>
           )}
-        </div>
 
-        {isLoadingInsights && (
-          <div className="flex items-center justify-center py-8">
-            <svg className="w-6 h-6 animate-spin text-indigo-600 mr-3" fill="none" viewBox="0 0 24 24">
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-            </svg>
-            <span className="text-gray-600 dark:text-gray-300">Analyzing your paid search strategy...</span>
-          </div>
-        )}
+          {insightsError && (
+            <div className="text-center py-4">
+              <p className="text-red-600 dark:text-red-400 text-sm mb-2">{insightsError}</p>
+              <button
+                onClick={() => fetchAIInsights(data)}
+                className="text-indigo-600 hover:text-indigo-700 text-sm font-medium"
+              >
+                Try Again
+              </button>
+            </div>
+          )}
 
-        {insightsError && (
-          <div className="text-center py-4">
-            <p className="text-red-600 dark:text-red-400 text-sm mb-2">{insightsError}</p>
-            <button
-              onClick={() => fetchAIInsights(data)}
-              className="text-indigo-600 hover:text-indigo-700 text-sm font-medium"
-            >
-              Try Again
-            </button>
-          </div>
-        )}
-
-        {!insights && !isLoadingInsights && !insightsError && (
-          <p className="text-sm text-gray-600 dark:text-gray-400 text-center py-4">
-            Get AI-powered strategic recommendations based on your paid search performance data
-          </p>
-        )}
-
-        {insights && (
+          {insights && (
           <div className="space-y-4">
             {/* Summary */}
             <div className="bg-white dark:bg-gray-800 rounded-lg p-4">
@@ -861,8 +852,9 @@ export function PaidAdsPanel({ domain, brandName, competitors, locationCode = 28
               </button>
             </div>
           </div>
-        )}
-      </div>
+          )}
+        </div>
+      )}
 
       {/* Debug Info */}
       {data.debug && (

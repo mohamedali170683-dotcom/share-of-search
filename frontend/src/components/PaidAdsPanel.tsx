@@ -63,7 +63,9 @@ interface PaidAdsPanelProps {
 
 const STORAGE_KEY = 'paid-ads-analyses';
 
-export function PaidAdsPanel({ domain, competitors, locationCode = 2840, languageCode = 'en' }: PaidAdsPanelProps) {
+export function PaidAdsPanel({ domain, brandName: _brandName, competitors, locationCode = 2840, languageCode = 'en' }: PaidAdsPanelProps) {
+  // brandName available for future use
+  void _brandName;
   const [data, setData] = useState<PaidAdsResponse | null>(null);
   const [savedAnalyses, setSavedAnalyses] = useState<SavedAnalysis[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -73,22 +75,30 @@ export function PaidAdsPanel({ domain, competitors, locationCode = 2840, languag
 
   // Load saved analyses on mount
   useEffect(() => {
+    if (!domain) return;
+
     const saved = localStorage.getItem(STORAGE_KEY);
     if (saved) {
       try {
         const analyses: SavedAnalysis[] = JSON.parse(saved);
-        setSavedAnalyses(analyses);
-        const currentAnalysis = analyses.find(a => a.domain.toLowerCase() === domain.toLowerCase());
+        // Filter out any invalid analyses
+        const validAnalyses = analyses.filter(a => a && a.domain && typeof a.domain === 'string');
+        setSavedAnalyses(validAnalyses);
+        const currentAnalysis = validAnalyses.find(a => a.domain.toLowerCase() === domain.toLowerCase());
         if (currentAnalysis) {
           setData(currentAnalysis.data);
         }
       } catch {
         console.error('Failed to load saved analyses');
+        // Clear corrupted data
+        localStorage.removeItem(STORAGE_KEY);
       }
     }
   }, [domain]);
 
   const saveAnalysis = (analysisData: PaidAdsResponse) => {
+    if (!domain) return;
+
     const newAnalysis: SavedAnalysis = {
       id: `${domain}-${Date.now()}`,
       domain,
@@ -97,7 +107,7 @@ export function PaidAdsPanel({ domain, competitors, locationCode = 2840, languag
     };
 
     const filtered = savedAnalyses
-      .filter(a => a.domain.toLowerCase() !== domain.toLowerCase())
+      .filter(a => a && a.domain && a.domain.toLowerCase() !== domain.toLowerCase())
       .slice(0, 9);
 
     const updated = [newAnalysis, ...filtered];

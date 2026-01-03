@@ -60,6 +60,21 @@ const STORAGE_KEY = 'youtube-sov-analyses';
 
 const CHANNEL_STORAGE_KEY = 'youtube-channel-info';
 
+interface OwnedChannel {
+  id: string;
+  name: string;
+  url?: string;
+}
+
+// ChannelConfig - used for localStorage schema documentation
+type ChannelConfigSchema = {
+  ownedChannels: OwnedChannel[];
+  competitorChannels?: Record<string, OwnedChannel[]>; // competitor name -> channels
+};
+
+// Export to avoid unused warning
+export type { ChannelConfigSchema };
+
 interface YouTubeInsights {
   summary: string;
   strengths: string[];
@@ -81,11 +96,19 @@ export function YouTubeSOVPanel({ brandName, competitors, locationCode = 2840, l
   const [isLoadingInsights, setIsLoadingInsights] = useState(false);
   const [insightsError, setInsightsError] = useState<string | null>(null);
 
-  // Channel ownership tracking
+  // Channel ownership tracking - now supports multiple channels
   const [showChannelInput, setShowChannelInput] = useState(false);
   const [channelInput, setChannelInput] = useState('');
-  const [ownedChannelId, setOwnedChannelId] = useState<string | null>(null);
-  const [ownedChannelName, setOwnedChannelName] = useState<string | null>(null);
+  const [ownedChannels, setOwnedChannels] = useState<OwnedChannel[]>([]);
+  const [competitorChannels, setCompetitorChannels] = useState<Record<string, OwnedChannel[]>>({});
+
+  // Drill-down state for visual breakdown
+  const [selectedMediaType, setSelectedMediaType] = useState<'owned' | 'earned' | null>(null);
+  const [showCompetitorChannelInput, setShowCompetitorChannelInput] = useState<string | null>(null);
+  const [competitorChannelInput, setCompetitorChannelInput] = useState('');
+
+  // Legacy compatibility - single channel ID for matching
+  const ownedChannelId = ownedChannels.length > 0 ? ownedChannels[0].id : null;
 
   // Load saved channel info on mount
   useEffect(() => {
@@ -93,9 +116,16 @@ export function YouTubeSOVPanel({ brandName, competitors, locationCode = 2840, l
     if (savedChannel) {
       try {
         const channelInfo = JSON.parse(savedChannel);
-        if (channelInfo[brandName.toLowerCase()]) {
-          setOwnedChannelId(channelInfo[brandName.toLowerCase()].channelId || null);
-          setOwnedChannelName(channelInfo[brandName.toLowerCase()].channelName || null);
+        const brandConfig = channelInfo[brandName.toLowerCase()];
+        if (brandConfig) {
+          // Handle both old format (single channel) and new format (multiple channels)
+          if (brandConfig.ownedChannels) {
+            setOwnedChannels(brandConfig.ownedChannels);
+            setCompetitorChannels(brandConfig.competitorChannels || {});
+          } else if (brandConfig.channelId) {
+            // Migrate old format
+            setOwnedChannels([{ id: brandConfig.channelId, name: brandConfig.channelName || brandConfig.channelId }]);
+          }
         }
       } catch {
         console.error('Failed to load channel info');
@@ -103,14 +133,45 @@ export function YouTubeSOVPanel({ brandName, competitors, locationCode = 2840, l
     }
   }, [brandName]);
 
-  // Save channel info
-  const saveChannelInfo = (channelId: string, channelName: string) => {
+  // Save channel info (new format with multiple channels)
+  const saveChannelConfig = (channels: OwnedChannel[], compChannels: Record<string, OwnedChannel[]>) => {
     const existing = localStorage.getItem(CHANNEL_STORAGE_KEY);
     const channelInfo = existing ? JSON.parse(existing) : {};
-    channelInfo[brandName.toLowerCase()] = { channelId, channelName };
+    channelInfo[brandName.toLowerCase()] = {
+      ownedChannels: channels,
+      competitorChannels: compChannels,
+    };
     localStorage.setItem(CHANNEL_STORAGE_KEY, JSON.stringify(channelInfo));
-    setOwnedChannelId(channelId);
-    setOwnedChannelName(channelName);
+    setOwnedChannels(channels);
+    setCompetitorChannels(compChannels);
+  };
+
+  // Add a new owned channel
+  const addOwnedChannel = (channelId: string, channelName: string) => {
+    const newChannel: OwnedChannel = { id: channelId, name: channelName };
+    const updated = [...ownedChannels, newChannel];
+    saveChannelConfig(updated, competitorChannels);
+  };
+
+  // Remove an owned channel
+  const removeOwnedChannel = (channelId: string) => {
+    const updated = ownedChannels.filter(c => c.id !== channelId);
+    saveChannelConfig(updated, competitorChannels);
+  };
+
+  // Add a competitor channel
+  const addCompetitorChannel = (competitorName: string, channelId: string, channelName: string) => {
+    const newChannel: OwnedChannel = { id: channelId, name: channelName };
+    const existing = competitorChannels[competitorName] || [];
+    const updated = { ...competitorChannels, [competitorName]: [...existing, newChannel] };
+    saveChannelConfig(ownedChannels, updated);
+  };
+
+  // Remove a competitor channel
+  const removeCompetitorChannel = (competitorName: string, channelId: string) => {
+    const existing = competitorChannels[competitorName] || [];
+    const updated = { ...competitorChannels, [competitorName]: existing.filter(c => c.id !== channelId) };
+    saveChannelConfig(ownedChannels, updated);
   };
 
   // Extract channel ID from URL or use direct ID
@@ -137,22 +198,37 @@ export function YouTubeSOVPanel({ brandName, competitors, locationCode = 2840, l
     return trimmed || null;
   };
 
-  const handleSetChannel = () => {
+  const handleAddChannel = () => {
     const channelId = parseChannelInput(channelInput);
     if (channelId) {
-      saveChannelInfo(channelId, channelInput);
+      // Check if already exists
+      if (!ownedChannels.some(c => c.id.toLowerCase() === channelId.toLowerCase())) {
+        addOwnedChannel(channelId, channelInput);
+      }
       setShowChannelInput(false);
       setChannelInput('');
     }
   };
 
-  const handleClearChannel = () => {
+  const handleAddCompetitorChannel = (competitorName: string) => {
+    const channelId = parseChannelInput(competitorChannelInput);
+    if (channelId) {
+      const existing = competitorChannels[competitorName] || [];
+      if (!existing.some(c => c.id.toLowerCase() === channelId.toLowerCase())) {
+        addCompetitorChannel(competitorName, channelId, competitorChannelInput);
+      }
+      setShowCompetitorChannelInput(null);
+      setCompetitorChannelInput('');
+    }
+  };
+
+  const handleClearAllChannels = () => {
     const existing = localStorage.getItem(CHANNEL_STORAGE_KEY);
     const channelInfo = existing ? JSON.parse(existing) : {};
     delete channelInfo[brandName.toLowerCase()];
     localStorage.setItem(CHANNEL_STORAGE_KEY, JSON.stringify(channelInfo));
-    setOwnedChannelId(null);
-    setOwnedChannelName(null);
+    setOwnedChannels([]);
+    setCompetitorChannels({});
   };
 
   // Normalize a string for fuzzy matching (remove special chars, spaces, etc.)
@@ -163,44 +239,54 @@ export function YouTubeSOVPanel({ brandName, competitors, locationCode = 2840, l
       .trim();
   };
 
-  // Determine if a video is owned media (from brand's channel)
-  const getMediaType = (video: YouTubeVideo): 'owned' | 'earned' | 'unknown' => {
-    if (!ownedChannelId) return 'unknown';
+  // Check if a video matches any of the given channels
+  const matchesAnyChannel = (video: YouTubeVideo, channels: OwnedChannel[]): boolean => {
+    if (channels.length === 0) return false;
 
     const channelIdLower = video.channelId?.toLowerCase() || '';
     const channelNameLower = video.channelName?.toLowerCase() || '';
     const channelNameNormalized = normalizeForMatch(video.channelName || '');
-    const ownedIdLower = ownedChannelId.toLowerCase();
-    const ownedIdNormalized = normalizeForMatch(ownedChannelId);
 
-    // Match by exact channel ID
-    if (channelIdLower === ownedIdLower) return 'owned';
+    for (const channel of channels) {
+      const ownedIdLower = channel.id.toLowerCase();
+      const ownedIdNormalized = normalizeForMatch(channel.id);
+      const ownedNameNormalized = normalizeForMatch(channel.name);
 
-    // Match by channel ID contains
-    if (channelIdLower.includes(ownedIdLower) || ownedIdLower.includes(channelIdLower)) return 'owned';
+      // Match by exact channel ID
+      if (channelIdLower === ownedIdLower) return true;
 
-    // Match by normalized channel name (fuzzy match)
-    if (channelNameNormalized && ownedIdNormalized) {
-      if (channelNameNormalized.includes(ownedIdNormalized) || ownedIdNormalized.includes(channelNameNormalized)) {
-        return 'owned';
+      // Match by channel ID contains
+      if (channelIdLower.includes(ownedIdLower) || ownedIdLower.includes(channelIdLower)) return true;
+
+      // Match by normalized channel name (fuzzy match)
+      if (channelNameNormalized && ownedIdNormalized) {
+        if (channelNameNormalized.includes(ownedIdNormalized) || ownedIdNormalized.includes(channelNameNormalized)) {
+          return true;
+        }
+      }
+
+      // Match by channel name
+      if (ownedNameNormalized) {
+        if (channelNameNormalized.includes(ownedNameNormalized) || ownedNameNormalized.includes(channelNameNormalized)) {
+          return true;
+        }
+        // Also check raw lowercase match
+        const ownedNameLower = channel.name.toLowerCase().replace('@', '');
+        if (channelNameLower.includes(ownedNameLower) || ownedNameLower.includes(channelNameLower)) {
+          return true;
+        }
       }
     }
 
-    // Match by channel name/handle if provided separately
-    if (ownedChannelName) {
-      const ownedNameNormalized = normalizeForMatch(ownedChannelName);
-      if (channelNameNormalized.includes(ownedNameNormalized) || ownedNameNormalized.includes(channelNameNormalized)) {
-        return 'owned';
-      }
-      // Also check raw lowercase match
-      const ownedNameLower = ownedChannelName.toLowerCase().replace('@', '');
-      if (channelNameLower.includes(ownedNameLower) || ownedNameLower.includes(channelNameLower)) {
-        return 'owned';
-      }
-    }
-
-    return 'earned';
+    return false;
   };
+
+  // Determine if a video is owned media (from brand's channel)
+  const getMediaType = (video: YouTubeVideo): 'owned' | 'earned' | 'unknown' => {
+    if (ownedChannels.length === 0) return 'unknown';
+    return matchesAnyChannel(video, ownedChannels) ? 'owned' : 'earned';
+  };
+
 
   // Load saved analyses on mount
   useEffect(() => {
@@ -316,24 +402,14 @@ export function YouTubeSOVPanel({ brandName, competitors, locationCode = 2840, l
     localStorage.setItem(STORAGE_KEY, JSON.stringify(filtered));
 
     // Also clear the channel info for this brand
-    const existingChannelInfo = localStorage.getItem(CHANNEL_STORAGE_KEY);
-    if (existingChannelInfo) {
-      try {
-        const channelInfo = JSON.parse(existingChannelInfo);
-        delete channelInfo[brandName.toLowerCase()];
-        localStorage.setItem(CHANNEL_STORAGE_KEY, JSON.stringify(channelInfo));
-      } catch {
-        // Ignore parse errors
-      }
-    }
+    handleClearAllChannels();
 
     // Reset state
-    setOwnedChannelId(null);
-    setOwnedChannelName(null);
     setData(null);
     setError(null);
     setInsights(null);
     setInsightsError(null);
+    setSelectedMediaType(null);
   };
 
   const fetchAIInsights = async (youtubeData: YouTubeSOVResponse, ownedCount?: number, earnedCount?: number, ownedViews?: number, earnedViews?: number) => {
@@ -589,23 +665,24 @@ export function YouTubeSOVPanel({ brandName, competitors, locationCode = 2840, l
         <div className="flex-1">
           <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-1 flex items-center gap-2">
             Track Owned vs Earned Media
-            {ownedChannelId && (
+            {ownedChannels.length > 0 && (
               <span className="px-2 py-0.5 bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300 text-xs rounded-full font-normal">
-                ✓ Configured
+                ✓ {ownedChannels.length} channel{ownedChannels.length > 1 ? 's' : ''}
               </span>
             )}
           </h3>
-          {!ownedChannelId ? (
+
+          {ownedChannels.length === 0 ? (
             <>
               <p className="text-sm text-gray-600 dark:text-gray-300 mb-4">
-                Set your official YouTube channel to distinguish between:
+                Add your official YouTube channel(s) to distinguish between:
               </p>
               <div className="grid grid-cols-2 gap-4 mb-4">
                 <div className="flex items-start gap-2">
                   <span className="w-3 h-3 bg-emerald-500 rounded-full mt-1 flex-shrink-0"></span>
                   <div>
                     <span className="text-sm font-medium text-emerald-700 dark:text-emerald-300">Owned Media</span>
-                    <p className="text-xs text-gray-500 dark:text-gray-400">Videos from your channel</p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">Videos from your channels</p>
                   </div>
                 </div>
                 <div className="flex items-start gap-2">
@@ -618,62 +695,71 @@ export function YouTubeSOVPanel({ brandName, competitors, locationCode = 2840, l
               </div>
             </>
           ) : (
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-600 dark:text-gray-300">
-                  Your channel: <span className="font-semibold text-emerald-700 dark:text-emerald-300">{ownedChannelName || ownedChannelId}</span>
-                </p>
+            <div className="space-y-2 mb-4">
+              <p className="text-sm text-gray-600 dark:text-gray-300">Your channels:</p>
+              <div className="flex flex-wrap gap-2">
+                {ownedChannels.map((channel) => (
+                  <span
+                    key={channel.id}
+                    className="inline-flex items-center gap-1 px-3 py-1 bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300 rounded-full text-sm"
+                  >
+                    <svg className="w-4 h-4 text-red-500" fill="currentColor" viewBox="0 0 24 24">
+                      <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814z"/>
+                      <path fill="white" d="M9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
+                    </svg>
+                    {channel.name}
+                    <button
+                      onClick={() => removeOwnedChannel(channel.id)}
+                      className="ml-1 text-emerald-600 hover:text-red-600 transition-colors"
+                    >
+                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </span>
+                ))}
               </div>
-              <button
-                onClick={handleClearChannel}
-                className="px-3 py-1 text-xs text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
-              >
-                Change
-              </button>
             </div>
           )}
 
-          {!ownedChannelId && (
-            <>
-              {showChannelInput ? (
-                <div className="space-y-2">
-                  <div className="flex gap-2">
-                    <input
-                      type="text"
-                      value={channelInput}
-                      onChange={(e) => setChannelInput(e.target.value)}
-                      placeholder="e.g., @ContinentalTires or channel URL"
-                      className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
-                    />
-                    <button
-                      onClick={handleSetChannel}
-                      className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors text-sm font-medium"
-                    >
-                      Save
-                    </button>
-                    <button
-                      onClick={() => { setShowChannelInput(false); setChannelInput(''); }}
-                      className="px-3 py-2 text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 text-sm"
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                  <p className="text-xs text-gray-500 dark:text-gray-400">
-                    Supports: @handle, youtube.com/channel/..., youtube.com/@..., or channel ID
-                  </p>
-                </div>
-              ) : (
+          {showChannelInput ? (
+            <div className="space-y-2">
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={channelInput}
+                  onChange={(e) => setChannelInput(e.target.value)}
+                  placeholder="e.g., @ContinentalTires or channel URL"
+                  className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                  onKeyDown={(e) => e.key === 'Enter' && handleAddChannel()}
+                />
                 <button
-                  onClick={() => setShowChannelInput(true)}
-                  className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors text-sm font-medium flex items-center gap-2"
+                  onClick={handleAddChannel}
+                  className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors text-sm font-medium"
                 >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                  </svg>
-                  Set Your YouTube Channel
+                  Add
                 </button>
-              )}
-            </>
+                <button
+                  onClick={() => { setShowChannelInput(false); setChannelInput(''); }}
+                  className="px-3 py-2 text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 text-sm"
+                >
+                  Cancel
+                </button>
+              </div>
+              <p className="text-xs text-gray-500 dark:text-gray-400">
+                Supports: @handle, youtube.com/channel/..., youtube.com/@..., or channel ID
+              </p>
+            </div>
+          ) : (
+            <button
+              onClick={() => setShowChannelInput(true)}
+              className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors text-sm font-medium flex items-center gap-2"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+              </svg>
+              {ownedChannels.length === 0 ? 'Add Your YouTube Channel' : 'Add Another Channel'}
+            </button>
           )}
         </div>
       </div>
@@ -836,7 +922,7 @@ export function YouTubeSOVPanel({ brandName, competitors, locationCode = 2840, l
         </div>
       </div>
 
-      {/* Brand Comparison */}
+      {/* Brand Comparison with Competitor Channels */}
       {allBrands.some(b => b.totalVideosInTop20 > 0) && (
         <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6">
           <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
@@ -846,17 +932,29 @@ export function YouTubeSOVPanel({ brandName, competitors, locationCode = 2840, l
             {allBrands.map((brand, idx) => {
               const isYourBrand = idx === 0;
               const viewsPercentage = maxViews > 0 ? (brand.totalViews / maxViews) * 100 : 0;
+              const compChannels = !isYourBrand ? (competitorChannels[brand.name] || []) : [];
+              const brandVideos = data.allVideos.filter(v =>
+                v.title.toLowerCase().includes(brand.name.toLowerCase())
+              );
+              const compOwnedVideos = compChannels.length > 0
+                ? brandVideos.filter(v => matchesAnyChannel(v, compChannels))
+                : [];
 
               return (
                 <div key={brand.name} className="space-y-2">
                   <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
                       <span className={`font-medium ${isYourBrand ? 'text-red-600 dark:text-red-400' : 'text-gray-700 dark:text-gray-300'}`}>
                         {brand.name}
                       </span>
                       {isYourBrand && (
                         <span className="px-2 py-0.5 bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 text-xs rounded-full">
                           Your Brand
+                        </span>
+                      )}
+                      {!isYourBrand && compChannels.length > 0 && (
+                        <span className="px-2 py-0.5 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 text-xs rounded-full">
+                          {compOwnedVideos.length} owned
                         </span>
                       )}
                     </div>
@@ -875,6 +973,68 @@ export function YouTubeSOVPanel({ brandName, competitors, locationCode = 2840, l
                       style={{ width: `${viewsPercentage}%` }}
                     />
                   </div>
+
+                  {/* Competitor channel management */}
+                  {!isYourBrand && (
+                    <div className="mt-2">
+                      {compChannels.length > 0 ? (
+                        <div className="flex flex-wrap gap-1 items-center">
+                          <span className="text-xs text-gray-500 dark:text-gray-400">Channels:</span>
+                          {compChannels.map(ch => (
+                            <span
+                              key={ch.id}
+                              className="inline-flex items-center gap-1 px-2 py-0.5 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 rounded text-xs"
+                            >
+                              {ch.name}
+                              <button
+                                onClick={() => removeCompetitorChannel(brand.name, ch.id)}
+                                className="hover:text-red-600"
+                              >
+                                ×
+                              </button>
+                            </span>
+                          ))}
+                        </div>
+                      ) : null}
+
+                      {showCompetitorChannelInput === brand.name ? (
+                        <div className="flex gap-2 mt-2">
+                          <input
+                            type="text"
+                            value={competitorChannelInput}
+                            onChange={(e) => setCompetitorChannelInput(e.target.value)}
+                            placeholder={`@${brand.name.replace(/\s+/g, '')} or channel URL`}
+                            className="flex-1 px-2 py-1 border border-gray-300 dark:border-gray-600 rounded text-xs bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+                            onKeyDown={(e) => e.key === 'Enter' && handleAddCompetitorChannel(brand.name)}
+                          />
+                          <button
+                            onClick={() => handleAddCompetitorChannel(brand.name)}
+                            className="px-2 py-1 bg-blue-600 text-white rounded text-xs hover:bg-blue-700"
+                          >
+                            Add
+                          </button>
+                          <button
+                            onClick={() => { setShowCompetitorChannelInput(null); setCompetitorChannelInput(''); }}
+                            className="text-xs text-gray-500 hover:text-gray-700"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => setShowCompetitorChannelInput(brand.name)}
+                          className="text-xs text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 mt-1"
+                        >
+                          + Add {brand.name}'s YouTube channel
+                        </button>
+                      )}
+                      {compChannels.length > 0 && brandVideos.length > 0 && (
+                        <p className="text-xs text-gray-400 mt-1">
+                          {compOwnedVideos.length} owned / {brandVideos.length - compOwnedVideos.length} earned
+                        </p>
+                      )}
+                    </div>
+                  )}
                 </div>
               );
             })}
@@ -1030,8 +1190,8 @@ export function YouTubeSOVPanel({ brandName, competitors, locationCode = 2840, l
         </div>
       )}
 
-      {/* Owned vs Earned Media Stats */}
-      {hasVideos && ownedChannelId && (() => {
+      {/* Owned vs Earned Media Visual Breakdown */}
+      {hasVideos && ownedChannels.length > 0 && (() => {
         const brandVideos = data.allVideos.filter(v => v.isBrandOwned);
         const ownedVideos = brandVideos.filter(v => getMediaType(v) === 'owned');
         const earnedVideos = brandVideos.filter(v => getMediaType(v) === 'earned');
@@ -1041,124 +1201,279 @@ export function YouTubeSOVPanel({ brandName, competitors, locationCode = 2840, l
         const ownedPercent = totalBrandViews > 0 ? Math.round((ownedViews / totalBrandViews) * 100) : 0;
         const earnedPercent = totalBrandViews > 0 ? Math.round((earnedViews / totalBrandViews) * 100) : 0;
 
+        // Donut chart dimensions
+        const size = 200;
+        const strokeWidth = 40;
+        const radius = (size - strokeWidth) / 2;
+        const circumference = 2 * Math.PI * radius;
+        const ownedLength = (ownedPercent / 100) * circumference;
+        const earnedLength = (earnedPercent / 100) * circumference;
+
         return (
           <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6">
             <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
               <svg className="w-5 h-5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
               </svg>
-              Owned vs Earned Media Breakdown
+              Owned vs Earned Media
+              <span className="text-sm font-normal text-gray-500 dark:text-gray-400">
+                (click segments to drill down)
+              </span>
             </h3>
-            <div className="grid grid-cols-2 gap-4 mb-4">
-              <div className="p-4 bg-emerald-50 dark:bg-emerald-900/20 rounded-lg border border-emerald-200 dark:border-emerald-800">
-                <div className="flex items-center gap-2 mb-1">
-                  <span className="w-3 h-3 bg-emerald-500 rounded-full"></span>
-                  <span className="text-sm font-medium text-emerald-800 dark:text-emerald-200">Owned Media</span>
+
+            <div className="flex flex-col lg:flex-row items-center gap-8">
+              {/* Donut Chart */}
+              <div className="relative flex-shrink-0">
+                <svg width={size} height={size} className="transform -rotate-90">
+                  {/* Background circle */}
+                  <circle
+                    cx={size / 2}
+                    cy={size / 2}
+                    r={radius}
+                    fill="none"
+                    stroke="#e5e7eb"
+                    strokeWidth={strokeWidth}
+                    className="dark:stroke-gray-700"
+                  />
+                  {/* Owned segment (clickable) */}
+                  <circle
+                    cx={size / 2}
+                    cy={size / 2}
+                    r={radius}
+                    fill="none"
+                    stroke="#10b981"
+                    strokeWidth={strokeWidth}
+                    strokeDasharray={`${ownedLength} ${circumference}`}
+                    strokeDashoffset="0"
+                    className={`cursor-pointer transition-all hover:opacity-80 ${selectedMediaType === 'owned' ? 'stroke-emerald-600' : ''}`}
+                    onClick={() => setSelectedMediaType(selectedMediaType === 'owned' ? null : 'owned')}
+                  />
+                  {/* Earned segment (clickable) */}
+                  <circle
+                    cx={size / 2}
+                    cy={size / 2}
+                    r={radius}
+                    fill="none"
+                    stroke="#a855f7"
+                    strokeWidth={strokeWidth}
+                    strokeDasharray={`${earnedLength} ${circumference}`}
+                    strokeDashoffset={`-${ownedLength}`}
+                    className={`cursor-pointer transition-all hover:opacity-80 ${selectedMediaType === 'earned' ? 'stroke-purple-600' : ''}`}
+                    onClick={() => setSelectedMediaType(selectedMediaType === 'earned' ? null : 'earned')}
+                  />
+                </svg>
+                {/* Center text */}
+                <div className="absolute inset-0 flex flex-col items-center justify-center">
+                  <span className="text-2xl font-bold text-gray-900 dark:text-white">
+                    {brandVideos.length}
+                  </span>
+                  <span className="text-xs text-gray-500 dark:text-gray-400">videos</span>
                 </div>
-                <p className="text-2xl font-bold text-emerald-700 dark:text-emerald-300">{ownedVideos.length} videos</p>
-                <p className="text-xs text-emerald-600 dark:text-emerald-400">{formatViews(ownedViews)} views ({ownedPercent}%)</p>
               </div>
-              <div className="p-4 bg-purple-50 dark:bg-purple-900/20 rounded-lg border border-purple-200 dark:border-purple-800">
-                <div className="flex items-center gap-2 mb-1">
-                  <span className="w-3 h-3 bg-purple-500 rounded-full"></span>
-                  <span className="text-sm font-medium text-purple-800 dark:text-purple-200">Earned Media</span>
-                </div>
-                <p className="text-2xl font-bold text-purple-700 dark:text-purple-300">{earnedVideos.length} videos</p>
-                <p className="text-xs text-purple-600 dark:text-purple-400">{formatViews(earnedViews)} views ({earnedPercent}%)</p>
+
+              {/* Legend & Stats */}
+              <div className="flex-1 space-y-4">
+                {/* Owned */}
+                <button
+                  onClick={() => setSelectedMediaType(selectedMediaType === 'owned' ? null : 'owned')}
+                  className={`w-full p-4 rounded-lg border-2 transition-all text-left ${
+                    selectedMediaType === 'owned'
+                      ? 'bg-emerald-100 dark:bg-emerald-900/40 border-emerald-500'
+                      : 'bg-emerald-50 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-800 hover:border-emerald-400'
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <span className="w-4 h-4 bg-emerald-500 rounded-full"></span>
+                      <div>
+                        <span className="font-semibold text-emerald-800 dark:text-emerald-200">Owned Media</span>
+                        <p className="text-xs text-emerald-600 dark:text-emerald-400">From your {ownedChannels.length} channel{ownedChannels.length > 1 ? 's' : ''}</p>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-xl font-bold text-emerald-700 dark:text-emerald-300">{ownedVideos.length}</p>
+                      <p className="text-xs text-emerald-600 dark:text-emerald-400">{formatViews(ownedViews)} views ({ownedPercent}%)</p>
+                    </div>
+                  </div>
+                </button>
+
+                {/* Earned */}
+                <button
+                  onClick={() => setSelectedMediaType(selectedMediaType === 'earned' ? null : 'earned')}
+                  className={`w-full p-4 rounded-lg border-2 transition-all text-left ${
+                    selectedMediaType === 'earned'
+                      ? 'bg-purple-100 dark:bg-purple-900/40 border-purple-500'
+                      : 'bg-purple-50 dark:bg-purple-900/20 border-purple-200 dark:border-purple-800 hover:border-purple-400'
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <span className="w-4 h-4 bg-purple-500 rounded-full"></span>
+                      <div>
+                        <span className="font-semibold text-purple-800 dark:text-purple-200">Earned Media</span>
+                        <p className="text-xs text-purple-600 dark:text-purple-400">Reviews & mentions by others</p>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-xl font-bold text-purple-700 dark:text-purple-300">{earnedVideos.length}</p>
+                      <p className="text-xs text-purple-600 dark:text-purple-400">{formatViews(earnedViews)} views ({earnedPercent}%)</p>
+                    </div>
+                  </div>
+                </button>
               </div>
             </div>
-            {/* Visual bar */}
-            <div className="w-full h-3 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden flex">
-              <div
-                className="h-full bg-emerald-500 transition-all"
-                style={{ width: `${ownedPercent}%` }}
-                title={`Owned: ${ownedPercent}%`}
-              />
-              <div
-                className="h-full bg-purple-500 transition-all"
-                style={{ width: `${earnedPercent}%` }}
-                title={`Earned: ${earnedPercent}%`}
-              />
-            </div>
-            <p className="text-xs text-gray-500 dark:text-gray-400 mt-2 text-center">
+
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-4 text-center">
               Share of views from {brandVideos.length} brand videos (mentioning "{data.yourBrand.name}" in title)
             </p>
+
+            {/* Drill-down video list */}
+            {selectedMediaType && (
+              <div className="mt-6 border-t border-gray-200 dark:border-gray-700 pt-4">
+                <div className="flex items-center justify-between mb-3">
+                  <h4 className={`font-semibold ${selectedMediaType === 'owned' ? 'text-emerald-700 dark:text-emerald-300' : 'text-purple-700 dark:text-purple-300'}`}>
+                    {selectedMediaType === 'owned' ? 'Owned' : 'Earned'} Media Videos ({selectedMediaType === 'owned' ? ownedVideos.length : earnedVideos.length})
+                  </h4>
+                  <button
+                    onClick={() => setSelectedMediaType(null)}
+                    className="text-sm text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
+                  >
+                    Close ✕
+                  </button>
+                </div>
+                <div className="space-y-2 max-h-[400px] overflow-y-auto">
+                  {(selectedMediaType === 'owned' ? ownedVideos : earnedVideos).map((video) => (
+                    <a
+                      key={video.videoId}
+                      href={video.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className={`flex items-center gap-3 p-3 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors border ${
+                        selectedMediaType === 'owned'
+                          ? 'border-emerald-200 dark:border-emerald-800'
+                          : 'border-purple-200 dark:border-purple-800'
+                      }`}
+                    >
+                      {video.thumbnail && (
+                        <img
+                          src={video.thumbnail}
+                          alt={video.title}
+                          className="w-20 h-12 object-cover rounded flex-shrink-0"
+                        />
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-gray-900 dark:text-white text-sm truncate">{video.title}</p>
+                        <p className="text-xs text-gray-500 dark:text-gray-400">
+                          {video.channelName} • {formatViews(video.viewsCount)} views
+                        </p>
+                      </div>
+                      <span className={`text-xs px-2 py-1 rounded-full ${
+                        selectedMediaType === 'owned'
+                          ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300'
+                          : 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300'
+                      }`}>
+                        #{video.rank}
+                      </span>
+                    </a>
+                  ))}
+                  {(selectedMediaType === 'owned' ? ownedVideos : earnedVideos).length === 0 && (
+                    <p className="text-center text-gray-500 dark:text-gray-400 py-4">
+                      No {selectedMediaType} media videos found in search results
+                    </p>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
         );
       })()}
 
-      {/* All Videos in Search Results */}
+      {/* All Videos in Search Results - collapsible */}
       {hasVideos && (
-        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6">
-          <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-            Videos in Search Results
-            <span className="text-sm font-normal text-gray-500 dark:text-gray-400 ml-2">
-              ({data.allVideos.length} videos found)
-            </span>
-          </h3>
-          <div className="space-y-3 max-h-[600px] overflow-y-auto">
-            {data.allVideos.map((video) => {
-              const mediaType = getMediaType(video);
-              return (
-                <a
-                  key={video.videoId}
-                  href={video.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className={`flex items-start gap-4 p-3 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors ${
-                    video.isBrandOwned
-                      ? mediaType === 'owned'
-                        ? 'bg-emerald-50 dark:bg-emerald-900/10 border border-emerald-200 dark:border-emerald-800'
-                        : 'bg-purple-50 dark:bg-purple-900/10 border border-purple-200 dark:border-purple-800'
-                      : ''
-                  }`}
-                >
-                  <div className="flex-shrink-0 w-8 h-8 bg-gray-100 dark:bg-gray-700 rounded-full flex items-center justify-center">
-                    <span className="text-sm font-bold text-gray-600 dark:text-gray-300">#{video.rank}</span>
-                  </div>
-                  {video.thumbnail && (
-                    <img
-                      src={video.thumbnail}
-                      alt={video.title}
-                      className="w-24 h-14 object-cover rounded flex-shrink-0"
-                    />
-                  )}
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <h4 className="font-medium text-gray-900 dark:text-white text-sm truncate">
-                        {video.title}
-                      </h4>
-                      {video.isBrandOwned && (
-                        <span className="px-2 py-0.5 bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 text-xs rounded-full flex-shrink-0">
-                          Brand Mention
-                        </span>
-                      )}
-                      {video.isBrandOwned && ownedChannelId && mediaType === 'owned' && (
-                        <span className="px-2 py-0.5 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 text-xs rounded-full flex-shrink-0">
-                          Owned
-                        </span>
-                      )}
-                      {video.isBrandOwned && ownedChannelId && mediaType === 'earned' && (
-                        <span className="px-2 py-0.5 bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 text-xs rounded-full flex-shrink-0">
-                          Earned
-                        </span>
-                      )}
+        <details className="bg-white dark:bg-gray-800 rounded-xl shadow-sm">
+          <summary className="p-6 cursor-pointer list-none">
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+                <svg className="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 10h16M4 14h16M4 18h16" />
+                </svg>
+                All Videos in Search Results
+                <span className="text-sm font-normal text-gray-500 dark:text-gray-400">
+                  ({data.allVideos.length} videos)
+                </span>
+              </h3>
+              <svg className="w-5 h-5 text-gray-400 transform transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              </svg>
+            </div>
+          </summary>
+          <div className="px-6 pb-6">
+            <div className="space-y-3 max-h-[600px] overflow-y-auto">
+              {data.allVideos.map((video) => {
+                const mediaType = getMediaType(video);
+                return (
+                  <a
+                    key={video.videoId}
+                    href={video.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className={`flex items-start gap-4 p-3 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors ${
+                      video.isBrandOwned
+                        ? mediaType === 'owned'
+                          ? 'bg-emerald-50 dark:bg-emerald-900/10 border border-emerald-200 dark:border-emerald-800'
+                          : mediaType === 'earned'
+                            ? 'bg-purple-50 dark:bg-purple-900/10 border border-purple-200 dark:border-purple-800'
+                            : 'bg-red-50 dark:bg-red-900/10 border border-red-200 dark:border-red-800'
+                        : 'border border-gray-200 dark:border-gray-700'
+                    }`}
+                  >
+                    <div className="flex-shrink-0 w-8 h-8 bg-gray-100 dark:bg-gray-700 rounded-full flex items-center justify-center">
+                      <span className="text-sm font-bold text-gray-600 dark:text-gray-300">#{video.rank}</span>
                     </div>
-                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                      {video.channelName} • {formatViews(video.viewsCount)} views • {video.duration}
-                    </p>
-                    <p className="text-xs text-gray-400 dark:text-gray-500">
-                      {formatDate(video.publishedDate)}
-                    </p>
-                  </div>
-                  <svg className="w-4 h-4 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                  </svg>
-                </a>
-              );
-            })}
+                    {video.thumbnail && (
+                      <img
+                        src={video.thumbnail}
+                        alt={video.title}
+                        className="w-24 h-14 object-cover rounded flex-shrink-0"
+                      />
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <h4 className="font-medium text-gray-900 dark:text-white text-sm truncate">
+                          {video.title}
+                        </h4>
+                        {video.isBrandOwned && (
+                          <span className="px-2 py-0.5 bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 text-xs rounded-full flex-shrink-0">
+                            Brand
+                          </span>
+                        )}
+                        {video.isBrandOwned && ownedChannels.length > 0 && mediaType === 'owned' && (
+                          <span className="px-2 py-0.5 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 text-xs rounded-full flex-shrink-0">
+                            Owned
+                          </span>
+                        )}
+                        {video.isBrandOwned && ownedChannels.length > 0 && mediaType === 'earned' && (
+                          <span className="px-2 py-0.5 bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 text-xs rounded-full flex-shrink-0">
+                            Earned
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                        {video.channelName} • {formatViews(video.viewsCount)} views • {video.duration}
+                      </p>
+                      <p className="text-xs text-gray-400 dark:text-gray-500">
+                        {formatDate(video.publishedDate)}
+                      </p>
+                    </div>
+                    <svg className="w-4 h-4 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                    </svg>
+                  </a>
+                );
+              })}
+            </div>
           </div>
-        </div>
+        </details>
       )}
 
       {/* No videos found message */}

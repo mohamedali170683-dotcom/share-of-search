@@ -2,12 +2,14 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 
 /**
  * Paid Ads SOV API
- * Uses DataForSEO Labs API to get actual paid search performance data
+ * Uses DataForSEO Labs API historical_rank_overview endpoint
+ * This provides historical paid advertising data going back to October 2020
  *
  * Metrics:
- * - Paid keywords count and top keywords
+ * - Paid keywords count (SERPs containing domain)
  * - Estimated paid traffic (ETV)
  * - Estimated ad spend
+ * - Position distribution for paid ads
  * - Competitor comparison
  */
 
@@ -40,6 +42,21 @@ const LOCATION_LANGUAGE_MAP: Record<number, string> = {
 
 function getLanguageForLocation(locationCode: number): string {
   return LOCATION_LANGUAGE_MAP[locationCode] || 'en';
+}
+
+/**
+ * Get date range for last 6 months of data
+ */
+function getDateRange(): { dateFrom: string; dateTo: string } {
+  const now = new Date();
+  const dateTo = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
+
+  // Go back 6 months
+  const fromDate = new Date(now);
+  fromDate.setMonth(fromDate.getMonth() - 6);
+  const dateFrom = `${fromDate.getFullYear()}-${String(fromDate.getMonth() + 1).padStart(2, '0')}-01`;
+
+  return { dateFrom, dateTo };
 }
 
 interface PaidKeyword {
@@ -89,20 +106,22 @@ interface PaidAdsResponse {
 }
 
 /**
- * Fetch paid keywords for a domain using ranked_keywords endpoint
+ * Fetch historical paid data for a domain using historical_rank_overview endpoint
+ * This endpoint provides historical paid advertising data going back to October 2020
  */
-async function fetchPaidKeywords(
+async function fetchHistoricalPaidData(
   domain: string,
   locationCode: number,
   auth: string
 ): Promise<DomainPaidData | null> {
   try {
-    // Get the correct language for this location
     const languageCode = getLanguageForLocation(locationCode);
-    console.log(`Fetching paid keywords for ${domain} (location: ${locationCode}, lang: ${languageCode})`);
+    const { dateFrom, dateTo } = getDateRange();
+
+    console.log(`Fetching historical paid data for ${domain} (location: ${locationCode}, lang: ${languageCode}, from: ${dateFrom}, to: ${dateTo})`);
 
     const response = await fetch(
-      'https://api.dataforseo.com/v3/dataforseo_labs/google/ranked_keywords/live',
+      'https://api.dataforseo.com/v3/dataforseo_labs/google/historical_rank_overview/live',
       {
         method: 'POST',
         headers: {
@@ -113,21 +132,20 @@ async function fetchPaidKeywords(
           target: domain,
           location_code: locationCode,
           language_code: languageCode,
-          item_types: ['paid'],
-          limit: 100,
-          order_by: ['keyword_data.keyword_info.search_volume,desc'],
+          date_from: dateFrom,
+          date_to: dateTo,
         }]),
       }
     );
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error(`Paid keywords API error for ${domain}: ${response.status} - ${errorText}`);
+      console.error(`Historical rank API error for ${domain}: ${response.status} - ${errorText}`);
       return null;
     }
 
     const data = await response.json();
-    console.log(`Paid keywords response for ${domain}:`, JSON.stringify(data).substring(0, 1500));
+    console.log(`Historical rank response for ${domain}:`, JSON.stringify(data).substring(0, 2000));
 
     const task = data?.tasks?.[0];
     if (task?.status_code !== 20000) {
@@ -142,37 +160,49 @@ async function fetchPaidKeywords(
     }
 
     const items = result?.items || [];
-    const totalCount = result?.total_count || 0;
-    const metrics = result?.metrics?.paid || {};
+    console.log(`Domain ${domain}: ${items.length} months of historical data`);
 
-    console.log(`Domain ${domain}: total_count=${totalCount}, items=${items.length}, metrics=`, JSON.stringify(metrics).substring(0, 300));
+    // Get the most recent month's data or aggregate across months
+    // Items are ordered by date, find the most recent with paid data
+    let latestPaidMetrics: any = null;
+    let totalPaidTraffic = 0;
+    let totalPaidSpend = 0;
+    let totalPaidCount = 0;
+    let monthsWithData = 0;
 
-    // Extract top keywords
-    const topKeywords: PaidKeyword[] = items.slice(0, 20).map((item: any) => ({
-      keyword: item.keyword_data?.keyword || '',
-      searchVolume: item.keyword_data?.keyword_info?.search_volume || 0,
-      cpc: item.keyword_data?.keyword_info?.cpc || 0,
-      position: item.ranked_serp_element?.serp_item?.rank_group || 0,
-      url: item.ranked_serp_element?.serp_item?.url || '',
-      competition: item.keyword_data?.keyword_info?.competition || 0,
-    }));
-
-    // Calculate estimated spend from keywords
-    let estimatedSpend = metrics.estimated_paid_traffic_cost || 0;
-    if (!estimatedSpend && topKeywords.length > 0) {
-      // Estimate from CPC and traffic
-      estimatedSpend = topKeywords.reduce((sum, kw) => {
-        const ctr = kw.position <= 1 ? 0.15 : kw.position <= 3 ? 0.08 : 0.03;
-        return sum + (kw.searchVolume * ctr * kw.cpc);
-      }, 0);
+    for (const item of items) {
+      const paidMetrics = item?.metrics?.paid;
+      if (paidMetrics && (paidMetrics.etv > 0 || paidMetrics.count > 0)) {
+        if (!latestPaidMetrics) {
+          latestPaidMetrics = paidMetrics;
+        }
+        totalPaidTraffic += paidMetrics.etv || 0;
+        totalPaidSpend += paidMetrics.estimated_paid_traffic_cost || 0;
+        totalPaidCount += paidMetrics.count || 0;
+        monthsWithData++;
+      }
     }
 
-    // Position distribution
+    // Use aggregated averages if we have multiple months
+    const avgMonthlyTraffic = monthsWithData > 0 ? Math.round(totalPaidTraffic / monthsWithData) : 0;
+    const avgMonthlySpend = monthsWithData > 0 ? Math.round(totalPaidSpend / monthsWithData) : 0;
+    const avgMonthlyCount = monthsWithData > 0 ? Math.round(totalPaidCount / monthsWithData) : 0;
+
+    // If no paid data found, return null
+    if (!latestPaidMetrics && avgMonthlyCount === 0) {
+      console.log(`No paid data found for ${domain} in historical data`);
+      return null;
+    }
+
+    const metrics = latestPaidMetrics || {};
+
+    // Position distribution from latest month
     const positionDistribution = {
       pos1: metrics.pos_1 || 0,
       pos2_3: metrics.pos_2_3 || 0,
       pos4_10: metrics.pos_4_10 || 0,
-      pos11_plus: (metrics.pos_11_20 || 0) + (metrics.pos_21_30 || 0) + (metrics.pos_31_40 || 0),
+      pos11_plus: (metrics.pos_11_20 || 0) + (metrics.pos_21_30 || 0) +
+                  (metrics.pos_31_40 || 0) + (metrics.pos_41_50 || 0),
     };
 
     // Calculate average position
@@ -184,23 +214,130 @@ async function fetchPaidKeywords(
         positionDistribution.pos1 * 1 +
         positionDistribution.pos2_3 * 2.5 +
         positionDistribution.pos4_10 * 7 +
-        positionDistribution.pos11_plus * 20
+        positionDistribution.pos11_plus * 25
       ) / totalPositions;
     }
 
+    console.log(`Domain ${domain}: avgMonthlyTraffic=${avgMonthlyTraffic}, avgMonthlySpend=${avgMonthlySpend}, avgMonthlyCount=${avgMonthlyCount}, monthsWithData=${monthsWithData}`);
+
     return {
       domain,
-      paidKeywordsCount: totalCount,
-      estimatedTraffic: metrics.etv || 0,
-      estimatedSpend: Math.round(estimatedSpend),
+      paidKeywordsCount: avgMonthlyCount,
+      estimatedTraffic: avgMonthlyTraffic,
+      estimatedSpend: avgMonthlySpend,
       avgPosition: Math.round(avgPosition * 10) / 10,
-      topKeywords,
+      topKeywords: [], // Historical endpoint doesn't provide individual keywords
       positionDistribution,
     };
   } catch (error) {
-    console.error(`Error fetching paid keywords for ${domain}:`, error);
+    console.error(`Error fetching historical paid data for ${domain}:`, error);
     return null;
   }
+}
+
+/**
+ * Fetch top paid keywords using ranked_keywords endpoint (supplementary data)
+ */
+async function fetchTopPaidKeywords(
+  domain: string,
+  locationCode: number,
+  auth: string
+): Promise<PaidKeyword[]> {
+  try {
+    const languageCode = getLanguageForLocation(locationCode);
+
+    const response = await fetch(
+      'https://api.dataforseo.com/v3/dataforseo_labs/google/ranked_keywords/live',
+      {
+        method: 'POST',
+        headers: {
+          'Authorization': `Basic ${auth}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify([{
+          target: domain,
+          location_code: locationCode,
+          language_code: languageCode,
+          item_types: ['paid'],
+          limit: 20,
+          order_by: ['keyword_data.keyword_info.search_volume,desc'],
+        }]),
+      }
+    );
+
+    if (!response.ok) return [];
+
+    const data = await response.json();
+    const task = data?.tasks?.[0];
+    if (task?.status_code !== 20000) return [];
+
+    const items = task?.result?.[0]?.items || [];
+
+    return items.slice(0, 20).map((item: any) => ({
+      keyword: item.keyword_data?.keyword || '',
+      searchVolume: item.keyword_data?.keyword_info?.search_volume || 0,
+      cpc: item.keyword_data?.keyword_info?.cpc || 0,
+      position: item.ranked_serp_element?.serp_item?.rank_group || 0,
+      url: item.ranked_serp_element?.serp_item?.url || '',
+      competition: item.keyword_data?.keyword_info?.competition || 0,
+    }));
+  } catch (error) {
+    console.error(`Error fetching top paid keywords for ${domain}:`, error);
+    return [];
+  }
+}
+
+/**
+ * Combined function to get paid data from historical endpoint + top keywords
+ */
+async function fetchPaidData(
+  domain: string,
+  locationCode: number,
+  auth: string
+): Promise<DomainPaidData | null> {
+  // Fetch historical data and top keywords in parallel
+  const [historicalData, topKeywords] = await Promise.all([
+    fetchHistoricalPaidData(domain, locationCode, auth),
+    fetchTopPaidKeywords(domain, locationCode, auth),
+  ]);
+
+  if (!historicalData) {
+    // If no historical data, try to build from keywords alone
+    if (topKeywords.length > 0) {
+      // Estimate metrics from keywords
+      const estimatedTraffic = topKeywords.reduce((sum, kw) => {
+        const ctr = kw.position <= 1 ? 0.12 : kw.position <= 3 ? 0.06 : 0.02;
+        return sum + Math.round(kw.searchVolume * ctr);
+      }, 0);
+
+      const estimatedSpend = topKeywords.reduce((sum, kw) => {
+        const ctr = kw.position <= 1 ? 0.12 : kw.position <= 3 ? 0.06 : 0.02;
+        return sum + (kw.searchVolume * ctr * kw.cpc);
+      }, 0);
+
+      return {
+        domain,
+        paidKeywordsCount: topKeywords.length,
+        estimatedTraffic,
+        estimatedSpend: Math.round(estimatedSpend),
+        avgPosition: topKeywords.reduce((sum, kw) => sum + kw.position, 0) / topKeywords.length || 0,
+        topKeywords,
+        positionDistribution: {
+          pos1: topKeywords.filter(kw => kw.position === 1).length,
+          pos2_3: topKeywords.filter(kw => kw.position >= 2 && kw.position <= 3).length,
+          pos4_10: topKeywords.filter(kw => kw.position >= 4 && kw.position <= 10).length,
+          pos11_plus: topKeywords.filter(kw => kw.position > 10).length,
+        },
+      };
+    }
+    return null;
+  }
+
+  // Merge historical data with top keywords
+  return {
+    ...historicalData,
+    topKeywords,
+  };
 }
 
 /**
@@ -284,10 +421,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           .map(c => c.toLowerCase().includes('.') ? c : `${c.toLowerCase()}.com`)
       : [];
 
-    // Fetch data for all domains in parallel
+    // Fetch data for all domains in parallel using historical + keywords endpoints
     const allDomains = [domain, ...competitorDomains];
     const results = await Promise.all(
-      allDomains.map(d => fetchPaidKeywords(d, locationCode, auth))
+      allDomains.map(d => fetchPaidData(d, locationCode, auth))
     );
 
     const yourDomainData = results[0];
@@ -295,6 +432,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     // Calculate SOV
     const { sov, totalMarket } = calculateSOV(yourDomainData, competitorData);
+
+    const { dateFrom, dateTo } = getDateRange();
 
     const response: PaidAdsResponse = {
       yourDomain: yourDomainData,
@@ -304,7 +443,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       timestamp: new Date().toISOString(),
       debug: {
         apiStatus: 'ok',
-        method: 'DataForSEO Labs ranked_keywords (paid)',
+        method: `DataForSEO historical_rank_overview (${dateFrom} to ${dateTo})`,
         yourKeywordsFound: yourDomainData?.paidKeywordsCount || 0,
         competitorsAnalyzed: competitorData.length,
       },

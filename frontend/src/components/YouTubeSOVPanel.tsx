@@ -200,6 +200,7 @@ export function YouTubeSOVPanel({ brandName, competitors, locationCode = 2840, l
           videoCount: data.channel.videoCount,
           subscriberCount: data.channel.subscriberCount,
           viewCount: data.channel.viewCount,
+          url: data.channel.customUrl ? `https://youtube.com/${data.channel.customUrl}` : undefined,
           lastFetched: new Date().toISOString(),
         };
       }
@@ -663,13 +664,20 @@ export function YouTubeSOVPanel({ brandName, competitors, locationCode = 2840, l
     setError(null);
 
     // Auto-fetch competitor YouTube channels using YouTube API search
+    // Accumulate all fetched channels first, then save once at the end to avoid stale closure issues
     const fetchCompetitorChannelsPromise = (async () => {
       const competitorsToFetch = competitors.filter(comp => {
         const existing = competitorChannels[comp] || [];
         return existing.length === 0; // Only fetch if not already configured
       });
 
-      for (const competitor of competitorsToFetch) {
+      if (competitorsToFetch.length === 0) return;
+
+      // Accumulate all fetched channels
+      const fetchedChannels: Record<string, OwnedChannel> = {};
+
+      // Fetch all competitors in parallel for speed
+      await Promise.all(competitorsToFetch.map(async (competitor) => {
         try {
           // Use YouTube API to search for the official channel by brand name
           const response = await fetch('/api/youtube-channel', {
@@ -684,8 +692,8 @@ export function YouTubeSOVPanel({ brandName, competitors, locationCode = 2840, l
           if (response.ok) {
             const data = await response.json();
             if (data.channel) {
-              // Add channel with stats from YouTube API
-              const newChannel: OwnedChannel = {
+              // Store fetched channel
+              fetchedChannels[competitor] = {
                 id: data.channel.customUrl || data.channel.channelId,
                 name: data.channel.channelTitle,
                 channelId: data.channel.channelId,
@@ -695,14 +703,29 @@ export function YouTubeSOVPanel({ brandName, competitors, locationCode = 2840, l
                 url: data.channel.customUrl ? `https://youtube.com/${data.channel.customUrl}` : undefined,
                 lastFetched: new Date().toISOString(),
               };
-              const existing = competitorChannels[competitor] || [];
-              const updated = { ...competitorChannels, [competitor]: [...existing, newChannel] };
-              saveChannelConfig(ownedChannels, updated);
             }
           }
         } catch (error) {
           console.warn(`Failed to auto-fetch ${competitor} channel:`, error);
         }
+      }));
+
+      // Save all fetched channels at once
+      if (Object.keys(fetchedChannels).length > 0) {
+        // Get fresh state from localStorage to avoid stale closure
+        const savedChannel = localStorage.getItem(CHANNEL_STORAGE_KEY);
+        const channelInfo = savedChannel ? JSON.parse(savedChannel) : {};
+        const brandConfig = channelInfo[brandName.toLowerCase()] || {};
+        const currentCompetitorChannels = brandConfig.competitorChannels || {};
+
+        // Merge fetched channels with existing
+        const mergedCompetitorChannels = { ...currentCompetitorChannels };
+        for (const [competitor, channel] of Object.entries(fetchedChannels)) {
+          mergedCompetitorChannels[competitor] = [channel];
+        }
+
+        saveChannelConfig(ownedChannels, mergedCompetitorChannels);
+        console.log('Auto-fetched competitor channels:', Object.keys(fetchedChannels));
       }
     })();
 

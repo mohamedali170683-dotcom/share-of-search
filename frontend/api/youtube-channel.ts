@@ -76,6 +76,7 @@ const GERMAN_LOCATION_VARIANTS = ['Deutschland', 'Germany', 'DE', 'German'];
 
 /**
  * Search for a channel with multiple query strategies
+ * Prioritizes regional/local channels when locationCode is provided
  */
 async function searchChannelWithStrategies(
   brandName: string,
@@ -84,36 +85,21 @@ async function searchChannelWithStrategies(
 ): Promise<{ channelId: string; channelTitle: string; subscriberCount: number } | null> {
   const locationInfo = locationCode ? LOCATION_NAMES[locationCode] : null;
 
-  // Build search queries in priority order
+  // Build search queries - prioritize location-specific searches
   const searchQueries: string[] = [];
 
-  // 1. Brand name + location variant (e.g., "Michelin Deutschland")
-  if (locationInfo) {
-    if (locationCode === 2276) {
-      // For Germany, try multiple variants
-      for (const variant of GERMAN_LOCATION_VARIANTS) {
-        searchQueries.push(`${brandName} ${variant}`);
-      }
-    } else {
-      searchQueries.push(`${brandName} ${locationInfo.name}`);
-    }
+  // For Germany, use specific German terms first
+  if (locationCode === 2276) {
+    searchQueries.push(`${brandName} Deutschland`);
+    searchQueries.push(`${brandName} Germany`);
+    searchQueries.push(`${brandName} DE`);
+  } else if (locationInfo) {
+    searchQueries.push(`${brandName} ${locationInfo.name}`);
   }
 
-  // 2. Brand name + "official" + location
-  if (locationInfo) {
-    searchQueries.push(`${brandName} official ${locationInfo.name}`);
-  }
-
-  // 3. Just brand name + "official"
+  // Then try generic searches
   searchQueries.push(`${brandName} official`);
-  searchQueries.push(`${brandName} official channel`);
-
-  // 4. Just brand name
   searchQueries.push(brandName);
-
-  // 5. Brand as handle
-  const handleVariant = `@${brandName.toLowerCase().replace(/\s+/g, '')}`;
-  searchQueries.push(handleVariant);
 
   // Store all found channels with their subscriber counts for ranking
   const foundChannels: Array<{
@@ -121,10 +107,31 @@ async function searchChannelWithStrategies(
     channelTitle: string;
     subscriberCount: number;
     matchScore: number;
+    customUrl?: string;
   }> = [];
 
-  // Try each search query
-  for (let i = 0; i < Math.min(searchQueries.length, 4); i++) {
+  // YouTube uses ISO 3166-1 alpha-2 country codes
+  const regionCodes: Record<number, string> = {
+    2276: 'DE', 2250: 'FR', 2826: 'GB', 2840: 'US', 2724: 'ES',
+    2380: 'IT', 2528: 'NL', 2056: 'BE', 2756: 'CH', 2040: 'AT',
+    2616: 'PL', 2203: 'CZ', 2076: 'BR', 2484: 'MX', 2124: 'CA',
+    2036: 'AU', 2392: 'JP', 2410: 'KR', 2156: 'CN', 2356: 'IN',
+  };
+
+  // Location keywords to look for in channel titles/descriptions
+  const locationKeywords: Record<number, string[]> = {
+    2276: ['deutschland', 'germany', 'german', 'de', 'deutsch'],
+    2250: ['france', 'french', 'français', 'fr'],
+    2826: ['uk', 'united kingdom', 'britain', 'british'],
+    2840: ['usa', 'us', 'united states', 'america', 'american'],
+    2724: ['spain', 'spanish', 'españa', 'es'],
+    2380: ['italy', 'italian', 'italia', 'it'],
+  };
+
+  const targetLocationKeywords = locationCode ? (locationKeywords[locationCode] || [locationInfo?.name.toLowerCase()]) : [];
+
+  // Try each search query (limit to 3 to save API quota)
+  for (let i = 0; i < Math.min(searchQueries.length, 3); i++) {
     const query = searchQueries[i];
 
     try {
@@ -132,22 +139,12 @@ async function searchChannelWithStrategies(
       searchUrl.searchParams.set('part', 'snippet');
       searchUrl.searchParams.set('type', 'channel');
       searchUrl.searchParams.set('q', query);
-      searchUrl.searchParams.set('maxResults', '5');
+      searchUrl.searchParams.set('maxResults', '10'); // Get more results for better matching
       searchUrl.searchParams.set('key', apiKey);
 
       // Add region code if available
-      if (locationInfo) {
-        // YouTube uses ISO 3166-1 alpha-2 country codes
-        const regionCodes: Record<number, string> = {
-          2276: 'DE', 2250: 'FR', 2826: 'GB', 2840: 'US', 2724: 'ES',
-          2380: 'IT', 2528: 'NL', 2056: 'BE', 2756: 'CH', 2040: 'AT',
-          2616: 'PL', 2203: 'CZ', 2076: 'BR', 2484: 'MX', 2124: 'CA',
-          2036: 'AU', 2392: 'JP', 2410: 'KR', 2156: 'CN', 2356: 'IN',
-        };
-        const regionCode = regionCodes[locationCode!];
-        if (regionCode) {
-          searchUrl.searchParams.set('regionCode', regionCode);
-        }
+      if (locationCode && regionCodes[locationCode]) {
+        searchUrl.searchParams.set('regionCode', regionCodes[locationCode]);
       }
 
       const searchResponse = await fetch(searchUrl.toString());
@@ -165,9 +162,9 @@ async function searchChannelWithStrategies(
         // Skip if already found
         if (foundChannels.some(c => c.channelId === channelId)) continue;
 
-        // Fetch subscriber count
+        // Fetch full channel details
         const statsUrl = new URL('https://www.googleapis.com/youtube/v3/channels');
-        statsUrl.searchParams.set('part', 'statistics,snippet');
+        statsUrl.searchParams.set('part', 'statistics,snippet,brandingSettings');
         statsUrl.searchParams.set('id', channelId);
         statsUrl.searchParams.set('key', apiKey);
 
@@ -181,39 +178,71 @@ async function searchChannelWithStrategies(
         const subscriberCount = parseInt(channel.statistics?.subscriberCount || '0', 10);
         const title = channel.snippet?.title || channelTitle;
         const description = (channel.snippet?.description || '').toLowerCase();
+        const customUrl = channel.snippet?.customUrl || '';
+        const country = channel.snippet?.country?.toLowerCase() || '';
 
         // Calculate match score
         let matchScore = 0;
         const titleLower = title.toLowerCase();
         const brandLower = brandName.toLowerCase();
+        const customUrlLower = customUrl.toLowerCase();
 
-        // Exact brand name match in title
-        if (titleLower.includes(brandLower)) matchScore += 100;
+        // CRITICAL: Check if this is the brand's channel (brand name in title)
+        if (titleLower.includes(brandLower)) {
+          matchScore += 100;
+        } else {
+          // If brand name not in title, heavily penalize (likely not the right channel)
+          matchScore -= 200;
+        }
 
-        // Official indicators
-        if (titleLower.includes('official') || description.includes('official')) matchScore += 50;
-
-        // Location match
-        if (locationInfo) {
-          const locLower = locationInfo.name.toLowerCase();
-          if (titleLower.includes(locLower) || titleLower.includes('deutschland') || titleLower.includes('germany')) {
-            matchScore += 75;
+        // STRONG BONUS: Location match in channel title (e.g., "Michelin Deutschland")
+        // This is the most important factor for regional channels
+        let hasLocationMatch = false;
+        for (const keyword of targetLocationKeywords) {
+          if (titleLower.includes(keyword) || customUrlLower.includes(keyword)) {
+            matchScore += 200; // Very strong bonus for regional match
+            hasLocationMatch = true;
+            break;
           }
         }
 
-        // Verified/high subscriber count bonus (likely official)
-        if (subscriberCount > 100000) matchScore += 30;
-        if (subscriberCount > 1000000) matchScore += 20;
+        // Country match from channel settings
+        if (locationCode && regionCodes[locationCode]) {
+          const targetCountry = regionCodes[locationCode].toLowerCase();
+          if (country === targetCountry) {
+            matchScore += 50;
+          }
+        }
 
-        // Penalize if title has other brand names (likely a fan channel)
-        if (titleLower.includes('fan') || titleLower.includes('unofficial')) matchScore -= 50;
+        // Official indicators
+        if (titleLower.includes('official') || description.includes('official')) {
+          matchScore += 30;
+        }
+
+        // Subscriber count bonus (larger channels are more likely to be official)
+        if (subscriberCount > 10000) matchScore += 10;
+        if (subscriberCount > 100000) matchScore += 20;
+        if (subscriberCount > 1000000) matchScore += 30;
+
+        // Penalize if clearly not the brand
+        if (titleLower.includes('fan') || titleLower.includes('unofficial') || titleLower.includes('news')) {
+          matchScore -= 100;
+        }
+
+        // Penalize global channel if we're looking for regional and found a regional one
+        if (locationCode && !hasLocationMatch && foundChannels.some(c => c.matchScore > 200)) {
+          matchScore -= 50; // Prefer regional over global
+        }
 
         foundChannels.push({
           channelId,
           channelTitle: title,
           subscriberCount,
           matchScore,
+          customUrl,
         });
+
+        console.log(`  Found: "${title}" (score: ${matchScore}, subs: ${subscriberCount}, location: ${hasLocationMatch ? 'YES' : 'no'})`);
       }
     } catch (error) {
       console.warn(`Search query "${query}" failed:`, error);
@@ -228,7 +257,7 @@ async function searchChannelWithStrategies(
 
   if (foundChannels.length > 0) {
     const best = foundChannels[0];
-    console.log(`Best channel match for "${brandName}": ${best.channelTitle} (score: ${best.matchScore}, subs: ${best.subscriberCount})`);
+    console.log(`✓ Best match for "${brandName}": ${best.channelTitle} (score: ${best.matchScore}, subs: ${best.subscriberCount})`);
     return {
       channelId: best.channelId,
       channelTitle: best.channelTitle,

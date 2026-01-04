@@ -271,38 +271,37 @@ export function YouTubeSOVPanel({ brandName, competitors, locationCode = 2840, l
     saveChannelConfig(ownedChannels, updated);
   };
 
-  // Auto-fetch competitor YouTube channel from their website
+  // Auto-fetch competitor YouTube channel using YouTube API search
   const [isFetchingCompetitor, setIsFetchingCompetitor] = useState<string | null>(null);
 
   const autoFetchCompetitorChannel = async (competitorName: string) => {
     setIsFetchingCompetitor(competitorName);
     try {
-      // Construct likely domain from competitor name
-      const domain = `${competitorName.toLowerCase().replace(/\s+/g, '')}.com`;
-
-      const response = await fetch('/api/scrape-youtube-channel', {
+      // Use YouTube API to search for the official channel by brand name
+      const response = await fetch('/api/youtube-channel', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ domain, brandName: competitorName, fetchStats: true }),
+        body: JSON.stringify({
+          channelIdentifier: competitorName, // Search by brand name
+          includeVideos: false,
+        }),
       });
 
       if (!response.ok) {
-        console.warn(`Failed to scrape ${domain}`);
+        console.warn(`Failed to fetch ${competitorName} channel from YouTube API`);
         return;
       }
 
       const data = await response.json();
 
-      if (data.found && (data.channelId || data.channelHandle)) {
-        const channelId = data.channelHandle || data.channelId;
-        const channelName = data.channelTitle || competitorName;
-
-        // Add with stats if available
-        await addCompetitorChannel(competitorName, channelId, channelName, {
-          channelId: data.channelId,
-          videoCount: data.videoCount,
-          viewCount: data.viewCount,
-          subscriberCount: data.subscriberCount,
+      if (data.channel) {
+        // Add with stats from YouTube API
+        await addCompetitorChannel(competitorName, data.channel.customUrl || data.channel.channelId, data.channel.channelTitle, {
+          channelId: data.channel.channelId,
+          videoCount: data.channel.videoCount,
+          viewCount: data.channel.viewCount,
+          subscriberCount: data.channel.subscriberCount,
+          url: data.channel.customUrl ? `https://youtube.com/${data.channel.customUrl}` : undefined,
           lastFetched: new Date().toISOString(),
         });
       }
@@ -663,7 +662,7 @@ export function YouTubeSOVPanel({ brandName, competitors, locationCode = 2840, l
     setIsLoading(true);
     setError(null);
 
-    // Auto-fetch competitor YouTube channels in parallel with main analysis
+    // Auto-fetch competitor YouTube channels using YouTube API search
     const fetchCompetitorChannelsPromise = (async () => {
       const competitorsToFetch = competitors.filter(comp => {
         const existing = competitorChannels[comp] || [];
@@ -672,26 +671,28 @@ export function YouTubeSOVPanel({ brandName, competitors, locationCode = 2840, l
 
       for (const competitor of competitorsToFetch) {
         try {
-          const domain = `${competitor.toLowerCase().replace(/\s+/g, '')}.com`;
-          const response = await fetch('/api/scrape-youtube-channel', {
+          // Use YouTube API to search for the official channel by brand name
+          const response = await fetch('/api/youtube-channel', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ domain, brandName: competitor, fetchStats: true }),
+            body: JSON.stringify({
+              channelIdentifier: competitor, // Search by brand name
+              includeVideos: false, // Just need stats, not video list
+            }),
           });
 
           if (response.ok) {
             const data = await response.json();
-            if (data.found && (data.channelId || data.channelHandle)) {
-              const channelId = data.channelHandle || data.channelId;
-              const channelName = data.channelTitle || competitor;
-              // Add channel with stats
+            if (data.channel) {
+              // Add channel with stats from YouTube API
               const newChannel: OwnedChannel = {
-                id: channelId,
-                name: channelName,
-                channelId: data.channelId,
-                videoCount: data.videoCount,
-                viewCount: data.viewCount,
-                subscriberCount: data.subscriberCount,
+                id: data.channel.customUrl || data.channel.channelId,
+                name: data.channel.channelTitle,
+                channelId: data.channel.channelId,
+                videoCount: data.channel.videoCount,
+                viewCount: data.channel.viewCount,
+                subscriberCount: data.channel.subscriberCount,
+                url: data.channel.customUrl ? `https://youtube.com/${data.channel.customUrl}` : undefined,
                 lastFetched: new Date().toISOString(),
               };
               const existing = competitorChannels[competitor] || [];

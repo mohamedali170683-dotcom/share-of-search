@@ -178,17 +178,26 @@ export function YouTubeSOVPanel({ brandName, competitors, locationCode = 2840, l
   };
 
   // Fetch channel stats from YouTube Data API v3
-  const fetchChannelStats = async (channelIdentifier: string): Promise<Partial<OwnedChannel>> => {
+  // Pass locationCode for regional channel matching (e.g., "Michelin Deutschland" for Germany)
+  const fetchChannelStats = async (channelIdentifier: string, useLocationCode: boolean = true): Promise<Partial<OwnedChannel>> => {
     try {
       const response = await fetch('/api/youtube-channel', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ channelIdentifier, includeVideos: false }),
+        body: JSON.stringify({
+          channelIdentifier,
+          includeVideos: false,
+          locationCode: useLocationCode ? locationCode : undefined, // Pass location for regional matching
+        }),
       });
 
       if (!response.ok) {
         const errorData = await response.json();
-        console.warn('YouTube Channel API error:', errorData.error);
+        console.warn('YouTube Channel API error:', errorData.error, '- Status:', response.status);
+        // If it's a 500 error about API key, show more specific message
+        if (response.status === 500 && errorData.error?.includes('API key')) {
+          console.error('YOUTUBE_API_KEY is not configured on the server');
+        }
         return {};
       }
 

@@ -47,6 +47,12 @@ interface GoogleMapsResponse {
   searchedKeywords: string[];
   location: string;
   timestamp: string;
+  methodology?: {
+    visibilityFormula: string;
+    reviewSOVFormula: string;
+    brandMatchingMethod: string;
+    dataSource: string;
+  };
   debug?: {
     totalListingsFetched: number;
     apiStatus: string;
@@ -308,7 +314,7 @@ export function GoogleMapsPanel({ brandName, competitors, locationCode = 2840, l
           <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
-          <span className="font-medium text-blue-800 dark:text-blue-200">How is Local SEO Analyzed?</span>
+          <span className="font-medium text-blue-800 dark:text-blue-200">How is Local SEO Analyzed? (Formulas & Methodology)</span>
         </div>
         <svg className={`w-5 h-5 text-blue-600 transition-transform ${showMethodology ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
@@ -318,23 +324,49 @@ export function GoogleMapsPanel({ brandName, competitors, locationCode = 2840, l
       {showMethodology && (
         <div className="mt-4 space-y-4 text-sm text-blue-800 dark:text-blue-200">
           <div>
-            <h4 className="font-semibold mb-2">Local Visibility Score</h4>
+            <h4 className="font-semibold mb-2">Local Visibility Score (by Listings)</h4>
             <p className="text-blue-700 dark:text-blue-300 mb-2">
-              Measures how often your business appears in Google Maps search results for brand and category searches.
+              Measures how often your business appears in Google Maps search results compared to competitors.
             </p>
+            <div className="bg-white dark:bg-gray-800 rounded p-3 font-mono text-xs">
+              <p className="font-bold">Formula: Visibility SOV = (Your Listings / Total Listings) × 100</p>
+              {data?.methodology?.visibilityFormula && (
+                <p className="mt-2 text-blue-600 dark:text-blue-400">
+                  <strong>Your Calculation:</strong> {data.methodology.visibilityFormula}
+                </p>
+              )}
+            </div>
           </div>
 
           <div>
             <h4 className="font-semibold mb-2">Review Share of Voice</h4>
             <p className="text-blue-700 dark:text-blue-300 mb-2">
-              Compares your total review count to competitors - more reviews = more trust signals for local search.
+              Compares your total review count to competitors. More reviews = stronger trust signals.
+            </p>
+            <div className="bg-white dark:bg-gray-800 rounded p-3 font-mono text-xs">
+              <p className="font-bold">Formula: Review SOV = (Your Reviews / Total Reviews) × 100</p>
+              {data?.methodology?.reviewSOVFormula && (
+                <p className="mt-2 text-blue-600 dark:text-blue-400">
+                  <strong>Your Calculation:</strong> {data.methodology.reviewSOVFormula}
+                </p>
+              )}
+            </div>
+          </div>
+
+          <div>
+            <h4 className="font-semibold mb-2">Brand Comparison Method</h4>
+            <p className="text-blue-700 dark:text-blue-300">
+              <strong>Step 1:</strong> Search Google Maps for each brand name (your brand + competitors).<br/>
+              <strong>Step 2:</strong> Collect listings from search results (up to 100 per search).<br/>
+              <strong>Step 3:</strong> Match listings to brands where the <strong>business title contains the brand name</strong> or <strong>domain matches the brand</strong>.<br/>
+              <strong>Step 4:</strong> Count listings and sum reviews for each brand.
             </p>
           </div>
 
           <div>
             <h4 className="font-semibold mb-2">Rating Analysis</h4>
             <p className="text-blue-700 dark:text-blue-300">
-              Analyzes your average star rating and distribution compared to competitors.
+              Average rating is calculated as a weighted average across all locations (weighted by review count).
               Higher ratings improve click-through rates and conversions.
             </p>
           </div>
@@ -342,8 +374,8 @@ export function GoogleMapsPanel({ brandName, competitors, locationCode = 2840, l
           <div>
             <h4 className="font-semibold mb-2">Data Source</h4>
             <p className="text-blue-700 dark:text-blue-300">
-              Results are fetched from Google Maps via DataForSEO SERP API.
-              Analysis includes up to 100 listings per search query.
+              Results are fetched from <strong>Google Maps via DataForSEO SERP API</strong>.
+              Analysis includes up to 100 listings per search query. Data reflects what appears in Google Maps search results at the time of analysis.
             </p>
           </div>
         </div>

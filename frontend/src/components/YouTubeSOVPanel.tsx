@@ -37,6 +37,13 @@ interface YouTubeSOVResponse {
   };
   searchedKeywords: string[];
   timestamp: string;
+  methodology?: {
+    sovByCountFormula: string;
+    sovByViewsFormula: string;
+    brandComparisonMethod: string;
+    ownedMediaMethod: string;
+    limitations: string[];
+  };
   debug?: {
     totalVideosFetched: number;
     channelVideosFetched?: number;
@@ -550,7 +557,7 @@ export function YouTubeSOVPanel({ brandName, competitors, locationCode = 2840, l
           <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
-          <span className="font-medium text-blue-800 dark:text-blue-200">How is YouTube SOV Calculated?</span>
+          <span className="font-medium text-blue-800 dark:text-blue-200">How is YouTube SOV Calculated? (Formulas & Methodology)</span>
         </div>
         <svg className={`w-5 h-5 text-blue-600 transition-transform ${showMethodology ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
@@ -565,10 +572,10 @@ export function YouTubeSOVPanel({ brandName, competitors, locationCode = 2840, l
               Measures how many videos in YouTube search results mention your brand in their title compared to competitors.
             </p>
             <div className="bg-white dark:bg-gray-800 rounded p-3 font-mono text-xs">
-              <p>SOS = (Your Brand Videos / Total Identified Brand Videos) × 100</p>
+              <p className="font-bold">Formula: SOS = (Your Brand Videos / Total Identified Brand Videos) × 100</p>
               {data && (
                 <p className="mt-2 text-blue-600 dark:text-blue-400">
-                  = ({data.yourBrand.totalVideosInTop20} / {data.yourBrand.totalVideosInTop20 + data.competitors.reduce((sum, c) => sum + c.totalVideosInTop20, 0)}) × 100 = <strong>{data.sov.byCount}%</strong>
+                  <strong>Your Calculation:</strong> ({data.yourBrand.totalVideosInTop20} / {data.yourBrand.totalVideosInTop20 + data.competitors.reduce((sum, c) => sum + c.totalVideosInTop20, 0)}) × 100 = <strong>{data.sov.byCount}%</strong>
                 </p>
               )}
             </div>
@@ -580,28 +587,62 @@ export function YouTubeSOVPanel({ brandName, competitors, locationCode = 2840, l
               Measures your brand's audience reach based on total views on videos mentioning your brand.
             </p>
             <div className="bg-white dark:bg-gray-800 rounded p-3 font-mono text-xs">
-              <p>SOV = (Your Brand Video Views / Total Brand Video Views) × 100</p>
+              <p className="font-bold">Formula: SOV = (Your Brand Video Views / Total Brand Video Views) × 100</p>
               {data && (
                 <p className="mt-2 text-blue-600 dark:text-blue-400">
-                  = ({formatViews(data.yourBrand.totalViews)} / {formatViews(data.yourBrand.totalViews + data.competitors.reduce((sum, c) => sum + c.totalViews, 0))}) × 100 = <strong>{data.sov.byViews}%</strong>
+                  <strong>Your Calculation:</strong> ({formatViews(data.yourBrand.totalViews)} / {formatViews(data.yourBrand.totalViews + data.competitors.reduce((sum, c) => sum + c.totalViews, 0))}) × 100 = <strong>{data.sov.byViews}%</strong>
                 </p>
               )}
             </div>
           </div>
 
           <div>
-            <h4 className="font-semibold mb-2">Brand Matching Method</h4>
+            <h4 className="font-semibold mb-2">Brand Comparison Method</h4>
             <p className="text-blue-700 dark:text-blue-300">
-              Videos are matched to brands based on <strong>video title</strong> containing the brand name.
-              This ensures we capture videos that are explicitly about the brand, not just uploaded by the brand's channel.
+              <strong>Step 1:</strong> Search YouTube for each brand name (your brand + competitors).<br/>
+              <strong>Step 2:</strong> Collect videos from search results (up to 100 per search).<br/>
+              <strong>Step 3:</strong> Filter videos where the <strong>video title contains the brand name</strong>.<br/>
+              <strong>Step 4:</strong> Count videos and sum views for each brand.
             </p>
+          </div>
+
+          <div>
+            <h4 className="font-semibold mb-2">Owned Media Calculation</h4>
+            <p className="text-blue-700 dark:text-blue-300">
+              <strong>Method:</strong> Search YouTube for your channel name/handle, then filter results to only videos from your channel.
+            </p>
+          </div>
+
+          {/* API Limitations Warning */}
+          <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-700 rounded-lg p-3">
+            <h4 className="font-semibold mb-2 text-yellow-800 dark:text-yellow-200 flex items-center gap-2">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              </svg>
+              Important Limitations
+            </h4>
+            <ul className="text-yellow-700 dark:text-yellow-300 text-xs space-y-1">
+              <li>• <strong>DataForSEO is a SEARCH API</strong>, not a channel listing API. It cannot retrieve ALL videos from a channel.</li>
+              <li>• Owned channel videos are limited to what appears in YouTube search results (typically 100-200 videos max).</li>
+              <li>• If your channel has 400+ videos, only ~100-150 may be captured via search.</li>
+              <li>• For complete channel video counts, use the official YouTube Data API v3.</li>
+              <li>• Brand matching is based on video titles only - videos without brand name in title are not counted.</li>
+            </ul>
+            {data?.methodology?.limitations && data.methodology.limitations.length > 0 && (
+              <div className="mt-2 pt-2 border-t border-yellow-300 dark:border-yellow-700">
+                <p className="text-xs text-yellow-600 dark:text-yellow-400 font-medium">Analysis-specific notes:</p>
+                {data.methodology.limitations.slice(0, 3).map((lim, i) => (
+                  <p key={i} className="text-xs text-yellow-600 dark:text-yellow-400">• {lim}</p>
+                ))}
+              </div>
+            )}
           </div>
 
           <div>
             <h4 className="font-semibold mb-2">Data Source</h4>
             <p className="text-blue-700 dark:text-blue-300">
-              Results are fetched from YouTube search via DataForSEO SERP API.
-              We analyze up to 100 videos per search keyword for comprehensive coverage.
+              Results are fetched from YouTube search via <strong>DataForSEO SERP API</strong>.
+              We analyze up to 100 videos per search keyword. Data reflects what appears in YouTube search results at the time of analysis.
             </p>
           </div>
         </div>

@@ -55,6 +55,13 @@ interface YouTubeSOVResponse {
   };
   searchedKeywords: string[];
   timestamp: string;
+  methodology: {
+    sovByCountFormula: string;
+    sovByViewsFormula: string;
+    brandComparisonMethod: string;
+    ownedMediaMethod: string;
+    limitations: string[];
+  };
   debug?: {
     totalVideosFetched: number;
     channelVideosFetched: number;
@@ -136,39 +143,52 @@ async function fetchYouTubeSERP(
 
 /**
  * Fetch videos from a specific YouTube channel by searching for channel content
- * Uses the channel handle/name as a search term to find their videos
+ *
+ * IMPORTANT LIMITATION: DataForSEO's YouTube API is a SEARCH API, not a channel listing API.
+ * It can only return videos that appear in YouTube search results (max ~100-200 per search).
+ * To get ALL videos from a channel (e.g., 400+), you would need YouTube Data API v3.
+ *
+ * This function works around the limitation by:
+ * 1. Searching for the channel name/handle
+ * 2. Searching for variations (channel name + common terms)
+ * 3. Filtering results to only include videos from the target channel
  */
 async function fetchChannelVideos(
   channelInfo: OwnedChannelInfo,
   locationCode: number,
   languageCode: string,
   auth: string
-): Promise<{ videos: YouTubeVideo[]; status: string }> {
+): Promise<{ videos: YouTubeVideo[]; status: string; limitation: string }> {
   try {
-    // Search for the channel's videos using various search strategies
-    // Strategy 1: Search using channel handle (e.g., "@ContinentalTires")
-    // Strategy 2: Search using channel name directly
+    // Build multiple search terms to capture more videos
     const searchTerms: string[] = [];
+    const baseName = channelInfo.name;
 
-    // If it's a handle (starts with @), use it directly
+    // Primary search: channel name/handle
     if (channelInfo.id.startsWith('@')) {
       searchTerms.push(channelInfo.id);
+      searchTerms.push(channelInfo.id.replace('@', ''));
     } else if (channelInfo.id.startsWith('UC')) {
-      // It's a channel ID - search using the channel name
-      searchTerms.push(channelInfo.name);
+      searchTerms.push(baseName);
     } else {
-      // Could be a custom URL or name
       searchTerms.push(channelInfo.id);
-      if (channelInfo.name !== channelInfo.id) {
-        searchTerms.push(channelInfo.name);
-      }
     }
 
-    console.log(`Fetching channel videos for: ${searchTerms.join(', ')}`);
+    // Add variations to capture more videos
+    if (baseName) {
+      searchTerms.push(baseName);
+      searchTerms.push(`${baseName} official`);
+      searchTerms.push(`${baseName} channel`);
+    }
+
+    // Deduplicate search terms
+    const uniqueTerms = [...new Set(searchTerms.map(t => t.toLowerCase()))].slice(0, 4);
+
+    console.log(`Fetching channel videos with terms: ${uniqueTerms.join(', ')}`);
 
     // Fetch videos for each search term in parallel
     const allResults = await Promise.all(
-      searchTerms.map(async (term) => {
+      uniqueTerms.map(async (term) => {
         const response = await fetch(
           'https://api.dataforseo.com/v3/serp/youtube/organic/live/advanced',
           {
@@ -182,7 +202,7 @@ async function fetchChannelVideos(
               location_code: locationCode,
               language_code: languageCode,
               device: 'desktop',
-              block_depth: 200, // Get more results for channel videos
+              depth: 100, // Max depth per search
             }]),
           }
         );
@@ -245,10 +265,14 @@ async function fetchChannelVideos(
       new Map(channelVideos.map((v: YouTubeVideo) => [v.videoId, v])).values()
     );
 
-    return { videos: uniqueVideos, status: 'ok' };
+    const limitation = uniqueVideos.length > 0
+      ? `Found ${uniqueVideos.length} videos via YouTube search. Note: This uses search results, not a full channel listing. The actual channel may have more videos.`
+      : 'No videos found via search. Try using the channel handle (e.g., @ChannelName).';
+
+    return { videos: uniqueVideos, status: 'ok', limitation };
   } catch (error) {
     console.error(`Channel fetch error for "${channelInfo.name}":`, error);
-    return { videos: [], status: `Exception: ${error}` };
+    return { videos: [], status: `Exception: ${error}`, limitation: 'Error fetching channel videos' };
   }
 }
 
@@ -405,10 +429,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     console.log(`Total videos from keyword search: ${allVideos.length}`);
 
-    // Collect videos from owned channel fetches
+    // Collect videos from owned channel fetches and limitations
     const ownedChannelVideos: YouTubeVideo[] = [];
+    const channelLimitations: string[] = [];
     for (const result of channelResults) {
       ownedChannelVideos.push(...result.videos);
+      if (result.limitation) {
+        channelLimitations.push(result.limitation);
+      }
     }
 
     console.log(`Total videos from owned channels: ${ownedChannelVideos.length}`);
@@ -444,6 +472,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // Calculate SOV
     const sov = calculateYouTubeSOV(yourBrandData, competitorData);
 
+    // Build methodology explanation
+    const methodology = {
+      sovByCountFormula: `SOV by Count = (Your Brand Videos / Total Brand Videos) × 100 = (${yourBrandData.totalVideosInTop20} / ${yourBrandData.totalVideosInTop20 + competitorData.reduce((s, c) => s + c.totalVideosInTop20, 0)}) × 100 = ${sov.byCount}%`,
+      sovByViewsFormula: `SOV by Views = (Your Brand Views / Total Brand Views) × 100 = (${yourBrandData.totalViews.toLocaleString()} / ${(yourBrandData.totalViews + competitorData.reduce((s, c) => s + c.totalViews, 0)).toLocaleString()}) × 100 = ${sov.byViews}%`,
+      brandComparisonMethod: 'Videos are matched to brands by searching YouTube for each brand name, then filtering videos where the title contains the brand name. Each brand gets credited for videos mentioning them in the title.',
+      ownedMediaMethod: 'Owned media is identified by searching YouTube for your channel name/handle and filtering results to videos from your channel. Due to API limitations, this captures videos appearing in search results (typically 100-200), not the full channel library.',
+      limitations: [
+        'DataForSEO YouTube API is a SEARCH API, not a channel listing API. It cannot retrieve ALL videos from a channel.',
+        `Owned channel search found ${uniqueOwnedChannelVideos.length} videos. Your actual channel may have significantly more videos.`,
+        'For complete channel video counts, consider using the official YouTube Data API v3.',
+        'Brand matching is based on video titles only - videos without the brand name in the title are not counted.',
+        ...channelLimitations,
+      ],
+    };
+
     const response: YouTubeSOVResponse = {
       yourBrand: yourBrandData,
       competitors: competitorData,
@@ -453,6 +496,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       ownedMediaStats,
       searchedKeywords: searchKeywords,
       timestamp: new Date().toISOString(),
+      methodology,
       debug: {
         totalVideosFetched: allVideos.length,
         channelVideosFetched: ownedChannelVideos.length,

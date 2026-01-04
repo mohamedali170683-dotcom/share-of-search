@@ -59,6 +59,12 @@ interface GoogleMapsResponse {
   searchedKeywords: string[];
   location: string;
   timestamp: string;
+  methodology: {
+    visibilityFormula: string;
+    reviewSOVFormula: string;
+    brandMatchingMethod: string;
+    dataSource: string;
+  };
   debug?: {
     totalListingsFetched: number;
     apiStatus: string;
@@ -321,6 +327,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // Calculate SOV
     const sov = calculateLocalSOV(yourBrandData, competitorData);
 
+    // Calculate totals for methodology
+    const totalListings = yourBrandData.totalListings + competitorData.reduce((s, c) => s + c.totalListings, 0);
+    const totalReviews = yourBrandData.totalReviews + competitorData.reduce((s, c) => s + c.totalReviews, 0);
+
+    // Build methodology explanation
+    const methodology = {
+      visibilityFormula: `Visibility SOV = (Your Listings / Total Listings) × 100 = (${yourBrandData.totalListings} / ${totalListings}) × 100 = ${sov.byListings}%`,
+      reviewSOVFormula: `Review SOV = (Your Reviews / Total Reviews) × 100 = (${yourBrandData.totalReviews.toLocaleString()} / ${totalReviews.toLocaleString()}) × 100 = ${sov.byReviews}%`,
+      brandMatchingMethod: 'Listings are matched to brands by: 1) Searching Google Maps for brand names, 2) Filtering listings where the business title contains the brand name or domain matches the brand.',
+      dataSource: 'Data is fetched from Google Maps via DataForSEO SERP API. Up to 100 listings are analyzed per search query.',
+    };
+
     const response: GoogleMapsResponse = {
       yourBrand: yourBrandData.totalListings > 0 ? yourBrandData : null,
       competitors: competitorData.filter(c => c.totalListings > 0),
@@ -329,6 +347,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       searchedKeywords: searchKeywords,
       location: `Location code: ${locationCode}`,
       timestamp: new Date().toISOString(),
+      methodology,
       debug: {
         totalListingsFetched: allListings.length,
         apiStatus,

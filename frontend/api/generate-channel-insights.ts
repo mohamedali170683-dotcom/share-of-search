@@ -15,6 +15,19 @@ interface BrandYouTubeData {
   totalViews: number;
 }
 
+interface ChannelStats {
+  name: string;
+  videoCount?: number;
+  viewCount?: number;
+  subscriberCount?: number;
+}
+
+interface EarnedMediaSource {
+  channelName: string;
+  videoCount: number;
+  totalViews: number;
+}
+
 interface YouTubeData {
   yourBrand: BrandYouTubeData;
   competitors: BrandYouTubeData[];
@@ -27,6 +40,10 @@ interface YouTubeData {
   earnedVideosCount?: number;
   ownedViews?: number;
   earnedViews?: number;
+  // New: competitor channel stats from YouTube API
+  competitorChannelStats?: Record<string, ChannelStats[]>;
+  // New: earned media breakdown
+  earnedMediaSources?: EarnedMediaSource[];
 }
 
 interface PaidKeyword {
@@ -103,39 +120,69 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     let prompt: string;
 
     if (type === 'youtube' && youtubeData) {
-      const competitorList = youtubeData.competitors
-        .map(c => `- ${c.name}: ${c.totalVideosInTop20} videos, ${c.totalViews.toLocaleString()} views`)
-        .join('\n');
-
-      const topVideos = youtubeData.allVideos
-        .slice(0, 10)
-        .map((v, i) => `${i + 1}. "${v.title}" by ${v.channelName} (${v.viewsCount.toLocaleString()} views)${v.isBrandOwned ? ' [Brand Mention]' : ''}`)
-        .join('\n');
-
-      const ownedEarnedContext = youtubeData.ownedVideosCount !== undefined
-        ? `\nOwned Media: ${youtubeData.ownedVideosCount} videos (${youtubeData.ownedViews?.toLocaleString() || 0} views)\nEarned Media: ${youtubeData.earnedVideosCount} videos (${youtubeData.earnedViews?.toLocaleString() || 0} views)`
+      // Build competitor owned channel stats (from YouTube API)
+      const competitorChannelList = youtubeData.competitorChannelStats
+        ? Object.entries(youtubeData.competitorChannelStats)
+            .filter(([_, channels]) => channels.length > 0 && channels.some(c => c.videoCount))
+            .map(([name, channels]) => {
+              const totalVideos = channels.reduce((sum, c) => sum + (c.videoCount || 0), 0);
+              const totalViews = channels.reduce((sum, c) => sum + (c.viewCount || 0), 0);
+              return `- ${name} (Official Channel): ${totalVideos.toLocaleString()} videos, ${totalViews.toLocaleString()} total views`;
+            })
+            .join('\n')
         : '';
 
-      prompt = `You are a data analyst providing BRIEF, ACCURATE insights for ${brandName}'s YouTube performance.
+      // Build earned media sources list
+      const earnedSourcesList = youtubeData.earnedMediaSources
+        ? youtubeData.earnedMediaSources
+            .slice(0, 5)
+            .map(s => `  - ${s.channelName}: ${s.videoCount} videos (${s.totalViews.toLocaleString()} views)`)
+            .join('\n')
+        : '';
 
-DATA:
-- ${brandName}: ${youtubeData.yourBrand.totalVideosInTop20} videos, ${youtubeData.yourBrand.totalViews.toLocaleString()} views, SOV: ${youtubeData.sov.byViews}%${ownedEarnedContext}
-- Competitors: ${competitorList || 'None'}
+      // Owned vs Earned context
+      const hasOwnedEarned = youtubeData.ownedVideosCount !== undefined;
+      const ownedEarnedContext = hasOwnedEarned
+        ? `
+YOUR OWNED MEDIA (from your official YouTube channel):
+- Videos: ${youtubeData.ownedVideosCount?.toLocaleString() || 0}
+- Total Views: ${youtubeData.ownedViews?.toLocaleString() || 0}
 
-Provide insights in JSON format. BE CONCISE - each field should be 1-2 sentences MAX. Use SPECIFIC numbers.
+YOUR EARNED MEDIA (videos by OTHER channels that mention ${brandName}):
+- Videos: ${youtubeData.earnedVideosCount || 0}
+- Total Views: ${youtubeData.earnedViews?.toLocaleString() || 0}
+${earnedSourcesList ? `\nTop Earned Media Sources:\n${earnedSourcesList}` : ''}`
+        : '';
 
-RULES:
-- NO generic advice like "create engaging content"
-- Reference ACTUAL numbers from the data
-- Be DIRECT and ACTIONABLE
-- Focus on the GAP between ${brandName} and competitors
+      prompt = `You are a YouTube marketing analyst. Analyze ${brandName}'s YouTube presence with ACCURACY.
+
+IMPORTANT DEFINITIONS:
+- OWNED MEDIA = Videos from ${brandName}'s official YouTube channel (they control this)
+- EARNED MEDIA = Videos by OTHER channels/creators mentioning ${brandName} (reviews, comparisons, influencers)
+- Competitor's OWNED = Videos from competitor's official channels
+
+${brandName.toUpperCase()}'s YOUTUBE DATA:
+${ownedEarnedContext || `- Total videos mentioning ${brandName}: ${youtubeData.yourBrand.totalVideosInTop20}`}
+
+COMPETITOR OFFICIAL CHANNELS (Owned Media):
+${competitorChannelList || 'No competitor channel data available - using search mentions only'}
+
+SEARCH MENTIONS (from YouTube search results):
+${youtubeData.competitors.map(c => `- ${c.name}: ${c.totalVideosInTop20} videos mentioning them`).join('\n')}
+
+ANALYSIS RULES:
+1. Compare OWNED vs OWNED (${brandName}'s channel vs competitor channels)
+2. Earned media shows brand awareness from third parties
+3. Use EXACT numbers from the data
+4. Be specific about what type of media you're comparing
 
 Return ONLY valid JSON:
 {
-  "summary": "[1 sentence: state the competitive position with specific numbers]",
-  "keyGap": "[1 sentence: the biggest gap vs competitors with numbers]",
-  "topAction": "[1 sentence: most impactful action to close the gap]",
-  "competitorThreat": "[1 sentence: which competitor is the biggest threat and why]"
+  "summary": "[1 sentence: ${brandName}'s owned channel position vs competitors with specific numbers]",
+  "keyGap": "[1 sentence: the gap in OWNED channel content vs top competitor's channel]",
+  "topAction": "[1 sentence: specific action to improve owned or earned media]",
+  "competitorThreat": "[1 sentence: which competitor has strongest owned channel and why]",
+  "earnedMediaInsight": "[1 sentence: what the earned media reveals about brand perception - who's talking about ${brandName}]"
 }`;
 
     } else if (type === 'paid-ads' && paidAdsData) {

@@ -100,12 +100,19 @@ interface YouTubeInsights {
   keyGap: string;
   topAction: string;
   competitorThreat: string;
+  earnedMediaInsight?: string; // New: insight about earned media sources
   // Legacy format (for backwards compatibility)
   strengths?: string[];
   opportunities?: string[];
   competitorInsight?: string;
   contentRecommendation?: string;
   priorityAction?: string;
+}
+
+interface EarnedMediaSource {
+  channelName: string;
+  videoCount: number;
+  totalViews: number;
 }
 
 export function YouTubeSOVPanel({ brandName, competitors, locationCode = 2840, languageCode = 'en' }: YouTubeSOVPanelProps) {
@@ -437,6 +444,28 @@ export function YouTubeSOVPanel({ brandName, competitors, locationCode = 2840, l
     return matchesAnyChannel(video, ownedChannels) ? 'owned' : 'earned';
   };
 
+  // Compute earned media sources breakdown (which channels are talking about the brand)
+  const computeEarnedMediaSources = (earnedVideos: YouTubeVideo[]): EarnedMediaSource[] => {
+    const sourceMap = new Map<string, { videoCount: number; totalViews: number }>();
+
+    for (const video of earnedVideos) {
+      const channelName = video.channelName || 'Unknown Channel';
+      const existing = sourceMap.get(channelName) || { videoCount: 0, totalViews: 0 };
+      sourceMap.set(channelName, {
+        videoCount: existing.videoCount + 1,
+        totalViews: existing.totalViews + video.viewsCount,
+      });
+    }
+
+    // Sort by total views descending
+    return Array.from(sourceMap.entries())
+      .map(([channelName, stats]) => ({
+        channelName,
+        videoCount: stats.videoCount,
+        totalViews: stats.totalViews,
+      }))
+      .sort((a, b) => b.totalViews - a.totalViews);
+  };
 
   // Load saved analyses on mount
   useEffect(() => {
@@ -474,7 +503,8 @@ export function YouTubeSOVPanel({ brandName, competitors, locationCode = 2840, l
       const earnedVideos = ownedChannelId ? brandVideos.filter((v: YouTubeVideo) => !ownedVideos.includes(v)) : [];
       const ownedViewsCount = ownedVideos.reduce((sum: number, v: YouTubeVideo) => sum + v.viewsCount, 0);
       const earnedViewsCount = earnedVideos.reduce((sum: number, v: YouTubeVideo) => sum + v.viewsCount, 0);
-      fetchAIInsights(data, ownedVideos.length, earnedVideos.length, ownedViewsCount, earnedViewsCount);
+      const earnedSources = computeEarnedMediaSources(earnedVideos);
+      fetchAIInsights(data, ownedVideos.length, earnedVideos.length, ownedViewsCount, earnedViewsCount, earnedSources);
     }
   }, [data, insights, isLoadingInsights, ownedChannelId]);
 
@@ -526,7 +556,8 @@ export function YouTubeSOVPanel({ brandName, competitors, locationCode = 2840, l
       const earnedVideos = ownedChannelId ? brandVideos.filter((v: YouTubeVideo) => !ownedVideos.includes(v)) : [];
       const ownedViewsCount = ownedVideos.reduce((sum: number, v: YouTubeVideo) => sum + v.viewsCount, 0);
       const earnedViewsCount = earnedVideos.reduce((sum: number, v: YouTubeVideo) => sum + v.viewsCount, 0);
-      fetchAIInsights(analysis.data, ownedVideos.length, earnedVideos.length, ownedViewsCount, earnedViewsCount);
+      const earnedSources = computeEarnedMediaSources(earnedVideos);
+      fetchAIInsights(analysis.data, ownedVideos.length, earnedVideos.length, ownedViewsCount, earnedViewsCount, earnedSources);
     }
   };
 
@@ -562,11 +593,31 @@ export function YouTubeSOVPanel({ brandName, competitors, locationCode = 2840, l
     setSelectedMediaType(null);
   };
 
-  const fetchAIInsights = async (youtubeData: YouTubeSOVResponse, ownedCount?: number, earnedCount?: number, ownedViews?: number, earnedViews?: number) => {
+  const fetchAIInsights = async (
+    youtubeData: YouTubeSOVResponse,
+    ownedCount?: number,
+    earnedCount?: number,
+    ownedViews?: number,
+    earnedViews?: number,
+    earnedSources?: EarnedMediaSource[]
+  ) => {
     setIsLoadingInsights(true);
     setInsightsError(null);
 
     try {
+      // Build competitor channel stats from stored data
+      const competitorChannelStats: Record<string, { name: string; videoCount?: number; viewCount?: number }[]> = {};
+      for (const comp of competitors) {
+        const channels = competitorChannels[comp] || [];
+        if (channels.length > 0) {
+          competitorChannelStats[comp] = channels.map(ch => ({
+            name: ch.name,
+            videoCount: ch.videoCount,
+            viewCount: ch.viewCount,
+          }));
+        }
+      }
+
       const response = await fetch('/api/generate-channel-insights', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -582,6 +633,8 @@ export function YouTubeSOVPanel({ brandName, competitors, locationCode = 2840, l
             earnedVideosCount: earnedCount,
             ownedViews,
             earnedViews,
+            competitorChannelStats,
+            earnedMediaSources: earnedSources,
           },
           competitors,
         }),
@@ -650,8 +703,9 @@ export function YouTubeSOVPanel({ brandName, competitors, locationCode = 2840, l
         const earnedVideos = ownedChannelId ? brandVideos.filter((v: YouTubeVideo) => !ownedVideos.includes(v)) : [];
         const ownedViewsCount = ownedVideos.reduce((sum: number, v: YouTubeVideo) => sum + v.viewsCount, 0);
         const earnedViewsCount = earnedVideos.reduce((sum: number, v: YouTubeVideo) => sum + v.viewsCount, 0);
+        const earnedSources = computeEarnedMediaSources(earnedVideos);
 
-        fetchAIInsights(result, ownedVideos.length, earnedVideos.length, ownedViewsCount, earnedViewsCount);
+        fetchAIInsights(result, ownedVideos.length, earnedVideos.length, ownedViewsCount, earnedViewsCount, earnedSources);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to fetch YouTube SOV');
@@ -1378,22 +1432,44 @@ export function YouTubeSOVPanel({ brandName, competitors, locationCode = 2840, l
                   {!isYourBrand && (
                     <div className="mt-2">
                       {compChannels.length > 0 ? (
-                        <div className="flex flex-wrap gap-1 items-center">
-                          <span className="text-xs text-gray-500 dark:text-gray-400">Channels:</span>
-                          {compChannels.map(ch => (
-                            <span
-                              key={ch.id}
-                              className="inline-flex items-center gap-1 px-2 py-0.5 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 rounded text-xs"
-                            >
-                              {ch.name}
-                              <button
-                                onClick={() => removeCompetitorChannel(brand.name, ch.id)}
-                                className="hover:text-red-600"
-                              >
-                                ×
-                              </button>
-                            </span>
-                          ))}
+                        <div className="space-y-1">
+                          {compChannels.map(ch => {
+                            const channelUrl = ch.channelId
+                              ? `https://youtube.com/channel/${ch.channelId}`
+                              : ch.id.startsWith('@')
+                              ? `https://youtube.com/${ch.id}`
+                              : ch.id.startsWith('UC')
+                              ? `https://youtube.com/channel/${ch.id}`
+                              : `https://youtube.com/@${ch.id}`;
+                            return (
+                              <div key={ch.id} className="flex items-center gap-2 text-xs">
+                                <svg className="w-3 h-3 text-red-600 flex-shrink-0" fill="currentColor" viewBox="0 0 24 24">
+                                  <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
+                                </svg>
+                                <a
+                                  href={channelUrl}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-blue-600 hover:text-blue-700 dark:text-blue-400 hover:underline truncate max-w-[200px]"
+                                  title={ch.name}
+                                >
+                                  {ch.name}
+                                </a>
+                                {ch.videoCount !== undefined && (
+                                  <span className="text-gray-500 dark:text-gray-400">
+                                    ({ch.videoCount.toLocaleString()} videos, {formatViews(ch.viewCount || 0)} views)
+                                  </span>
+                                )}
+                                <button
+                                  onClick={() => removeCompetitorChannel(brand.name, ch.id)}
+                                  className="text-gray-400 hover:text-red-600 ml-auto"
+                                  title="Remove channel"
+                                >
+                                  ×
+                                </button>
+                              </div>
+                            );
+                          })}
                         </div>
                       ) : null}
 
@@ -1478,7 +1554,8 @@ export function YouTubeSOVPanel({ brandName, competitors, locationCode = 2840, l
                   const earnedVideos = ownedChannelId ? brandVideos.filter(v => getMediaType(v) === 'earned') : [];
                   const ownedViews = ownedVideos.reduce((sum, v) => sum + v.viewsCount, 0);
                   const earnedViews = earnedVideos.reduce((sum, v) => sum + v.viewsCount, 0);
-                  fetchAIInsights(data, ownedVideos.length, earnedVideos.length, ownedViews, earnedViews);
+                  const earnedSources = computeEarnedMediaSources(earnedVideos);
+                  fetchAIInsights(data, ownedVideos.length, earnedVideos.length, ownedViews, earnedViews, earnedSources);
                 }}
                 className="text-indigo-600 hover:text-indigo-700 text-sm font-medium"
               >
@@ -1512,8 +1589,16 @@ export function YouTubeSOVPanel({ brandName, competitors, locationCode = 2840, l
                 <p className="text-orange-700 dark:text-orange-300 text-sm">{insights.competitorThreat}</p>
               </div>
 
+              {/* Earned Media Insight - Full Width (new) */}
+              {insights.earnedMediaInsight && (
+                <div className="md:col-span-2 bg-purple-50 dark:bg-purple-900/20 rounded-lg p-4 border-l-4 border-purple-500">
+                  <h4 className="font-semibold text-purple-800 dark:text-purple-200 text-xs uppercase tracking-wide mb-1">Earned Media Insight</h4>
+                  <p className="text-purple-700 dark:text-purple-300 text-sm">{insights.earnedMediaInsight}</p>
+                </div>
+              )}
+
               {/* Regenerate button */}
-              <div className="text-center pt-2">
+              <div className="md:col-span-2 text-center pt-2">
                 <button
                   onClick={() => {
                     setInsights(null);
@@ -1522,7 +1607,8 @@ export function YouTubeSOVPanel({ brandName, competitors, locationCode = 2840, l
                     const earnedVideos = ownedChannelId ? brandVideos.filter(v => getMediaType(v) === 'earned') : [];
                     const ownedViews = ownedVideos.reduce((sum, v) => sum + v.viewsCount, 0);
                     const earnedViews = earnedVideos.reduce((sum, v) => sum + v.viewsCount, 0);
-                    fetchAIInsights(data, ownedVideos.length, earnedVideos.length, ownedViews, earnedViews);
+                    const earnedSources = computeEarnedMediaSources(earnedVideos);
+                    fetchAIInsights(data, ownedVideos.length, earnedVideos.length, ownedViews, earnedViews, earnedSources);
                   }}
                   className="text-indigo-600 hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300 text-sm font-medium"
                 >
@@ -1717,6 +1803,54 @@ export function YouTubeSOVPanel({ brandName, competitors, locationCode = 2840, l
                 Add your YouTube channel to see accurate video counts from the YouTube Data API.
               </p>
             )}
+
+            {/* Earned Media Sources Breakdown */}
+            {earnedVideos.length > 0 && (() => {
+              const sources = computeEarnedMediaSources(earnedVideos);
+              if (sources.length === 0) return null;
+
+              return (
+                <div className="mt-4 border-t border-gray-200 dark:border-gray-700 pt-4">
+                  <h4 className="font-semibold text-purple-800 dark:text-purple-200 text-sm mb-3 flex items-center gap-2">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                    </svg>
+                    Who's Talking About {data.yourBrand.name}?
+                    <span className="text-xs font-normal text-gray-500">({sources.length} channels)</span>
+                  </h4>
+                  <div className="space-y-2">
+                    {sources.slice(0, 5).map((source, idx) => (
+                      <div
+                        key={source.channelName}
+                        className="flex items-center justify-between p-2 bg-purple-50 dark:bg-purple-900/20 rounded-lg"
+                      >
+                        <div className="flex items-center gap-2">
+                          <span className="w-6 h-6 flex items-center justify-center bg-purple-200 dark:bg-purple-800 text-purple-700 dark:text-purple-300 rounded-full text-xs font-medium">
+                            {idx + 1}
+                          </span>
+                          <span className="text-sm text-gray-800 dark:text-gray-200 font-medium truncate max-w-[200px]">
+                            {source.channelName}
+                          </span>
+                        </div>
+                        <div className="text-right text-xs text-gray-600 dark:text-gray-400">
+                          <span className="font-medium">{source.videoCount} video{source.videoCount > 1 ? 's' : ''}</span>
+                          <span className="mx-1">•</span>
+                          <span>{formatViews(source.totalViews)} views</span>
+                        </div>
+                      </div>
+                    ))}
+                    {sources.length > 5 && (
+                      <p className="text-xs text-gray-500 dark:text-gray-400 text-center pt-1">
+                        + {sources.length - 5} more channels
+                      </p>
+                    )}
+                  </div>
+                  <p className="text-xs text-purple-600 dark:text-purple-400 mt-2 italic">
+                    Earned media = videos by other creators mentioning your brand (reviews, comparisons, tutorials, etc.)
+                  </p>
+                </div>
+              );
+            })()}
 
             {/* Drill-down video list */}
             {selectedMediaType && (

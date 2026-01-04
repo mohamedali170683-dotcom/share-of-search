@@ -200,6 +200,10 @@ export function YouTubeSOVPanel({ brandName, competitors, locationCode = 2840, l
         if (response.status === 500 && errorData.error?.includes('API key')) {
           console.error('[YouTube] YOUTUBE_API_KEY is not configured on the server');
         }
+        // If quota exceeded, log clearly
+        if (response.status === 429 || errorData.debug?.quotaExceeded) {
+          console.error('[YouTube] API quota exceeded - daily limit reached. Try again tomorrow.');
+        }
         return {};
       }
 
@@ -690,11 +694,19 @@ export function YouTubeSOVPanel({ brandName, competitors, locationCode = 2840, l
 
       // Accumulate all fetched channels
       const fetchedChannels: Record<string, OwnedChannel> = {};
+      let quotaExceeded = false;
 
-      console.log(`[YouTube] Auto-fetching ${competitorsToFetch.length} competitor channels:`, competitorsToFetch);
+      // Limit to top 3 competitors to conserve API quota
+      const topCompetitors = competitorsToFetch.slice(0, 3);
+      console.log(`[YouTube] Auto-fetching ${topCompetitors.length} competitor channels (of ${competitorsToFetch.length}):`, topCompetitors);
 
-      // Fetch all competitors in parallel for speed
-      await Promise.all(competitorsToFetch.map(async (competitor) => {
+      // Fetch competitors sequentially to detect quota exceeded early and stop
+      for (const competitor of topCompetitors) {
+        if (quotaExceeded) {
+          console.warn('[YouTube] Stopping auto-fetch - quota exceeded');
+          break;
+        }
+
         try {
           console.log(`[YouTube] Auto-fetching channel for: "${competitor}" (locationCode: ${locationCode})`);
           // Use YouTube API to search for the official channel by brand name
@@ -730,11 +742,16 @@ export function YouTubeSOVPanel({ brandName, competitors, locationCode = 2840, l
           } else {
             const errorData = await response.json().catch(() => ({}));
             console.warn(`[YouTube] Failed to fetch "${competitor}": ${response.status}`, errorData);
+            // Check if quota exceeded
+            if (response.status === 429 || errorData.debug?.quotaExceeded) {
+              console.error('[YouTube] API quota exceeded - stopping auto-fetch');
+              quotaExceeded = true;
+            }
           }
         } catch (error) {
           console.warn(`[YouTube] Error auto-fetching "${competitor}" channel:`, error);
         }
-      }));
+      }
 
       // Save all fetched channels at once
       if (Object.keys(fetchedChannels).length > 0) {

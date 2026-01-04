@@ -130,18 +130,23 @@ async function searchChannelWithStrategies(
 
   const targetLocationKeywords = locationCode ? (locationKeywords[locationCode] || [locationInfo?.name.toLowerCase()]) : [];
 
-  // Try each search query (limit to 3 to save API quota)
-  console.log(`[YouTube API] Searching for "${brandName}" with ${searchQueries.length} strategies`);
+  // Try each search query (limit to 2 to save API quota - reduced from 3)
+  console.log(`[YouTube API] Searching for "${brandName}" with ${Math.min(searchQueries.length, 2)} strategies (of ${searchQueries.length})`);
 
-  for (let i = 0; i < Math.min(searchQueries.length, 3); i++) {
+  let quotaExceeded = false;
+
+  for (let i = 0; i < Math.min(searchQueries.length, 2); i++) {
     const query = searchQueries[i];
+
+    // Skip remaining queries if quota is exceeded
+    if (quotaExceeded) break;
 
     try {
       const searchUrl = new URL('https://www.googleapis.com/youtube/v3/search');
       searchUrl.searchParams.set('part', 'snippet');
       searchUrl.searchParams.set('type', 'channel');
       searchUrl.searchParams.set('q', query);
-      searchUrl.searchParams.set('maxResults', '10'); // Get more results for better matching
+      searchUrl.searchParams.set('maxResults', '5'); // Reduced from 10 to save quota
       searchUrl.searchParams.set('key', apiKey);
 
       // Add region code if available
@@ -155,6 +160,13 @@ async function searchChannelWithStrategies(
       if (!searchResponse.ok) {
         const errorText = await searchResponse.text();
         console.error(`[YouTube API] Search failed for "${query}": ${searchResponse.status} - ${errorText}`);
+
+        // Check for quota exceeded error
+        if (searchResponse.status === 403 && errorText.includes('quotaExceeded')) {
+          console.error('[YouTube API] QUOTA EXCEEDED - stopping all API calls');
+          quotaExceeded = true;
+          break;
+        }
         continue;
       }
 
@@ -257,6 +269,11 @@ async function searchChannelWithStrategies(
     }
   }
 
+  // If quota exceeded and no results, throw specific error
+  if (quotaExceeded && foundChannels.length === 0) {
+    throw new Error('QUOTA_EXCEEDED');
+  }
+
   // Sort by match score (descending), then by subscriber count
   foundChannels.sort((a, b) => {
     if (b.matchScore !== a.matchScore) return b.matchScore - a.matchScore;
@@ -347,6 +364,10 @@ async function resolveChannelId(
       } else {
         const errorText = await searchResponse.text();
         console.error(`[YouTube API] Search API error for ${handle}: ${searchResponse.status} - ${errorText}`);
+        // Check for quota exceeded
+        if (searchResponse.status === 403 && errorText.includes('quotaExceeded')) {
+          return { channelId: null, error: 'YouTube API quota exceeded. Try again tomorrow.' };
+        }
       }
     } catch (error) {
       console.error('[YouTube API] Error resolving handle:', error);
@@ -354,12 +375,18 @@ async function resolveChannelId(
   }
 
   // For brand names (not handles), use multi-strategy search
-  const result = await searchChannelWithStrategies(identifier, apiKey, locationCode);
-  if (result) {
-    return { channelId: result.channelId };
+  try {
+    const result = await searchChannelWithStrategies(identifier, apiKey, locationCode);
+    if (result) {
+      return { channelId: result.channelId };
+    }
+    return { channelId: null, error: 'Channel not found' };
+  } catch (error) {
+    if (error instanceof Error && error.message === 'QUOTA_EXCEEDED') {
+      return { channelId: null, error: 'YouTube API quota exceeded. Try again tomorrow.' };
+    }
+    throw error;
   }
-
-  return { channelId: null, error: 'Channel not found' };
 }
 
 /**
@@ -563,11 +590,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     if (!channelId) {
       console.warn(`[YouTube API] Channel not found for: "${channelIdentifier}", error: ${resolveError}`);
-      return res.status(404).json({
+      // Return 429 for quota exceeded to signal rate limiting
+      const isQuotaError = resolveError?.includes('quota');
+      return res.status(isQuotaError ? 429 : 404).json({
         error: resolveError || 'Channel not found',
         channel: null,
         recentVideos: [],
-        debug: { apiKeyConfigured: true, identifier: channelIdentifier, resolved: false },
+        debug: { apiKeyConfigured: true, identifier: channelIdentifier, resolved: false, quotaExceeded: isQuotaError },
       });
     }
 

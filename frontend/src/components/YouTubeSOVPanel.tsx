@@ -663,6 +663,48 @@ export function YouTubeSOVPanel({ brandName, competitors, locationCode = 2840, l
     setIsLoading(true);
     setError(null);
 
+    // Auto-fetch competitor YouTube channels in parallel with main analysis
+    const fetchCompetitorChannelsPromise = (async () => {
+      const competitorsToFetch = competitors.filter(comp => {
+        const existing = competitorChannels[comp] || [];
+        return existing.length === 0; // Only fetch if not already configured
+      });
+
+      for (const competitor of competitorsToFetch) {
+        try {
+          const domain = `${competitor.toLowerCase().replace(/\s+/g, '')}.com`;
+          const response = await fetch('/api/scrape-youtube-channel', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ domain, brandName: competitor, fetchStats: true }),
+          });
+
+          if (response.ok) {
+            const data = await response.json();
+            if (data.found && (data.channelId || data.channelHandle)) {
+              const channelId = data.channelHandle || data.channelId;
+              const channelName = data.channelTitle || competitor;
+              // Add channel with stats
+              const newChannel: OwnedChannel = {
+                id: channelId,
+                name: channelName,
+                channelId: data.channelId,
+                videoCount: data.videoCount,
+                viewCount: data.viewCount,
+                subscriberCount: data.subscriberCount,
+                lastFetched: new Date().toISOString(),
+              };
+              const existing = competitorChannels[competitor] || [];
+              const updated = { ...competitorChannels, [competitor]: [...existing, newChannel] };
+              saveChannelConfig(ownedChannels, updated);
+            }
+          }
+        } catch (error) {
+          console.warn(`Failed to auto-fetch ${competitor} channel:`, error);
+        }
+      }
+    })();
+
     try {
       const response = await fetch('/api/youtube-sov', {
         method: 'POST',
@@ -685,6 +727,9 @@ export function YouTubeSOVPanel({ brandName, competitors, locationCode = 2840, l
       const result = await response.json();
       setData(result);
       saveAnalysis(result);
+
+      // Wait for competitor channel fetching to complete before generating insights
+      await fetchCompetitorChannelsPromise;
 
       // Auto-generate AI insights after successful fetch
       if (result.allVideos && result.allVideos.length > 0) {
@@ -1382,37 +1427,66 @@ export function YouTubeSOVPanel({ brandName, competitors, locationCode = 2840, l
               const hasAPIStats = isYourBrand ? hasYouTubeAPIStats : compStats?.hasAPI;
 
               const viewsPercentage = adjustedMaxViews > 0 ? (displayViews / adjustedMaxViews) * 100 : 0;
-              const brandVideos = data.allVideos.filter(v =>
-                v.title.toLowerCase().includes(brand.name.toLowerCase())
-              );
-              const compOwnedVideos = compChannels.length > 0
-                ? brandVideos.filter(v => matchesAnyChannel(v, compChannels))
-                : [];
+
+              // Get channel URL for display
+              const getChannelUrl = (ch: OwnedChannel) => {
+                if (ch.channelId) return `https://youtube.com/channel/${ch.channelId}`;
+                if (ch.id.startsWith('@')) return `https://youtube.com/${ch.id}`;
+                if (ch.id.startsWith('UC')) return `https://youtube.com/channel/${ch.id}`;
+                return `https://youtube.com/@${ch.id}`;
+              };
+
+              // For your brand, get channel info from ownedChannels
+              const yourChannels = isYourBrand ? ownedChannels : compChannels;
+              const primaryChannel = yourChannels[0];
 
               return (
                 <div key={brand.name} className="space-y-2">
                   <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className={`font-medium ${isYourBrand ? 'text-red-600 dark:text-red-400' : 'text-gray-700 dark:text-gray-300'}`}>
-                        {brand.name}
-                      </span>
-                      {isYourBrand && (
-                        <span className="px-2 py-0.5 bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 text-xs rounded-full">
-                          Your Brand
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className={`font-medium ${isYourBrand ? 'text-red-600 dark:text-red-400' : 'text-gray-700 dark:text-gray-300'}`}>
+                          {brand.name}
                         </span>
-                      )}
-                      {hasAPIStats && (
-                        <span className="px-2 py-0.5 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 text-xs rounded-full">
-                          YouTube API
-                        </span>
-                      )}
-                      {!isYourBrand && compChannels.length > 0 && !compStats?.hasAPI && (
-                        <span className="px-2 py-0.5 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 text-xs rounded-full">
-                          {compOwnedVideos.length} owned
-                        </span>
+                        {isYourBrand && (
+                          <span className="px-2 py-0.5 bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 text-xs rounded-full">
+                            Your Brand
+                          </span>
+                        )}
+                        {hasAPIStats && (
+                          <span className="px-2 py-0.5 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 text-xs rounded-full">
+                            YouTube API
+                          </span>
+                        )}
+                      </div>
+                      {/* Show channel URL under brand name */}
+                      {primaryChannel && (
+                        <div className="flex items-center gap-1 mt-0.5">
+                          <a
+                            href={getChannelUrl(primaryChannel)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-700 dark:text-blue-400 hover:underline"
+                          >
+                            <svg className="w-3 h-3 text-red-600 flex-shrink-0" fill="currentColor" viewBox="0 0 24 24">
+                              <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
+                            </svg>
+                            <span className="truncate max-w-[180px]">{primaryChannel.name || primaryChannel.id}</span>
+                          </a>
+                          {/* Remove button for competitor channels */}
+                          {!isYourBrand && (
+                            <button
+                              onClick={() => removeCompetitorChannel(brand.name, primaryChannel.id)}
+                              className="text-gray-400 hover:text-red-600 text-xs ml-1"
+                              title="Remove channel"
+                            >
+                              ×
+                            </button>
+                          )}
+                        </div>
                       )}
                     </div>
-                    <div className="text-right">
+                    <div className="text-right flex-shrink-0">
                       <span className="font-semibold text-gray-900 dark:text-white">
                         {displayVideoCount.toLocaleString()} videos
                       </span>
@@ -1428,53 +1502,11 @@ export function YouTubeSOVPanel({ brandName, competitors, locationCode = 2840, l
                     />
                   </div>
 
-                  {/* Competitor channel management */}
-                  {!isYourBrand && (
-                    <div className="mt-2">
-                      {compChannels.length > 0 ? (
-                        <div className="space-y-1">
-                          {compChannels.map(ch => {
-                            const channelUrl = ch.channelId
-                              ? `https://youtube.com/channel/${ch.channelId}`
-                              : ch.id.startsWith('@')
-                              ? `https://youtube.com/${ch.id}`
-                              : ch.id.startsWith('UC')
-                              ? `https://youtube.com/channel/${ch.id}`
-                              : `https://youtube.com/@${ch.id}`;
-                            return (
-                              <div key={ch.id} className="flex items-center gap-2 text-xs">
-                                <svg className="w-3 h-3 text-red-600 flex-shrink-0" fill="currentColor" viewBox="0 0 24 24">
-                                  <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
-                                </svg>
-                                <a
-                                  href={channelUrl}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="text-blue-600 hover:text-blue-700 dark:text-blue-400 hover:underline truncate max-w-[200px]"
-                                  title={ch.name}
-                                >
-                                  {ch.name}
-                                </a>
-                                {ch.videoCount !== undefined && (
-                                  <span className="text-gray-500 dark:text-gray-400">
-                                    ({ch.videoCount.toLocaleString()} videos, {formatViews(ch.viewCount || 0)} views)
-                                  </span>
-                                )}
-                                <button
-                                  onClick={() => removeCompetitorChannel(brand.name, ch.id)}
-                                  className="text-gray-400 hover:text-red-600 ml-auto"
-                                  title="Remove channel"
-                                >
-                                  ×
-                                </button>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      ) : null}
-
+                  {/* Competitor channel management - only show if no channel configured */}
+                  {!isYourBrand && compChannels.length === 0 && (
+                    <div className="mt-1">
                       {showCompetitorChannelInput === brand.name ? (
-                        <div className="flex gap-2 mt-2">
+                        <div className="flex gap-2">
                           <input
                             type="text"
                             value={competitorChannelInput}
@@ -1499,15 +1531,10 @@ export function YouTubeSOVPanel({ brandName, competitors, locationCode = 2840, l
                       ) : (
                         <button
                           onClick={() => setShowCompetitorChannelInput(brand.name)}
-                          className="text-xs text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 mt-1"
+                          className="text-xs text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
                         >
                           + Add {brand.name}'s YouTube channel
                         </button>
-                      )}
-                      {compChannels.length > 0 && brandVideos.length > 0 && (
-                        <p className="text-xs text-gray-400 mt-1">
-                          {compOwnedVideos.length} owned / {brandVideos.length - compOwnedVideos.length} earned
-                        </p>
                       )}
                     </div>
                   )}

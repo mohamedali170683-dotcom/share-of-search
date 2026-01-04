@@ -44,77 +44,275 @@ interface YouTubeChannelResponse {
 }
 
 /**
+ * Location code to country/region name mapping for search queries
+ */
+const LOCATION_NAMES: Record<number, { name: string; language: string }> = {
+  2276: { name: 'Germany', language: 'de' },
+  2250: { name: 'France', language: 'fr' },
+  2826: { name: 'United Kingdom', language: 'en' },
+  2840: { name: 'United States', language: 'en' },
+  2724: { name: 'Spain', language: 'es' },
+  2380: { name: 'Italy', language: 'it' },
+  2528: { name: 'Netherlands', language: 'nl' },
+  2056: { name: 'Belgium', language: 'fr' },
+  2756: { name: 'Switzerland', language: 'de' },
+  2040: { name: 'Austria', language: 'de' },
+  2616: { name: 'Poland', language: 'pl' },
+  2203: { name: 'Czech Republic', language: 'cs' },
+  2076: { name: 'Brazil', language: 'pt' },
+  2484: { name: 'Mexico', language: 'es' },
+  2124: { name: 'Canada', language: 'en' },
+  2036: { name: 'Australia', language: 'en' },
+  2392: { name: 'Japan', language: 'ja' },
+  2410: { name: 'South Korea', language: 'ko' },
+  2156: { name: 'China', language: 'zh' },
+  2356: { name: 'India', language: 'en' },
+};
+
+/**
+ * German location name variants for brand searches
+ */
+const GERMAN_LOCATION_VARIANTS = ['Deutschland', 'Germany', 'DE', 'German'];
+
+/**
+ * Search for a channel with multiple query strategies
+ */
+async function searchChannelWithStrategies(
+  brandName: string,
+  apiKey: string,
+  locationCode?: number
+): Promise<{ channelId: string; channelTitle: string; subscriberCount: number } | null> {
+  const locationInfo = locationCode ? LOCATION_NAMES[locationCode] : null;
+
+  // Build search queries in priority order
+  const searchQueries: string[] = [];
+
+  // 1. Brand name + location variant (e.g., "Michelin Deutschland")
+  if (locationInfo) {
+    if (locationCode === 2276) {
+      // For Germany, try multiple variants
+      for (const variant of GERMAN_LOCATION_VARIANTS) {
+        searchQueries.push(`${brandName} ${variant}`);
+      }
+    } else {
+      searchQueries.push(`${brandName} ${locationInfo.name}`);
+    }
+  }
+
+  // 2. Brand name + "official" + location
+  if (locationInfo) {
+    searchQueries.push(`${brandName} official ${locationInfo.name}`);
+  }
+
+  // 3. Just brand name + "official"
+  searchQueries.push(`${brandName} official`);
+  searchQueries.push(`${brandName} official channel`);
+
+  // 4. Just brand name
+  searchQueries.push(brandName);
+
+  // 5. Brand as handle
+  const handleVariant = `@${brandName.toLowerCase().replace(/\s+/g, '')}`;
+  searchQueries.push(handleVariant);
+
+  // Store all found channels with their subscriber counts for ranking
+  const foundChannels: Array<{
+    channelId: string;
+    channelTitle: string;
+    subscriberCount: number;
+    matchScore: number;
+  }> = [];
+
+  // Try each search query
+  for (let i = 0; i < Math.min(searchQueries.length, 4); i++) {
+    const query = searchQueries[i];
+
+    try {
+      const searchUrl = new URL('https://www.googleapis.com/youtube/v3/search');
+      searchUrl.searchParams.set('part', 'snippet');
+      searchUrl.searchParams.set('type', 'channel');
+      searchUrl.searchParams.set('q', query);
+      searchUrl.searchParams.set('maxResults', '5');
+      searchUrl.searchParams.set('key', apiKey);
+
+      // Add region code if available
+      if (locationInfo) {
+        // YouTube uses ISO 3166-1 alpha-2 country codes
+        const regionCodes: Record<number, string> = {
+          2276: 'DE', 2250: 'FR', 2826: 'GB', 2840: 'US', 2724: 'ES',
+          2380: 'IT', 2528: 'NL', 2056: 'BE', 2756: 'CH', 2040: 'AT',
+          2616: 'PL', 2203: 'CZ', 2076: 'BR', 2484: 'MX', 2124: 'CA',
+          2036: 'AU', 2392: 'JP', 2410: 'KR', 2156: 'CN', 2356: 'IN',
+        };
+        const regionCode = regionCodes[locationCode!];
+        if (regionCode) {
+          searchUrl.searchParams.set('regionCode', regionCode);
+        }
+      }
+
+      const searchResponse = await fetch(searchUrl.toString());
+      if (!searchResponse.ok) continue;
+
+      const searchData = await searchResponse.json();
+      const items = searchData.items || [];
+
+      for (const item of items) {
+        const channelId = item.id?.channelId || item.snippet?.channelId;
+        const channelTitle = item.snippet?.title || '';
+
+        if (!channelId) continue;
+
+        // Skip if already found
+        if (foundChannels.some(c => c.channelId === channelId)) continue;
+
+        // Fetch subscriber count
+        const statsUrl = new URL('https://www.googleapis.com/youtube/v3/channels');
+        statsUrl.searchParams.set('part', 'statistics,snippet');
+        statsUrl.searchParams.set('id', channelId);
+        statsUrl.searchParams.set('key', apiKey);
+
+        const statsResponse = await fetch(statsUrl.toString());
+        if (!statsResponse.ok) continue;
+
+        const statsData = await statsResponse.json();
+        const channel = statsData.items?.[0];
+        if (!channel) continue;
+
+        const subscriberCount = parseInt(channel.statistics?.subscriberCount || '0', 10);
+        const title = channel.snippet?.title || channelTitle;
+        const description = (channel.snippet?.description || '').toLowerCase();
+
+        // Calculate match score
+        let matchScore = 0;
+        const titleLower = title.toLowerCase();
+        const brandLower = brandName.toLowerCase();
+
+        // Exact brand name match in title
+        if (titleLower.includes(brandLower)) matchScore += 100;
+
+        // Official indicators
+        if (titleLower.includes('official') || description.includes('official')) matchScore += 50;
+
+        // Location match
+        if (locationInfo) {
+          const locLower = locationInfo.name.toLowerCase();
+          if (titleLower.includes(locLower) || titleLower.includes('deutschland') || titleLower.includes('germany')) {
+            matchScore += 75;
+          }
+        }
+
+        // Verified/high subscriber count bonus (likely official)
+        if (subscriberCount > 100000) matchScore += 30;
+        if (subscriberCount > 1000000) matchScore += 20;
+
+        // Penalize if title has other brand names (likely a fan channel)
+        if (titleLower.includes('fan') || titleLower.includes('unofficial')) matchScore -= 50;
+
+        foundChannels.push({
+          channelId,
+          channelTitle: title,
+          subscriberCount,
+          matchScore,
+        });
+      }
+    } catch (error) {
+      console.warn(`Search query "${query}" failed:`, error);
+    }
+  }
+
+  // Sort by match score (descending), then by subscriber count
+  foundChannels.sort((a, b) => {
+    if (b.matchScore !== a.matchScore) return b.matchScore - a.matchScore;
+    return b.subscriberCount - a.subscriberCount;
+  });
+
+  if (foundChannels.length > 0) {
+    const best = foundChannels[0];
+    console.log(`Best channel match for "${brandName}": ${best.channelTitle} (score: ${best.matchScore}, subs: ${best.subscriberCount})`);
+    return {
+      channelId: best.channelId,
+      channelTitle: best.channelTitle,
+      subscriberCount: best.subscriberCount,
+    };
+  }
+
+  return null;
+}
+
+/**
  * Resolve a channel identifier (handle, custom URL, or ID) to a channel ID
  */
 async function resolveChannelId(
   identifier: string,
-  apiKey: string
+  apiKey: string,
+  locationCode?: number
 ): Promise<{ channelId: string | null; error?: string }> {
   // Already a channel ID
   if (identifier.startsWith('UC') && identifier.length === 24) {
     return { channelId: identifier };
   }
 
-  // Handle format (@username)
-  const handle = identifier.startsWith('@') ? identifier : `@${identifier}`;
+  // Handle format (@username) - try exact match first
+  if (identifier.startsWith('@')) {
+    const handle = identifier;
 
-  try {
-    // First try to search by handle
-    const searchUrl = new URL('https://www.googleapis.com/youtube/v3/search');
-    searchUrl.searchParams.set('part', 'snippet');
-    searchUrl.searchParams.set('type', 'channel');
-    searchUrl.searchParams.set('q', handle);
-    searchUrl.searchParams.set('maxResults', '5');
-    searchUrl.searchParams.set('key', apiKey);
+    try {
+      const searchUrl = new URL('https://www.googleapis.com/youtube/v3/search');
+      searchUrl.searchParams.set('part', 'snippet');
+      searchUrl.searchParams.set('type', 'channel');
+      searchUrl.searchParams.set('q', handle);
+      searchUrl.searchParams.set('maxResults', '5');
+      searchUrl.searchParams.set('key', apiKey);
 
-    const searchResponse = await fetch(searchUrl.toString());
+      const searchResponse = await fetch(searchUrl.toString());
 
-    if (!searchResponse.ok) {
-      const errorData = await searchResponse.json();
-      console.error('YouTube search API error:', errorData);
-      return { channelId: null, error: `API error: ${searchResponse.status}` };
-    }
+      if (searchResponse.ok) {
+        const searchData = await searchResponse.json();
+        const items = searchData.items || [];
 
-    const searchData = await searchResponse.json();
-    const items = searchData.items || [];
+        // Find exact match for handle
+        for (const item of items) {
+          const channelId = item.id?.channelId || item.snippet?.channelId;
+          if (channelId) {
+            const verifyUrl = new URL('https://www.googleapis.com/youtube/v3/channels');
+            verifyUrl.searchParams.set('part', 'snippet');
+            verifyUrl.searchParams.set('id', channelId);
+            verifyUrl.searchParams.set('key', apiKey);
 
-    // Find exact match for handle
-    for (const item of items) {
-      const channelId = item.id?.channelId || item.snippet?.channelId;
-      if (channelId) {
-        // Verify this is the right channel by fetching its details
-        const verifyUrl = new URL('https://www.googleapis.com/youtube/v3/channels');
-        verifyUrl.searchParams.set('part', 'snippet');
-        verifyUrl.searchParams.set('id', channelId);
-        verifyUrl.searchParams.set('key', apiKey);
+            const verifyResponse = await fetch(verifyUrl.toString());
+            if (verifyResponse.ok) {
+              const verifyData = await verifyResponse.json();
+              const channel = verifyData.items?.[0];
+              const customUrl = channel?.snippet?.customUrl?.toLowerCase();
+              const handleLower = handle.toLowerCase().replace('@', '');
 
-        const verifyResponse = await fetch(verifyUrl.toString());
-        if (verifyResponse.ok) {
-          const verifyData = await verifyResponse.json();
-          const channel = verifyData.items?.[0];
-          const customUrl = channel?.snippet?.customUrl?.toLowerCase();
-          const handleLower = handle.toLowerCase().replace('@', '');
+              if (customUrl === handleLower || customUrl === `@${handleLower}`) {
+                return { channelId };
+              }
+            }
+          }
+        }
 
-          if (customUrl === handleLower || customUrl === `@${handleLower}`) {
+        // Return first result if no exact match
+        if (items.length > 0) {
+          const channelId = items[0].id?.channelId || items[0].snippet?.channelId;
+          if (channelId) {
             return { channelId };
           }
         }
       }
+    } catch (error) {
+      console.error('Error resolving handle:', error);
     }
-
-    // If no exact match, return the first result
-    if (items.length > 0) {
-      const channelId = items[0].id?.channelId || items[0].snippet?.channelId;
-      if (channelId) {
-        return { channelId };
-      }
-    }
-
-    return { channelId: null, error: 'Channel not found' };
-  } catch (error) {
-    console.error('Error resolving channel ID:', error);
-    return { channelId: null, error: `Exception: ${error}` };
   }
+
+  // For brand names (not handles), use multi-strategy search
+  const result = await searchChannelWithStrategies(identifier, apiKey, locationCode);
+  if (result) {
+    return { channelId: result.channelId };
+  }
+
+  return { channelId: null, error: 'Channel not found' };
 }
 
 /**
@@ -289,7 +487,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
-    const { channelIdentifier, includeVideos = true, maxVideos = 50 } = req.body;
+    const { channelIdentifier, includeVideos = true, maxVideos = 50, locationCode } = req.body;
 
     if (!channelIdentifier || typeof channelIdentifier !== 'string') {
       return res.status(400).json({ error: 'channelIdentifier is required (handle, custom URL, or channel ID)' });
@@ -305,10 +503,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
     }
 
-    console.log(`Fetching YouTube channel data for: ${channelIdentifier}`);
+    console.log(`Fetching YouTube channel data for: ${channelIdentifier}${locationCode ? ` (location: ${locationCode})` : ''}`);
 
-    // Resolve channel identifier to ID
-    const { channelId, error: resolveError } = await resolveChannelId(channelIdentifier, apiKey);
+    // Resolve channel identifier to ID (with location-aware search for brand names)
+    const { channelId, error: resolveError } = await resolveChannelId(channelIdentifier, apiKey, locationCode);
 
     if (!channelId) {
       return res.status(404).json({

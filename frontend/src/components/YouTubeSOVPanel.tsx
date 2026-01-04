@@ -279,12 +279,14 @@ export function YouTubeSOVPanel({ brandName, competitors, locationCode = 2840, l
     setIsFetchingCompetitor(competitorName);
     try {
       // Use YouTube API to search for the official channel by brand name
+      // Pass locationCode for location-aware search (e.g., "Michelin Deutschland" for Germany)
       const response = await fetch('/api/youtube-channel', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           channelIdentifier: competitorName, // Search by brand name
           includeVideos: false,
+          locationCode, // Pass location for regional channel matching
         }),
       });
 
@@ -680,12 +682,14 @@ export function YouTubeSOVPanel({ brandName, competitors, locationCode = 2840, l
       await Promise.all(competitorsToFetch.map(async (competitor) => {
         try {
           // Use YouTube API to search for the official channel by brand name
+          // Pass locationCode for location-aware search (e.g., "Michelin Deutschland" for Germany)
           const response = await fetch('/api/youtube-channel', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               channelIdentifier: competitor, // Search by brand name
               includeVideos: false, // Just need stats, not video list
+              locationCode, // Pass location for regional channel matching
             }),
           });
 

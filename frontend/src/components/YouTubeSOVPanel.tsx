@@ -1374,7 +1374,19 @@ export function YouTubeSOVPanel({ brandName, competitors, locationCode = 2840, l
       {hasVideos && ownedChannels.length > 0 && (() => {
         // Use channel videos fetched directly from API if available
         const channelVideos = data.ownedChannelVideos || [];
-        const hasChannelData = channelVideos.length > 0;
+
+        // Check if we have accurate stats from YouTube Data API v3
+        const hasYouTubeAPIStats = ownedChannels.some(c => c.videoCount !== undefined);
+
+        // Calculate accurate owned video count from YouTube Data API
+        const accurateOwnedVideoCount = hasYouTubeAPIStats
+          ? ownedChannels.reduce((sum, c) => sum + (c.videoCount || 0), 0)
+          : null;
+
+        // Calculate accurate owned views from YouTube Data API
+        const accurateOwnedViews = hasYouTubeAPIStats
+          ? ownedChannels.reduce((sum, c) => sum + (c.viewCount || 0), 0)
+          : null;
 
         // If we have channel data, use it for owned media (more accurate)
         // Otherwise fall back to matching from search results
@@ -1382,13 +1394,15 @@ export function YouTubeSOVPanel({ brandName, competitors, locationCode = 2840, l
         const ownedVideosFromSearch = brandVideos.filter(v => getMediaType(v) === 'owned');
         const earnedVideos = brandVideos.filter(v => getMediaType(v) === 'earned');
 
-        // Use the better data source for owned
-        const ownedVideos = hasChannelData ? channelVideos : ownedVideosFromSearch;
+        // Use the better data source for owned videos list (for display)
+        const ownedVideos = channelVideos.length > 0 ? channelVideos : ownedVideosFromSearch;
 
-        // Calculate stats
-        const ownedViews = hasChannelData
-          ? (data.ownedMediaStats?.totalViews || ownedVideos.reduce((sum, v) => sum + v.viewsCount, 0))
-          : ownedVideos.reduce((sum, v) => sum + v.viewsCount, 0);
+        // Use accurate count from YouTube API if available, otherwise use search results
+        const ownedVideoCount = accurateOwnedVideoCount ?? ownedVideos.length;
+
+        // Calculate stats - use YouTube API stats if available
+        const ownedViews = accurateOwnedViews ??
+          (data.ownedMediaStats?.totalViews || ownedVideos.reduce((sum, v) => sum + v.viewsCount, 0));
         const earnedViews = earnedVideos.reduce((sum, v) => sum + v.viewsCount, 0);
         const totalBrandViews = ownedViews + earnedViews;
         const ownedPercent = totalBrandViews > 0 ? Math.round((ownedViews / totalBrandViews) * 100) : 0;
@@ -1458,9 +1472,12 @@ export function YouTubeSOVPanel({ brandName, competitors, locationCode = 2840, l
                 {/* Center text */}
                 <div className="absolute inset-0 flex flex-col items-center justify-center">
                   <span className="text-2xl font-bold text-gray-900 dark:text-white">
-                    {ownedVideos.length + earnedVideos.length}
+                    {ownedVideoCount + earnedVideos.length}
                   </span>
                   <span className="text-xs text-gray-500 dark:text-gray-400">total videos</span>
+                  {hasYouTubeAPIStats && (
+                    <span className="text-[10px] text-emerald-600 dark:text-emerald-400 mt-1">via YouTube API</span>
+                  )}
                 </div>
               </div>
 
@@ -1481,12 +1498,12 @@ export function YouTubeSOVPanel({ brandName, competitors, locationCode = 2840, l
                       <div>
                         <span className="font-semibold text-emerald-800 dark:text-emerald-200">Owned Media</span>
                         <p className="text-xs text-emerald-600 dark:text-emerald-400">
-                          {hasChannelData ? 'Videos from your channel' : `From your ${ownedChannels.length} channel${ownedChannels.length > 1 ? 's' : ''}`}
+                          {hasYouTubeAPIStats ? `From ${ownedChannels.length} channel${ownedChannels.length > 1 ? 's' : ''} (YouTube API)` : `From your ${ownedChannels.length} channel${ownedChannels.length > 1 ? 's' : ''}`}
                         </p>
                       </div>
                     </div>
                     <div className="text-right">
-                      <p className="text-xl font-bold text-emerald-700 dark:text-emerald-300">{ownedVideos.length}</p>
+                      <p className="text-xl font-bold text-emerald-700 dark:text-emerald-300">{ownedVideoCount.toLocaleString()}</p>
                       <p className="text-xs text-emerald-600 dark:text-emerald-400">{formatViews(ownedViews)} views ({ownedPercent}%)</p>
                     </div>
                   </div>
@@ -1519,21 +1536,21 @@ export function YouTubeSOVPanel({ brandName, competitors, locationCode = 2840, l
             </div>
 
             {/* Info about data source */}
-            {hasChannelData && (
+            {hasYouTubeAPIStats && (
               <div className="bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-lg p-3 mt-4">
                 <p className="text-xs text-emerald-700 dark:text-emerald-300 flex items-center gap-2">
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                   </svg>
-                  Owned media includes {ownedVideos.length} videos fetched directly from your channel{ownedChannels.length > 1 ? 's' : ''}.
+                  <strong>Accurate counts from YouTube Data API:</strong> Your {ownedChannels.length} channel{ownedChannels.length > 1 ? 's have' : ' has'} {ownedVideoCount.toLocaleString()} total videos.
                   Earned media shows {earnedVideos.length} videos mentioning "{data.yourBrand.name}" from other channels.
                 </p>
               </div>
             )}
-            {!hasChannelData && (
+            {!hasYouTubeAPIStats && (
               <p className="text-xs text-gray-500 dark:text-gray-400 mt-4 text-center">
                 Based on {brandVideos.length} videos mentioning "{data.yourBrand.name}" in search results.
-                Run a new analysis to fetch videos directly from your channel.
+                Add your YouTube channel to see accurate video counts from the YouTube Data API.
               </p>
             )}
 
@@ -1542,7 +1559,12 @@ export function YouTubeSOVPanel({ brandName, competitors, locationCode = 2840, l
               <div className="mt-6 border-t border-gray-200 dark:border-gray-700 pt-4">
                 <div className="flex items-center justify-between mb-3">
                   <h4 className={`font-semibold ${selectedMediaType === 'owned' ? 'text-emerald-700 dark:text-emerald-300' : 'text-purple-700 dark:text-purple-300'}`}>
-                    {selectedMediaType === 'owned' ? 'Owned' : 'Earned'} Media Videos ({selectedMediaType === 'owned' ? ownedVideos.length : earnedVideos.length})
+                    {selectedMediaType === 'owned' ? 'Owned' : 'Earned'} Media Videos ({selectedMediaType === 'owned' ? ownedVideoCount.toLocaleString() : earnedVideos.length})
+                    {selectedMediaType === 'owned' && hasYouTubeAPIStats && ownedVideos.length < ownedVideoCount && (
+                      <span className="text-xs font-normal text-gray-500 ml-2">
+                        (showing {ownedVideos.length} from search)
+                      </span>
+                    )}
                   </h4>
                   <button
                     onClick={() => setSelectedMediaType(null)}
@@ -1583,14 +1605,14 @@ export function YouTubeSOVPanel({ brandName, competitors, locationCode = 2840, l
                           ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300'
                           : 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300'
                       }`}>
-                        {selectedMediaType === 'owned' && hasChannelData ? `#${idx + 1}` : `#${video.rank || idx + 1}`}
+                        {selectedMediaType === 'owned' && channelVideos.length > 0 ? `#${idx + 1}` : `#${video.rank || idx + 1}`}
                       </span>
                     </a>
                   ))}
                   {(selectedMediaType === 'owned' ? ownedVideos : earnedVideos).length === 0 && (
                     <p className="text-center text-gray-500 dark:text-gray-400 py-4">
                       No {selectedMediaType} media videos found.
-                      {selectedMediaType === 'owned' && !hasChannelData && ' Run a new analysis to fetch channel videos.'}
+                      {selectedMediaType === 'owned' && !hasYouTubeAPIStats && ' Add your YouTube channel to see owned media.'}
                     </p>
                   )}
                 </div>

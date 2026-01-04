@@ -95,12 +95,17 @@ type ChannelConfigSchema = {
 export type { ChannelConfigSchema };
 
 interface YouTubeInsights {
+  // New concise format
   summary: string;
-  strengths: string[];
-  opportunities: string[];
-  competitorInsight: string;
-  contentRecommendation: string;
-  priorityAction: string;
+  keyGap: string;
+  topAction: string;
+  competitorThreat: string;
+  // Legacy format (for backwards compatibility)
+  strengths?: string[];
+  opportunities?: string[];
+  competitorInsight?: string;
+  contentRecommendation?: string;
+  priorityAction?: string;
 }
 
 export function YouTubeSOVPanel({ brandName, competitors, locationCode = 2840, languageCode = 'en' }: YouTubeSOVPanelProps) {
@@ -234,9 +239,19 @@ export function YouTubeSOVPanel({ brandName, competitors, locationCode = 2840, l
     saveChannelConfig(updated, competitorChannels);
   };
 
-  // Add a competitor channel
-  const addCompetitorChannel = (competitorName: string, channelId: string, channelName: string) => {
-    const newChannel: OwnedChannel = { id: channelId, name: channelName };
+  // Add a competitor channel (with optional stats)
+  const addCompetitorChannel = async (competitorName: string, channelId: string, channelName: string, stats?: Partial<OwnedChannel>) => {
+    const newChannel: OwnedChannel = { id: channelId, name: channelName, ...stats };
+
+    // If no stats provided, try to fetch them
+    if (!stats?.videoCount) {
+      const fetchedStats = await fetchChannelStats(channelId);
+      if (fetchedStats.videoCount !== undefined) {
+        Object.assign(newChannel, fetchedStats);
+        if (fetchedStats.name) newChannel.name = fetchedStats.name;
+      }
+    }
+
     const existing = competitorChannels[competitorName] || [];
     const updated = { ...competitorChannels, [competitorName]: [...existing, newChannel] };
     saveChannelConfig(ownedChannels, updated);
@@ -247,6 +262,58 @@ export function YouTubeSOVPanel({ brandName, competitors, locationCode = 2840, l
     const existing = competitorChannels[competitorName] || [];
     const updated = { ...competitorChannels, [competitorName]: existing.filter(c => c.id !== channelId) };
     saveChannelConfig(ownedChannels, updated);
+  };
+
+  // Auto-fetch competitor YouTube channel from their website
+  const [isFetchingCompetitor, setIsFetchingCompetitor] = useState<string | null>(null);
+
+  const autoFetchCompetitorChannel = async (competitorName: string) => {
+    setIsFetchingCompetitor(competitorName);
+    try {
+      // Construct likely domain from competitor name
+      const domain = `${competitorName.toLowerCase().replace(/\s+/g, '')}.com`;
+
+      const response = await fetch('/api/scrape-youtube-channel', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ domain, brandName: competitorName, fetchStats: true }),
+      });
+
+      if (!response.ok) {
+        console.warn(`Failed to scrape ${domain}`);
+        return;
+      }
+
+      const data = await response.json();
+
+      if (data.found && (data.channelId || data.channelHandle)) {
+        const channelId = data.channelHandle || data.channelId;
+        const channelName = data.channelTitle || competitorName;
+
+        // Add with stats if available
+        await addCompetitorChannel(competitorName, channelId, channelName, {
+          channelId: data.channelId,
+          videoCount: data.videoCount,
+          viewCount: data.viewCount,
+          subscriberCount: data.subscriberCount,
+          lastFetched: new Date().toISOString(),
+        });
+      }
+    } catch (error) {
+      console.error(`Error auto-fetching ${competitorName} channel:`, error);
+    } finally {
+      setIsFetchingCompetitor(null);
+    }
+  };
+
+  // Auto-fetch all competitor channels
+  const autoFetchAllCompetitorChannels = async () => {
+    for (const competitor of competitors) {
+      const existing = competitorChannels[competitor] || [];
+      if (existing.length === 0) {
+        await autoFetchCompetitorChannel(competitor);
+      }
+    }
   };
 
   // Extract channel ID from URL or use direct ID
@@ -1173,30 +1240,94 @@ export function YouTubeSOVPanel({ brandName, competitors, locationCode = 2840, l
           ? ownedChannels.reduce((sum, c) => sum + (c.viewCount || 0), 0)
           : allBrands[0]?.totalViews || 0;
 
-        // Recalculate max views including YouTube API data
-        const adjustedMaxViews = Math.max(yourBrandViews, ...allBrands.slice(1).map(b => b.totalViews));
+        // Check which competitors have YouTube API stats
+        const competitorsWithAPIStats = competitors.filter(comp => {
+          const channels = competitorChannels[comp] || [];
+          return channels.some(c => c.videoCount !== undefined);
+        });
+        const hasAnyCompetitorAPIStats = competitorsWithAPIStats.length > 0;
+
+        // Recalculate max views including YouTube API data for all brands
+        const getCompetitorStats = (compName: string) => {
+          const channels = competitorChannels[compName] || [];
+          const hasAPIStats = channels.some(c => c.videoCount !== undefined);
+          if (hasAPIStats) {
+            return {
+              videoCount: channels.reduce((sum, c) => sum + (c.videoCount || 0), 0),
+              viewCount: channels.reduce((sum, c) => sum + (c.viewCount || 0), 0),
+              hasAPI: true,
+            };
+          }
+          const brand = allBrands.find(b => b.name.toLowerCase() === compName.toLowerCase());
+          return {
+            videoCount: brand?.totalVideosInTop20 || 0,
+            viewCount: brand?.totalViews || 0,
+            hasAPI: false,
+          };
+        };
+
+        const allViews = [yourBrandViews, ...competitors.map(c => getCompetitorStats(c).viewCount)];
+        const adjustedMaxViews = Math.max(...allViews, 1);
 
         return (
         <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6">
-          <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
-            Brand Comparison
-          </h3>
-          {hasYouTubeAPIStats && (
+          <div className="flex items-center justify-between mb-2">
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+              Brand Comparison
+            </h3>
+            {!hasAnyCompetitorAPIStats && (
+              <button
+                onClick={autoFetchAllCompetitorChannels}
+                disabled={isFetchingCompetitor !== null}
+                className="text-xs px-3 py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 flex items-center gap-1"
+              >
+                {isFetchingCompetitor ? (
+                  <>
+                    <svg className="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+                    </svg>
+                    Fetching...
+                  </>
+                ) : (
+                  <>
+                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    </svg>
+                    Auto-fetch Competitor Channels
+                  </>
+                )}
+              </button>
+            )}
+          </div>
+          {(hasYouTubeAPIStats || hasAnyCompetitorAPIStats) && (
             <p className="text-xs text-emerald-600 dark:text-emerald-400 mb-4 flex items-center gap-1">
               <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
-              Your brand uses accurate counts from YouTube Data API
+              {hasYouTubeAPIStats && hasAnyCompetitorAPIStats
+                ? 'All brands use accurate counts from YouTube Data API'
+                : hasYouTubeAPIStats
+                ? 'Your brand uses accurate counts from YouTube Data API'
+                : `${competitorsWithAPIStats.length} competitor(s) use YouTube API data`}
             </p>
           )}
           <div className="space-y-4">
             {allBrands.map((brand, idx) => {
               const isYourBrand = idx === 0;
-              // Use YouTube API stats for your brand, DataForSEO for competitors
-              const displayVideoCount = isYourBrand && hasYouTubeAPIStats ? yourBrandVideoCount : brand.totalVideosInTop20;
-              const displayViews = isYourBrand && hasYouTubeAPIStats ? yourBrandViews : brand.totalViews;
-              const viewsPercentage = adjustedMaxViews > 0 ? (displayViews / adjustedMaxViews) * 100 : 0;
               const compChannels = !isYourBrand ? (competitorChannels[brand.name] || []) : [];
+              const compStats = !isYourBrand ? getCompetitorStats(brand.name) : null;
+
+              // Use YouTube API stats when available
+              const displayVideoCount = isYourBrand
+                ? (hasYouTubeAPIStats ? yourBrandVideoCount : brand.totalVideosInTop20)
+                : (compStats?.hasAPI ? compStats.videoCount : brand.totalVideosInTop20);
+              const displayViews = isYourBrand
+                ? (hasYouTubeAPIStats ? yourBrandViews : brand.totalViews)
+                : (compStats?.hasAPI ? compStats.viewCount : brand.totalViews);
+              const hasAPIStats = isYourBrand ? hasYouTubeAPIStats : compStats?.hasAPI;
+
+              const viewsPercentage = adjustedMaxViews > 0 ? (displayViews / adjustedMaxViews) * 100 : 0;
               const brandVideos = data.allVideos.filter(v =>
                 v.title.toLowerCase().includes(brand.name.toLowerCase())
               );
@@ -1216,12 +1347,12 @@ export function YouTubeSOVPanel({ brandName, competitors, locationCode = 2840, l
                           Your Brand
                         </span>
                       )}
-                      {isYourBrand && hasYouTubeAPIStats && (
+                      {hasAPIStats && (
                         <span className="px-2 py-0.5 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 text-xs rounded-full">
                           YouTube API
                         </span>
                       )}
-                      {!isYourBrand && compChannels.length > 0 && (
+                      {!isYourBrand && compChannels.length > 0 && !compStats?.hasAPI && (
                         <span className="px-2 py-0.5 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 text-xs rounded-full">
                           {compOwnedVideos.length} owned
                         </span>
@@ -1357,85 +1488,28 @@ export function YouTubeSOVPanel({ brandName, competitors, locationCode = 2840, l
           )}
 
           {insights && (
-            <div className="space-y-4">
-              {/* Summary */}
-              <div className="bg-white dark:bg-gray-800 rounded-lg p-4">
-                <p className="text-gray-700 dark:text-gray-300">{insights.summary}</p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {/* Summary - Full Width */}
+              <div className="md:col-span-2 bg-white dark:bg-gray-800 rounded-lg p-4 border-l-4 border-indigo-500">
+                <p className="text-gray-800 dark:text-gray-200 font-medium">{insights.summary}</p>
               </div>
 
-              {/* Priority Action */}
-              <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4">
-                <div className="flex items-start gap-3">
-                  <div className="w-8 h-8 bg-red-100 dark:bg-red-900/40 rounded-full flex items-center justify-center flex-shrink-0">
-                    <svg className="w-4 h-4 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                    </svg>
-                  </div>
-                  <div>
-                    <h4 className="font-semibold text-red-800 dark:text-red-200 text-sm">Priority Action (Next 30 Days)</h4>
-                    <p className="text-red-700 dark:text-red-300 text-sm mt-1">{insights.priorityAction}</p>
-                  </div>
-                </div>
+              {/* Key Gap */}
+              <div className="bg-red-50 dark:bg-red-900/20 rounded-lg p-4 border-l-4 border-red-500">
+                <h4 className="font-semibold text-red-800 dark:text-red-200 text-xs uppercase tracking-wide mb-1">Gap to Close</h4>
+                <p className="text-red-700 dark:text-red-300 text-sm">{insights.keyGap}</p>
               </div>
 
-              <div className="grid md:grid-cols-2 gap-4">
-                {/* Strengths */}
-                <div className="bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-lg p-4">
-                  <h4 className="font-semibold text-emerald-800 dark:text-emerald-200 text-sm mb-2 flex items-center gap-2">
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                    Strengths
-                  </h4>
-                  <ul className="space-y-2">
-                    {insights.strengths.map((s, i) => (
-                      <li key={i} className="text-emerald-700 dark:text-emerald-300 text-sm flex items-start gap-2">
-                        <span className="text-emerald-500 mt-1">•</span>
-                        <span>{s}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-
-                {/* Opportunities */}
-                <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
-                  <h4 className="font-semibold text-blue-800 dark:text-blue-200 text-sm mb-2 flex items-center gap-2">
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
-                    </svg>
-                    Opportunities
-                  </h4>
-                  <ul className="space-y-2">
-                    {insights.opportunities.map((o, i) => (
-                      <li key={i} className="text-blue-700 dark:text-blue-300 text-sm flex items-start gap-2">
-                        <span className="text-blue-500 mt-1">•</span>
-                        <span>{o}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
+              {/* Top Action */}
+              <div className="bg-emerald-50 dark:bg-emerald-900/20 rounded-lg p-4 border-l-4 border-emerald-500">
+                <h4 className="font-semibold text-emerald-800 dark:text-emerald-200 text-xs uppercase tracking-wide mb-1">Top Action</h4>
+                <p className="text-emerald-700 dark:text-emerald-300 text-sm">{insights.topAction}</p>
               </div>
 
-              {/* Competitor Insight */}
-              <div className="bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-lg p-4">
-                <h4 className="font-semibold text-orange-800 dark:text-orange-200 text-sm mb-1 flex items-center gap-2">
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
-                  </svg>
-                  Competitor Insight
-                </h4>
-                <p className="text-orange-700 dark:text-orange-300 text-sm">{insights.competitorInsight}</p>
-              </div>
-
-              {/* Content Recommendation */}
-              <div className="bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800 rounded-lg p-4">
-                <h4 className="font-semibold text-purple-800 dark:text-purple-200 text-sm mb-1 flex items-center gap-2">
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                  </svg>
-                  Content Recommendation
-                </h4>
-                <p className="text-purple-700 dark:text-purple-300 text-sm">{insights.contentRecommendation}</p>
+              {/* Competitor Threat - Full Width */}
+              <div className="md:col-span-2 bg-orange-50 dark:bg-orange-900/20 rounded-lg p-4 border-l-4 border-orange-500">
+                <h4 className="font-semibold text-orange-800 dark:text-orange-200 text-xs uppercase tracking-wide mb-1">Competitor Threat</h4>
+                <p className="text-orange-700 dark:text-orange-300 text-sm">{insights.competitorThreat}</p>
               </div>
 
               {/* Regenerate button */}

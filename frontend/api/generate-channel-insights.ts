@@ -116,34 +116,27 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         ? `\nOwned Media: ${youtubeData.ownedVideosCount} videos (${youtubeData.ownedViews?.toLocaleString() || 0} views)\nEarned Media: ${youtubeData.earnedVideosCount} videos (${youtubeData.earnedViews?.toLocaleString() || 0} views)`
         : '';
 
-      prompt = `You are a strategic video marketing consultant analyzing YouTube Share of Voice data for ${brandName}${industry ? ` in the ${industry} industry` : ''}.
+      prompt = `You are a data analyst providing BRIEF, ACCURATE insights for ${brandName}'s YouTube performance.
 
-YOUTUBE PERFORMANCE DATA:
-- Brand: ${brandName}
-- Videos mentioning brand in search results: ${youtubeData.yourBrand.totalVideosInTop20}
-- Total views on brand-related videos: ${youtubeData.yourBrand.totalViews.toLocaleString()}
-- Share of Voice by video count: ${youtubeData.sov.byCount}%
-- Share of Voice by views: ${youtubeData.sov.byViews}%${ownedEarnedContext}
+DATA:
+- ${brandName}: ${youtubeData.yourBrand.totalVideosInTop20} videos, ${youtubeData.yourBrand.totalViews.toLocaleString()} views, SOV: ${youtubeData.sov.byViews}%${ownedEarnedContext}
+- Competitors: ${competitorList || 'None'}
 
-COMPETITOR ANALYSIS:
-${competitorList || 'No competitor data available'}
+Provide insights in JSON format. BE CONCISE - each field should be 1-2 sentences MAX. Use SPECIFIC numbers.
 
-TOP VIDEOS IN SEARCH RESULTS:
-${topVideos || 'No videos found'}
-
-Based on this data, provide strategic insights in JSON format with these EXACT keys:
-
-1. "summary": A 2-sentence executive summary of the brand's YouTube presence and competitive position
-2. "strengths": Array of 2-3 specific strengths (what's working well based on the data)
-3. "opportunities": Array of 2-3 actionable opportunities to improve YouTube SOV
-4. "competitorInsight": One key insight about competitor performance that ${brandName} should act on
-5. "contentRecommendation": One specific video content recommendation based on what's ranking well
-6. "priorityAction": The single most important action to take in the next 30 days
-
-Be specific and data-driven. Reference actual numbers from the data. Avoid generic advice.
+RULES:
+- NO generic advice like "create engaging content"
+- Reference ACTUAL numbers from the data
+- Be DIRECT and ACTIONABLE
+- Focus on the GAP between ${brandName} and competitors
 
 Return ONLY valid JSON:
-{"summary": "...", "strengths": ["...", "..."], "opportunities": ["...", "..."], "competitorInsight": "...", "contentRecommendation": "...", "priorityAction": "..."}`;
+{
+  "summary": "[1 sentence: state the competitive position with specific numbers]",
+  "keyGap": "[1 sentence: the biggest gap vs competitors with numbers]",
+  "topAction": "[1 sentence: most impactful action to close the gap]",
+  "competitorThreat": "[1 sentence: which competitor is the biggest threat and why]"
+}`;
 
     } else if (type === 'paid-ads' && paidAdsData) {
       const yourData = paidAdsData.yourDomain;

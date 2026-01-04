@@ -80,7 +80,7 @@ export const deleteProject = (id: string): boolean => {
   }
 };
 
-// Clean up YouTube and Paid Ads analyses when a project is deleted
+// Clean up YouTube, Paid Ads, and Google Maps analyses when a project is deleted
 const cleanupRelatedAnalyses = (brandName: string, domain: string): void => {
   const brandLower = brandName.toLowerCase();
   const domainLower = domain.toLowerCase();
@@ -123,6 +123,20 @@ const cleanupRelatedAnalyses = (brandName: string, domain: string): void => {
     }
   } catch (e) {
     console.error('Failed to clean Paid Ads analyses:', e);
+  }
+
+  // Clean Google Maps (Local SEO) analyses
+  try {
+    const mapsData = localStorage.getItem('google-maps-analyses');
+    if (mapsData) {
+      const analyses = JSON.parse(mapsData);
+      const filtered = analyses.filter((a: { brandName?: string }) =>
+        a && a.brandName && a.brandName.toLowerCase() !== brandLower
+      );
+      localStorage.setItem('google-maps-analyses', JSON.stringify(filtered));
+    }
+  } catch (e) {
+    console.error('Failed to clean Google Maps analyses:', e);
   }
 };
 

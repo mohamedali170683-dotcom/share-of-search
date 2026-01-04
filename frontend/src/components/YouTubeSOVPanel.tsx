@@ -77,6 +77,12 @@ interface OwnedChannel {
   id: string;
   name: string;
   url?: string;
+  // YouTube Data API v3 statistics (accurate counts)
+  channelId?: string; // Resolved YouTube channel ID (UC...)
+  videoCount?: number; // Total videos on channel (from API)
+  subscriberCount?: number;
+  viewCount?: number; // Total channel views
+  lastFetched?: string; // When stats were fetched
 }
 
 // ChannelConfig - used for localStorage schema documentation
@@ -159,11 +165,67 @@ export function YouTubeSOVPanel({ brandName, competitors, locationCode = 2840, l
     setCompetitorChannels(compChannels);
   };
 
-  // Add a new owned channel
-  const addOwnedChannel = (channelId: string, channelName: string) => {
+  // Fetch channel stats from YouTube Data API v3
+  const fetchChannelStats = async (channelIdentifier: string): Promise<Partial<OwnedChannel>> => {
+    try {
+      const response = await fetch('/api/youtube-channel', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ channelIdentifier, includeVideos: false }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        console.warn('YouTube Channel API error:', errorData.error);
+        return {};
+      }
+
+      const data = await response.json();
+      if (data.channel) {
+        return {
+          channelId: data.channel.channelId,
+          name: data.channel.channelTitle || channelIdentifier,
+          videoCount: data.channel.videoCount,
+          subscriberCount: data.channel.subscriberCount,
+          viewCount: data.channel.viewCount,
+          lastFetched: new Date().toISOString(),
+        };
+      }
+      return {};
+    } catch (error) {
+      console.warn('Failed to fetch channel stats:', error);
+      return {};
+    }
+  };
+
+  // Add a new owned channel (with optional API lookup)
+  const addOwnedChannel = async (channelId: string, channelName: string) => {
+    // Start with basic info
     const newChannel: OwnedChannel = { id: channelId, name: channelName };
+
+    // Try to fetch stats from YouTube Data API
+    const stats = await fetchChannelStats(channelId);
+    if (stats.channelId || stats.videoCount) {
+      Object.assign(newChannel, stats);
+      if (stats.name) newChannel.name = stats.name; // Use official channel name
+    }
+
     const updated = [...ownedChannels, newChannel];
     saveChannelConfig(updated, competitorChannels);
+  };
+
+  // Refresh stats for all owned channels
+  const refreshChannelStats = async () => {
+    const updatedChannels = await Promise.all(
+      ownedChannels.map(async (channel) => {
+        const stats = await fetchChannelStats(channel.id);
+        if (stats.videoCount !== undefined) {
+          return { ...channel, ...stats };
+        }
+        return channel;
+      })
+    );
+    saveChannelConfig(updatedChannels, competitorChannels);
   };
 
   // Remove an owned channel
@@ -211,12 +273,20 @@ export function YouTubeSOVPanel({ brandName, competitors, locationCode = 2840, l
     return trimmed || null;
   };
 
-  const handleAddChannel = () => {
+  // State for loading channel stats
+  const [isAddingChannel, setIsAddingChannel] = useState(false);
+
+  const handleAddChannel = async () => {
     const channelId = parseChannelInput(channelInput);
     if (channelId) {
       // Check if already exists
       if (!ownedChannels.some(c => c.id.toLowerCase() === channelId.toLowerCase())) {
-        addOwnedChannel(channelId, channelInput);
+        setIsAddingChannel(true);
+        try {
+          await addOwnedChannel(channelId, channelInput);
+        } finally {
+          setIsAddingChannel(false);
+        }
       }
       setShowChannelInput(false);
       setChannelInput('');
@@ -609,8 +679,16 @@ export function YouTubeSOVPanel({ brandName, competitors, locationCode = 2840, l
           <div>
             <h4 className="font-semibold mb-2">Owned Media Calculation</h4>
             <p className="text-blue-700 dark:text-blue-300">
-              <strong>Method:</strong> Search YouTube for your channel name/handle, then filter results to only videos from your channel.
+              <strong>Method 1 (DataForSEO):</strong> Search YouTube for your channel name/handle, then filter results to only videos from your channel. Limited to ~100-200 videos.<br/>
+              <strong>Method 2 (YouTube Data API v3):</strong> When configured, we fetch accurate channel statistics directly from YouTube, including total video count, subscriber count, and total views.
             </p>
+            {ownedChannels.some(c => c.videoCount !== undefined) && (
+              <div className="mt-2 bg-emerald-50 dark:bg-emerald-900/30 rounded p-2">
+                <p className="text-xs font-medium text-emerald-700 dark:text-emerald-300">
+                  YouTube Data API Active - Showing accurate channel statistics
+                </p>
+              </div>
+            )}
           </div>
 
           {/* API Limitations Warning */}
@@ -625,7 +703,11 @@ export function YouTubeSOVPanel({ brandName, competitors, locationCode = 2840, l
               <li>• <strong>DataForSEO is a SEARCH API</strong>, not a channel listing API. It cannot retrieve ALL videos from a channel.</li>
               <li>• Owned channel videos are limited to what appears in YouTube search results (typically 100-200 videos max).</li>
               <li>• If your channel has 400+ videos, only ~100-150 may be captured via search.</li>
-              <li>• For complete channel video counts, use the official YouTube Data API v3.</li>
+              {ownedChannels.some(c => c.videoCount !== undefined) ? (
+                <li className="text-emerald-700 dark:text-emerald-400">• <strong>YouTube Data API v3 is configured</strong> - accurate channel video counts are shown above.</li>
+              ) : (
+                <li>• For complete channel video counts, add <code className="bg-yellow-100 dark:bg-yellow-800 px-1 rounded">YOUTUBE_API_KEY</code> to environment variables.</li>
+              )}
               <li>• Brand matching is based on video titles only - videos without brand name in title are not counted.</li>
             </ul>
             {data?.methodology?.limitations && data.methodology.limitations.length > 0 && (
@@ -744,28 +826,63 @@ export function YouTubeSOVPanel({ brandName, competitors, locationCode = 2840, l
               </div>
             </>
           ) : (
-            <div className="space-y-2 mb-4">
-              <p className="text-sm text-gray-600 dark:text-gray-300">Your channels:</p>
-              <div className="flex flex-wrap gap-2">
-                {ownedChannels.map((channel) => (
-                  <span
-                    key={channel.id}
-                    className="inline-flex items-center gap-1 px-3 py-1 bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300 rounded-full text-sm"
+            <div className="space-y-3 mb-4">
+              <div className="flex items-center justify-between">
+                <p className="text-sm text-gray-600 dark:text-gray-300">Your channels:</p>
+                {ownedChannels.some(c => c.videoCount !== undefined) && (
+                  <button
+                    onClick={refreshChannelStats}
+                    className="text-xs text-emerald-600 hover:text-emerald-700 flex items-center gap-1"
+                    title="Refresh channel statistics"
                   >
-                    <svg className="w-4 h-4 text-red-500" fill="currentColor" viewBox="0 0 24 24">
-                      <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814z"/>
-                      <path fill="white" d="M9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
+                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                     </svg>
-                    {channel.name}
+                    Refresh Stats
+                  </button>
+                )}
+              </div>
+              <div className="space-y-2">
+                {ownedChannels.map((channel) => (
+                  <div
+                    key={channel.id}
+                    className="flex items-center justify-between p-3 bg-emerald-50 dark:bg-emerald-900/30 border border-emerald-200 dark:border-emerald-800 rounded-lg"
+                  >
+                    <div className="flex items-center gap-2">
+                      <svg className="w-5 h-5 text-red-500 flex-shrink-0" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814z"/>
+                        <path fill="white" d="M9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
+                      </svg>
+                      <div>
+                        <span className="text-sm font-medium text-emerald-700 dark:text-emerald-300">{channel.name}</span>
+                        {channel.videoCount !== undefined && (
+                          <div className="flex items-center gap-3 text-xs text-emerald-600 dark:text-emerald-400">
+                            <span className="font-semibold">{channel.videoCount.toLocaleString()} videos</span>
+                            {channel.subscriberCount !== undefined && (
+                              <span>{formatViews(channel.subscriberCount)} subscribers</span>
+                            )}
+                            {channel.viewCount !== undefined && (
+                              <span>{formatViews(channel.viewCount)} total views</span>
+                            )}
+                          </div>
+                        )}
+                        {channel.videoCount === undefined && (
+                          <p className="text-xs text-gray-500 dark:text-gray-400">
+                            Stats unavailable (add YOUTUBE_API_KEY for accurate counts)
+                          </p>
+                        )}
+                      </div>
+                    </div>
                     <button
                       onClick={() => removeOwnedChannel(channel.id)}
-                      className="ml-1 text-emerald-600 hover:text-red-600 transition-colors"
+                      className="p-1 text-emerald-600 hover:text-red-600 transition-colors"
+                      title="Remove channel"
                     >
-                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                       </svg>
                     </button>
-                  </span>
+                  </div>
                 ))}
               </div>
             </div>
@@ -780,23 +897,37 @@ export function YouTubeSOVPanel({ brandName, competitors, locationCode = 2840, l
                   onChange={(e) => setChannelInput(e.target.value)}
                   placeholder="e.g., @ContinentalTires or channel URL"
                   className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
-                  onKeyDown={(e) => e.key === 'Enter' && handleAddChannel()}
+                  onKeyDown={(e) => e.key === 'Enter' && !isAddingChannel && handleAddChannel()}
+                  disabled={isAddingChannel}
                 />
                 <button
                   onClick={handleAddChannel}
-                  className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors text-sm font-medium"
+                  disabled={isAddingChannel}
+                  className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                 >
-                  Add
+                  {isAddingChannel ? (
+                    <>
+                      <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
+                      Fetching...
+                    </>
+                  ) : (
+                    'Add'
+                  )}
                 </button>
                 <button
                   onClick={() => { setShowChannelInput(false); setChannelInput(''); }}
                   className="px-3 py-2 text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 text-sm"
+                  disabled={isAddingChannel}
                 >
                   Cancel
                 </button>
               </div>
               <p className="text-xs text-gray-500 dark:text-gray-400">
                 Supports: @handle, youtube.com/channel/..., youtube.com/@..., or channel ID
+                {isAddingChannel && ' — Fetching channel statistics from YouTube...'}
               </p>
             </div>
           ) : (

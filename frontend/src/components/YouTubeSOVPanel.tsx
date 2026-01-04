@@ -181,6 +181,8 @@ export function YouTubeSOVPanel({ brandName, competitors, locationCode = 2840, l
   // Pass locationCode for regional channel matching (e.g., "Michelin Deutschland" for Germany)
   const fetchChannelStats = async (channelIdentifier: string, useLocationCode: boolean = true): Promise<Partial<OwnedChannel>> => {
     try {
+      console.log(`[YouTube] Fetching stats for: "${channelIdentifier}", locationCode: ${useLocationCode ? locationCode : 'none'}`);
+
       const response = await fetch('/api/youtube-channel', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -193,16 +195,17 @@ export function YouTubeSOVPanel({ brandName, competitors, locationCode = 2840, l
 
       if (!response.ok) {
         const errorData = await response.json();
-        console.warn('YouTube Channel API error:', errorData.error, '- Status:', response.status);
+        console.warn(`[YouTube] API error for "${channelIdentifier}":`, errorData.error, '- Status:', response.status, '- Debug:', errorData.debug);
         // If it's a 500 error about API key, show more specific message
         if (response.status === 500 && errorData.error?.includes('API key')) {
-          console.error('YOUTUBE_API_KEY is not configured on the server');
+          console.error('[YouTube] YOUTUBE_API_KEY is not configured on the server');
         }
         return {};
       }
 
       const data = await response.json();
       if (data.channel) {
+        console.log(`[YouTube] Success for "${channelIdentifier}": ${data.channel.channelTitle} (${data.channel.videoCount} videos)`);
         return {
           channelId: data.channel.channelId,
           name: data.channel.channelTitle || channelIdentifier,
@@ -213,9 +216,10 @@ export function YouTubeSOVPanel({ brandName, competitors, locationCode = 2840, l
           lastFetched: new Date().toISOString(),
         };
       }
+      console.warn(`[YouTube] No channel data returned for "${channelIdentifier}"`);
       return {};
     } catch (error) {
-      console.warn('Failed to fetch channel stats:', error);
+      console.warn(`[YouTube] Failed to fetch channel stats for "${channelIdentifier}":`, error);
       return {};
     }
   };
@@ -687,9 +691,12 @@ export function YouTubeSOVPanel({ brandName, competitors, locationCode = 2840, l
       // Accumulate all fetched channels
       const fetchedChannels: Record<string, OwnedChannel> = {};
 
+      console.log(`[YouTube] Auto-fetching ${competitorsToFetch.length} competitor channels:`, competitorsToFetch);
+
       // Fetch all competitors in parallel for speed
       await Promise.all(competitorsToFetch.map(async (competitor) => {
         try {
+          console.log(`[YouTube] Auto-fetching channel for: "${competitor}" (locationCode: ${locationCode})`);
           // Use YouTube API to search for the official channel by brand name
           // Pass locationCode for location-aware search (e.g., "Michelin Deutschland" for Germany)
           const response = await fetch('/api/youtube-channel', {
@@ -705,6 +712,7 @@ export function YouTubeSOVPanel({ brandName, competitors, locationCode = 2840, l
           if (response.ok) {
             const data = await response.json();
             if (data.channel) {
+              console.log(`[YouTube] Found channel for "${competitor}": ${data.channel.channelTitle} (${data.channel.videoCount} videos)`);
               // Store fetched channel
               fetchedChannels[competitor] = {
                 id: data.channel.customUrl || data.channel.channelId,
@@ -716,10 +724,15 @@ export function YouTubeSOVPanel({ brandName, competitors, locationCode = 2840, l
                 url: data.channel.customUrl ? `https://youtube.com/${data.channel.customUrl}` : undefined,
                 lastFetched: new Date().toISOString(),
               };
+            } else {
+              console.warn(`[YouTube] No channel data for "${competitor}"`);
             }
+          } else {
+            const errorData = await response.json().catch(() => ({}));
+            console.warn(`[YouTube] Failed to fetch "${competitor}": ${response.status}`, errorData);
           }
         } catch (error) {
-          console.warn(`Failed to auto-fetch ${competitor} channel:`, error);
+          console.warn(`[YouTube] Error auto-fetching "${competitor}" channel:`, error);
         }
       }));
 

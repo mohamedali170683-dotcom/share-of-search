@@ -131,6 +131,8 @@ async function searchChannelWithStrategies(
   const targetLocationKeywords = locationCode ? (locationKeywords[locationCode] || [locationInfo?.name.toLowerCase()]) : [];
 
   // Try each search query (limit to 3 to save API quota)
+  console.log(`[YouTube API] Searching for "${brandName}" with ${searchQueries.length} strategies`);
+
   for (let i = 0; i < Math.min(searchQueries.length, 3); i++) {
     const query = searchQueries[i];
 
@@ -147,8 +149,14 @@ async function searchChannelWithStrategies(
         searchUrl.searchParams.set('regionCode', regionCodes[locationCode]);
       }
 
+      console.log(`[YouTube API] Search query ${i + 1}: "${query}"${locationCode ? ` (region: ${regionCodes[locationCode]})` : ''}`);
+
       const searchResponse = await fetch(searchUrl.toString());
-      if (!searchResponse.ok) continue;
+      if (!searchResponse.ok) {
+        const errorText = await searchResponse.text();
+        console.error(`[YouTube API] Search failed for "${query}": ${searchResponse.status} - ${errorText}`);
+        continue;
+      }
 
       const searchData = await searchResponse.json();
       const items = searchData.items || [];
@@ -284,7 +292,7 @@ async function resolveChannelId(
   // Handle format (@username) - search directly
   if (identifier.startsWith('@')) {
     const handle = identifier;
-    console.log(`Searching for handle: ${handle}`);
+    console.log(`[YouTube API] Resolving handle: ${handle}`);
 
     try {
       const searchUrl = new URL('https://www.googleapis.com/youtube/v3/search');
@@ -299,6 +307,7 @@ async function resolveChannelId(
       if (searchResponse.ok) {
         const searchData = await searchResponse.json();
         const items = searchData.items || [];
+        console.log(`[YouTube API] Handle search returned ${items.length} results for ${handle}`);
 
         if (items.length > 0) {
           // Try to find best match by checking customUrl
@@ -336,10 +345,11 @@ async function resolveChannelId(
           }
         }
       } else {
-        console.error(`Search API error for ${handle}:`, searchResponse.status);
+        const errorText = await searchResponse.text();
+        console.error(`[YouTube API] Search API error for ${handle}: ${searchResponse.status} - ${errorText}`);
       }
     } catch (error) {
-      console.error('Error resolving handle:', error);
+      console.error('[YouTube API] Error resolving handle:', error);
     }
   }
 
@@ -532,28 +542,36 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const apiKey = process.env.YOUTUBE_API_KEY;
 
+    // Debug: Log whether API key exists (not the key itself!)
+    console.log(`[YouTube API] Request for: "${channelIdentifier}", API key configured: ${!!apiKey}, locationCode: ${locationCode || 'none'}`);
+
     if (!apiKey) {
+      console.error('[YouTube API] YOUTUBE_API_KEY environment variable is not set');
       return res.status(500).json({
         error: 'YouTube API key not configured. Add YOUTUBE_API_KEY to environment variables.',
         channel: null,
         recentVideos: [],
+        debug: { apiKeyConfigured: false },
       });
     }
 
-    console.log(`Fetching YouTube channel data for: ${channelIdentifier}${locationCode ? ` (location: ${locationCode})` : ''}`);
+    console.log(`[YouTube API] Fetching channel data for: ${channelIdentifier}${locationCode ? ` (location: ${locationCode})` : ''}`);
 
     // Resolve channel identifier to ID (with location-aware search for brand names)
+    console.log(`[YouTube API] Resolving channel identifier: "${channelIdentifier}"`);
     const { channelId, error: resolveError } = await resolveChannelId(channelIdentifier, apiKey, locationCode);
 
     if (!channelId) {
+      console.warn(`[YouTube API] Channel not found for: "${channelIdentifier}", error: ${resolveError}`);
       return res.status(404).json({
         error: resolveError || 'Channel not found',
         channel: null,
         recentVideos: [],
+        debug: { apiKeyConfigured: true, identifier: channelIdentifier, resolved: false },
       });
     }
 
-    console.log(`Resolved channel ID: ${channelId}`);
+    console.log(`[YouTube API] Resolved channel ID: ${channelId}`);
 
     // Fetch channel stats and videos in parallel
     const [channelStats, recentVideos] = await Promise.all([
@@ -569,7 +587,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
     }
 
-    console.log(`Channel ${channelStats.channelTitle}: ${channelStats.videoCount} total videos, ${channelStats.viewCount} total views`);
+    console.log(`[YouTube API] Success! Channel "${channelStats.channelTitle}": ${channelStats.videoCount} total videos, ${channelStats.viewCount} total views`);
 
     const response: YouTubeChannelResponse = {
       channel: channelStats,

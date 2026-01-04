@@ -281,9 +281,10 @@ async function resolveChannelId(
     return { channelId: identifier };
   }
 
-  // Handle format (@username) - try exact match first
+  // Handle format (@username) - search directly
   if (identifier.startsWith('@')) {
     const handle = identifier;
+    console.log(`Searching for handle: ${handle}`);
 
     try {
       const searchUrl = new URL('https://www.googleapis.com/youtube/v3/search');
@@ -299,10 +300,15 @@ async function resolveChannelId(
         const searchData = await searchResponse.json();
         const items = searchData.items || [];
 
-        // Find exact match for handle
-        for (const item of items) {
-          const channelId = item.id?.channelId || item.snippet?.channelId;
-          if (channelId) {
+        if (items.length > 0) {
+          // Try to find best match by checking customUrl
+          const handleLower = handle.toLowerCase().replace('@', '');
+
+          for (const item of items) {
+            const channelId = item.id?.channelId || item.snippet?.channelId;
+            if (!channelId) continue;
+
+            // Verify channel and check customUrl
             const verifyUrl = new URL('https://www.googleapis.com/youtube/v3/channels');
             verifyUrl.searchParams.set('part', 'snippet');
             verifyUrl.searchParams.set('id', channelId);
@@ -312,23 +318,25 @@ async function resolveChannelId(
             if (verifyResponse.ok) {
               const verifyData = await verifyResponse.json();
               const channel = verifyData.items?.[0];
-              const customUrl = channel?.snippet?.customUrl?.toLowerCase();
-              const handleLower = handle.toLowerCase().replace('@', '');
+              const customUrl = (channel?.snippet?.customUrl || '').toLowerCase().replace('@', '');
 
-              if (customUrl === handleLower || customUrl === `@${handleLower}`) {
+              // Check for match (exact or partial)
+              if (customUrl === handleLower || customUrl.includes(handleLower) || handleLower.includes(customUrl)) {
+                console.log(`Found exact match for ${handle}: ${channel?.snippet?.title} (${channelId})`);
                 return { channelId };
               }
             }
           }
-        }
 
-        // Return first result if no exact match
-        if (items.length > 0) {
-          const channelId = items[0].id?.channelId || items[0].snippet?.channelId;
-          if (channelId) {
-            return { channelId };
+          // If no exact match, return first result
+          const firstChannelId = items[0].id?.channelId || items[0].snippet?.channelId;
+          if (firstChannelId) {
+            console.log(`No exact match for ${handle}, using first result: ${firstChannelId}`);
+            return { channelId: firstChannelId };
           }
         }
+      } else {
+        console.error(`Search API error for ${handle}:`, searchResponse.status);
       }
     } catch (error) {
       console.error('Error resolving handle:', error);

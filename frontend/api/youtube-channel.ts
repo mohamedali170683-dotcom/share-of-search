@@ -9,8 +9,136 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
  * - Subscriber count
  * - Recent videos list
  *
- * Requires YOUTUBE_API_KEY environment variable
+ * Features:
+ * - Multiple API key rotation (YOUTUBE_API_KEY, YOUTUBE_API_KEY_2, etc.)
+ * - In-memory caching with 24-hour TTL to reduce API calls
+ * - Quota exceeded detection and automatic key switching
  */
+
+// ============================================
+// API KEY ROTATION
+// ============================================
+
+interface ApiKeyState {
+  key: string;
+  quotaExceeded: boolean;
+  quotaResetTime?: number; // Unix timestamp when quota should reset
+}
+
+// Load all available API keys from environment
+function getApiKeys(): ApiKeyState[] {
+  const keys: ApiKeyState[] = [];
+
+  // Primary key
+  if (process.env.YOUTUBE_API_KEY) {
+    keys.push({ key: process.env.YOUTUBE_API_KEY, quotaExceeded: false });
+  }
+
+  // Additional keys (YOUTUBE_API_KEY_2, YOUTUBE_API_KEY_3, etc.)
+  for (let i = 2; i <= 10; i++) {
+    const key = process.env[`YOUTUBE_API_KEY_${i}`];
+    if (key) {
+      keys.push({ key, quotaExceeded: false });
+    }
+  }
+
+  return keys;
+}
+
+// In-memory storage for API key states (persists across requests in same serverless instance)
+let apiKeyStates: ApiKeyState[] | null = null;
+
+function getApiKeyStates(): ApiKeyState[] {
+  if (!apiKeyStates) {
+    apiKeyStates = getApiKeys();
+  }
+
+  // Check if any quota-exceeded keys should be reset (quota resets at midnight PT)
+  const now = Date.now();
+  for (const state of apiKeyStates) {
+    if (state.quotaExceeded && state.quotaResetTime && now > state.quotaResetTime) {
+      console.log('[YouTube API] Resetting quota status for key (new day)');
+      state.quotaExceeded = false;
+      state.quotaResetTime = undefined;
+    }
+  }
+
+  return apiKeyStates;
+}
+
+function getAvailableApiKey(): string | null {
+  const states = getApiKeyStates();
+  const available = states.find(s => !s.quotaExceeded);
+  return available?.key || null;
+}
+
+function markKeyQuotaExceeded(key: string): void {
+  const states = getApiKeyStates();
+  const state = states.find(s => s.key === key);
+  if (state) {
+    state.quotaExceeded = true;
+    // Set reset time to next midnight PT (UTC-8)
+    const now = new Date();
+    const tomorrow = new Date(now);
+    tomorrow.setUTCHours(8, 0, 0, 0); // Midnight PT = 8:00 UTC
+    if (tomorrow <= now) {
+      tomorrow.setDate(tomorrow.getDate() + 1);
+    }
+    state.quotaResetTime = tomorrow.getTime();
+    console.log(`[YouTube API] Marked key as quota exceeded, will reset at ${tomorrow.toISOString()}`);
+  }
+}
+
+// ============================================
+// CACHING
+// ============================================
+
+interface CachedChannel {
+  data: ChannelStatistics;
+  timestamp: number;
+  locationCode?: number;
+}
+
+// In-memory cache for channel lookups (24-hour TTL)
+const channelCache = new Map<string, CachedChannel>();
+const CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
+
+function getCacheKey(identifier: string, locationCode?: number): string {
+  return `${identifier.toLowerCase()}:${locationCode || 'global'}`;
+}
+
+function getCachedChannel(identifier: string, locationCode?: number): ChannelStatistics | null {
+  const key = getCacheKey(identifier, locationCode);
+  const cached = channelCache.get(key);
+
+  if (cached && (Date.now() - cached.timestamp) < CACHE_TTL_MS) {
+    console.log(`[YouTube API] Cache HIT for "${identifier}" (age: ${Math.round((Date.now() - cached.timestamp) / 60000)}min)`);
+    return cached.data;
+  }
+
+  if (cached) {
+    console.log(`[YouTube API] Cache EXPIRED for "${identifier}"`);
+    channelCache.delete(key);
+  }
+
+  return null;
+}
+
+function setCachedChannel(identifier: string, data: ChannelStatistics, locationCode?: number): void {
+  const key = getCacheKey(identifier, locationCode);
+  channelCache.set(key, { data, timestamp: Date.now(), locationCode });
+  console.log(`[YouTube API] Cached channel "${data.channelTitle}" for "${identifier}"`);
+
+  // Also cache by channelId for direct lookups
+  if (data.channelId && data.channelId !== identifier) {
+    const idKey = getCacheKey(data.channelId, locationCode);
+    channelCache.set(idKey, { data, timestamp: Date.now(), locationCode });
+  }
+}
+
+// ============================================
+// TYPES
+// ============================================
 
 interface ChannelStatistics {
   channelId: string;
@@ -567,18 +695,37 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(400).json({ error: 'channelIdentifier is required (handle, custom URL, or channel ID)' });
     }
 
-    const apiKey = process.env.YOUTUBE_API_KEY;
+    // Get available API key (with rotation support)
+    const apiKeyStates = getApiKeyStates();
+    const apiKey = getAvailableApiKey();
 
-    // Debug: Log whether API key exists (not the key itself!)
-    console.log(`[YouTube API] Request for: "${channelIdentifier}", API key configured: ${!!apiKey}, locationCode: ${locationCode || 'none'}`);
+    // Debug: Log API key status
+    const totalKeys = apiKeyStates.length;
+    const availableKeys = apiKeyStates.filter(s => !s.quotaExceeded).length;
+    console.log(`[YouTube API] Request for: "${channelIdentifier}", API keys: ${availableKeys}/${totalKeys} available, locationCode: ${locationCode || 'none'}`);
 
     if (!apiKey) {
-      console.error('[YouTube API] YOUTUBE_API_KEY environment variable is not set');
-      return res.status(500).json({
-        error: 'YouTube API key not configured. Add YOUTUBE_API_KEY to environment variables.',
+      const allExhausted = totalKeys > 0;
+      console.error(`[YouTube API] ${allExhausted ? 'All API keys quota exceeded' : 'No YOUTUBE_API_KEY configured'}`);
+      return res.status(allExhausted ? 429 : 500).json({
+        error: allExhausted
+          ? 'All YouTube API keys quota exceeded. Try again tomorrow.'
+          : 'YouTube API key not configured. Add YOUTUBE_API_KEY to environment variables.',
         channel: null,
         recentVideos: [],
-        debug: { apiKeyConfigured: false },
+        debug: { apiKeyConfigured: totalKeys > 0, keysAvailable: availableKeys, totalKeys },
+      });
+    }
+
+    // Check cache first (only for stats, not videos)
+    const cachedChannel = getCachedChannel(channelIdentifier, locationCode);
+    if (cachedChannel && !includeVideos) {
+      console.log(`[YouTube API] Returning cached result for "${channelIdentifier}"`);
+      return res.status(200).json({
+        channel: cachedChannel,
+        recentVideos: [],
+        quotaUsed: 0, // No API call made
+        cached: true,
       });
     }
 
@@ -590,8 +737,28 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     if (!channelId) {
       console.warn(`[YouTube API] Channel not found for: "${channelIdentifier}", error: ${resolveError}`);
-      // Return 429 for quota exceeded to signal rate limiting
+      // Check if quota exceeded and mark the key
       const isQuotaError = resolveError?.includes('quota');
+      if (isQuotaError) {
+        markKeyQuotaExceeded(apiKey);
+        // Try again with next available key
+        const nextKey = getAvailableApiKey();
+        if (nextKey) {
+          console.log('[YouTube API] Retrying with next available API key...');
+          const retryResult = await resolveChannelId(channelIdentifier, nextKey, locationCode);
+          if (retryResult.channelId) {
+            // Continue with the retry result
+            const [channelStats, recentVideos] = await Promise.all([
+              fetchChannelStats(retryResult.channelId, nextKey),
+              includeVideos ? fetchChannelVideos(retryResult.channelId, nextKey, maxVideos) : Promise.resolve([]),
+            ]);
+            if (channelStats) {
+              setCachedChannel(channelIdentifier, channelStats, locationCode);
+              return res.status(200).json({ channel: channelStats, recentVideos, quotaUsed: includeVideos ? 4 : 2 });
+            }
+          }
+        }
+      }
       return res.status(isQuotaError ? 429 : 404).json({
         error: resolveError || 'Channel not found',
         channel: null,
@@ -615,6 +782,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         recentVideos: [],
       });
     }
+
+    // Cache the successful result
+    setCachedChannel(channelIdentifier, channelStats, locationCode);
 
     console.log(`[YouTube API] Success! Channel "${channelStats.channelTitle}": ${channelStats.videoCount} total videos, ${channelStats.viewCount} total views`);
 

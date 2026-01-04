@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { MetricCard, KeywordTable, TrendsPanel, MethodologyPage, FAQ, ProjectCard, AnalysisForm, CategoryBreakdownPanel, CompetitorStrengthPanel } from './components';
 import { OpportunitiesPanel } from './components/OpportunitiesPanel';
 import { YouTubeSOVPanel } from './components/YouTubeSOVPanel';
-import { PaidAdsPanel } from './components/PaidAdsPanel';
+import { GoogleMapsPanel } from './components/GoogleMapsPanel';
 import type { BrandKeyword, RankedKeyword, SOSResult, SOVResult, GrowthGapResult, Project, ActionableInsights, BrandContext, Opportunity } from './types';
 import { calculateMetrics, getRankedKeywords, getBrandKeywords, getTrends, exportToCSV } from './services/api';
 import { getProjects, saveProject, deleteProject } from './services/projectStorage';
@@ -11,7 +11,7 @@ import type { TrendsData } from './services/api';
 import { generateActionableInsights } from './lib/actionableInsights';
 
 type ViewMode = 'dashboard' | 'analysis' | 'project';
-type AnalysisTab = 'overview' | 'opportunities' | 'categories' | 'competitors' | 'youtube' | 'paidAds';
+type AnalysisTab = 'overview' | 'opportunities' | 'categories' | 'competitors' | 'youtube' | 'localSeo';
 
 function App() {
   const { toggleTheme, isDark } = useTheme();
@@ -498,11 +498,12 @@ function App() {
       )
     },
     {
-      id: 'paidAds',
-      label: 'Paid Ads',
+      id: 'localSeo',
+      label: 'Local SEO',
       icon: (
         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
         </svg>
       )
     }
@@ -773,12 +774,12 @@ function App() {
         />
       )}
 
-      {analysisTab === 'paidAds' && (
-        <PaidAdsPanel
-          domain={currentDomain}
+      {analysisTab === 'localSeo' && (
+        <GoogleMapsPanel
           brandName={brandName}
           competitors={actualCompetitors}
           locationCode={currentLocation.code}
+          languageCode={currentLanguage}
         />
       )}
     </main>

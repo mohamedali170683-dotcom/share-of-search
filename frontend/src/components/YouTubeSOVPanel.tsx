@@ -721,11 +721,32 @@ export function YouTubeSOVPanel({ brandName, competitors, locationCode = 2840, l
           </div>
 
           <div>
-            <h4 className="font-semibold mb-2">Data Source</h4>
-            <p className="text-blue-700 dark:text-blue-300">
-              Results are fetched from YouTube search via <strong>DataForSEO SERP API</strong>.
-              We analyze up to 100 videos per search keyword. Data reflects what appears in YouTube search results at the time of analysis.
-            </p>
+            <h4 className="font-semibold mb-2">Data Sources (Combined)</h4>
+            <div className="space-y-2">
+              <div className="flex items-start gap-2">
+                <span className="w-2 h-2 bg-emerald-500 rounded-full mt-2 flex-shrink-0"></span>
+                <div>
+                  <p className="text-blue-700 dark:text-blue-300">
+                    <strong>YouTube Data API v3</strong> (for your brand): Provides accurate channel statistics including total video count, subscriber count, and total views. Used for SOV calculations when configured.
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-start gap-2">
+                <span className="w-2 h-2 bg-gray-400 rounded-full mt-2 flex-shrink-0"></span>
+                <div>
+                  <p className="text-blue-700 dark:text-blue-300">
+                    <strong>DataForSEO SERP API</strong> (for competitors): Fetches videos from YouTube search results (up to 100 per search). Used for competitor analysis since we don't have direct access to their channel statistics.
+                  </p>
+                </div>
+              </div>
+            </div>
+            {ownedChannels.some(c => c.videoCount !== undefined) && (
+              <div className="mt-3 bg-emerald-50 dark:bg-emerald-900/30 rounded p-2">
+                <p className="text-xs font-medium text-emerald-700 dark:text-emerald-300">
+                  Your SOV is calculated using accurate YouTube API data for your brand vs. search-based data for competitors.
+                </p>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -1027,7 +1048,6 @@ export function YouTubeSOVPanel({ brandName, competitors, locationCode = 2840, l
   if (!data) return null;
 
   const allBrands = [data.yourBrand, ...data.competitors];
-  const maxViews = Math.max(...allBrands.map(b => b.totalViews), 1);
   const hasVideos = data.allVideos && data.allVideos.length > 0;
 
   return (
@@ -1065,6 +1085,34 @@ export function YouTubeSOVPanel({ brandName, competitors, locationCode = 2840, l
       )}
 
       {/* SOV Summary Cards */}
+      {(() => {
+        // Check if we have YouTube API stats for accurate SOV calculation
+        const hasYouTubeAPIStats = ownedChannels.some(c => c.videoCount !== undefined);
+        const yourBrandVideoCount = hasYouTubeAPIStats
+          ? ownedChannels.reduce((sum, c) => sum + (c.videoCount || 0), 0)
+          : data.yourBrand.totalVideosInTop20;
+        const yourBrandViews = hasYouTubeAPIStats
+          ? ownedChannels.reduce((sum, c) => sum + (c.viewCount || 0), 0)
+          : data.yourBrand.totalViews;
+
+        // Recalculate SOV with YouTube API data
+        const competitorVideos = data.competitors.reduce((sum, c) => sum + c.totalVideosInTop20, 0);
+        const competitorViews = data.competitors.reduce((sum, c) => sum + c.totalViews, 0);
+        const totalVideos = yourBrandVideoCount + competitorVideos;
+        const totalViews = yourBrandViews + competitorViews;
+
+        const adjustedSOVByCount = totalVideos > 0
+          ? Math.round((yourBrandVideoCount / totalVideos) * 100 * 10) / 10
+          : 0;
+        const adjustedSOVByViews = totalViews > 0
+          ? Math.round((yourBrandViews / totalViews) * 100 * 10) / 10
+          : 0;
+
+        // Use adjusted values if we have YouTube API stats, otherwise use original
+        const displaySOVByCount = hasYouTubeAPIStats ? adjustedSOVByCount : data.sov.byCount;
+        const displaySOVByViews = hasYouTubeAPIStats ? adjustedSOVByViews : data.sov.byViews;
+
+        return (
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6 border-l-4 border-red-500">
           <div className="flex items-center gap-3 mb-2">
@@ -1075,12 +1123,17 @@ export function YouTubeSOVPanel({ brandName, competitors, locationCode = 2840, l
             </div>
             <div>
               <p className="text-sm text-gray-500 dark:text-gray-400">Share of Search (by video count)</p>
-              <p className="text-2xl font-bold text-gray-900 dark:text-white">{data.sov.byCount}%</p>
+              <p className="text-2xl font-bold text-gray-900 dark:text-white">{displaySOVByCount}%</p>
             </div>
           </div>
           <p className="text-xs text-gray-500 dark:text-gray-400">
-            {data.yourBrand.totalVideosInTop20} brand videos identified in search results
+            {yourBrandVideoCount.toLocaleString()} brand videos {hasYouTubeAPIStats ? '(YouTube API)' : 'in search results'}
           </p>
+          {hasYouTubeAPIStats && (
+            <p className="text-xs text-emerald-600 dark:text-emerald-400 mt-1">
+              vs {competitorVideos.toLocaleString()} competitor videos
+            </p>
+          )}
         </div>
 
         <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6 border-l-4 border-purple-500">
@@ -1093,25 +1146,56 @@ export function YouTubeSOVPanel({ brandName, competitors, locationCode = 2840, l
             </div>
             <div>
               <p className="text-sm text-gray-500 dark:text-gray-400">Share of Voice (by views)</p>
-              <p className="text-2xl font-bold text-gray-900 dark:text-white">{data.sov.byViews}%</p>
+              <p className="text-2xl font-bold text-gray-900 dark:text-white">{displaySOVByViews}%</p>
             </div>
           </div>
           <p className="text-xs text-gray-500 dark:text-gray-400">
-            {formatViews(data.yourBrand.totalViews)} total views on brand videos
+            {formatViews(yourBrandViews)} total views {hasYouTubeAPIStats ? '(YouTube API)' : 'on brand videos'}
           </p>
+          {hasYouTubeAPIStats && (
+            <p className="text-xs text-emerald-600 dark:text-emerald-400 mt-1">
+              vs {formatViews(competitorViews)} competitor views
+            </p>
+          )}
         </div>
       </div>
+        );
+      })()}
 
       {/* Brand Comparison with Competitor Channels */}
-      {allBrands.some(b => b.totalVideosInTop20 > 0) && (
+      {allBrands.some(b => b.totalVideosInTop20 > 0) && (() => {
+        // Check if we have YouTube API stats for your brand
+        const hasYouTubeAPIStats = ownedChannels.some(c => c.videoCount !== undefined);
+        const yourBrandVideoCount = hasYouTubeAPIStats
+          ? ownedChannels.reduce((sum, c) => sum + (c.videoCount || 0), 0)
+          : allBrands[0]?.totalVideosInTop20 || 0;
+        const yourBrandViews = hasYouTubeAPIStats
+          ? ownedChannels.reduce((sum, c) => sum + (c.viewCount || 0), 0)
+          : allBrands[0]?.totalViews || 0;
+
+        // Recalculate max views including YouTube API data
+        const adjustedMaxViews = Math.max(yourBrandViews, ...allBrands.slice(1).map(b => b.totalViews));
+
+        return (
         <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6">
-          <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
             Brand Comparison
           </h3>
+          {hasYouTubeAPIStats && (
+            <p className="text-xs text-emerald-600 dark:text-emerald-400 mb-4 flex items-center gap-1">
+              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              Your brand uses accurate counts from YouTube Data API
+            </p>
+          )}
           <div className="space-y-4">
             {allBrands.map((brand, idx) => {
               const isYourBrand = idx === 0;
-              const viewsPercentage = maxViews > 0 ? (brand.totalViews / maxViews) * 100 : 0;
+              // Use YouTube API stats for your brand, DataForSEO for competitors
+              const displayVideoCount = isYourBrand && hasYouTubeAPIStats ? yourBrandVideoCount : brand.totalVideosInTop20;
+              const displayViews = isYourBrand && hasYouTubeAPIStats ? yourBrandViews : brand.totalViews;
+              const viewsPercentage = adjustedMaxViews > 0 ? (displayViews / adjustedMaxViews) * 100 : 0;
               const compChannels = !isYourBrand ? (competitorChannels[brand.name] || []) : [];
               const brandVideos = data.allVideos.filter(v =>
                 v.title.toLowerCase().includes(brand.name.toLowerCase())
@@ -1132,6 +1216,11 @@ export function YouTubeSOVPanel({ brandName, competitors, locationCode = 2840, l
                           Your Brand
                         </span>
                       )}
+                      {isYourBrand && hasYouTubeAPIStats && (
+                        <span className="px-2 py-0.5 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 text-xs rounded-full">
+                          YouTube API
+                        </span>
+                      )}
                       {!isYourBrand && compChannels.length > 0 && (
                         <span className="px-2 py-0.5 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 text-xs rounded-full">
                           {compOwnedVideos.length} owned
@@ -1140,10 +1229,10 @@ export function YouTubeSOVPanel({ brandName, competitors, locationCode = 2840, l
                     </div>
                     <div className="text-right">
                       <span className="font-semibold text-gray-900 dark:text-white">
-                        {brand.totalVideosInTop20} videos
+                        {displayVideoCount.toLocaleString()} videos
                       </span>
                       <span className="text-gray-500 dark:text-gray-400 text-sm ml-2">
-                        ({formatViews(brand.totalViews)} views)
+                        ({formatViews(displayViews)} views)
                       </span>
                     </div>
                   </div>
@@ -1220,7 +1309,8 @@ export function YouTubeSOVPanel({ brandName, competitors, locationCode = 2840, l
             })}
           </div>
         </div>
-      )}
+        );
+      })()}
 
       {/* AI Strategic Insights */}
       {hasVideos && (isLoadingInsights || insights || insightsError) && (

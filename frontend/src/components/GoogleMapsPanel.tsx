@@ -36,6 +36,14 @@ interface BrandLocalData {
   categories: string[];
 }
 
+interface CategorySearchResult {
+  keyword: string;
+  totalResults: number;
+  yourBrandAppears: boolean;
+  yourBrandRank: number | null;
+  competitorAppearances: { name: string; rank: number }[];
+}
+
 interface GoogleMapsResponse {
   yourBrand: BrandLocalData | null;
   competitors: BrandLocalData[];
@@ -44,12 +52,19 @@ interface GoogleMapsResponse {
     byListings: number;
     byReviews: number;
   };
+  categoryVisibility?: {
+    searchTerms: string[];
+    results: CategorySearchResult[];
+    brandAppearanceRate: number;
+    avgRankWhenAppearing: number | null;
+  };
   searchedKeywords: string[];
   location: string;
   timestamp: string;
   methodology?: {
-    visibilityFormula: string;
-    reviewSOVFormula: string;
+    presenceFormula: string;
+    reviewShareFormula: string;
+    categoryVisibilityFormula?: string;
     brandMatchingMethod: string;
     dataSource: string;
   };
@@ -245,7 +260,7 @@ export function GoogleMapsPanel({ brandName, competitors, locationCode = 2840, l
   };
 
   const addSearchTerm = () => {
-    if (newSearchTerm.trim() && searchTerms.length < 3) {
+    if (newSearchTerm.trim() && searchTerms.length < 5) {
       setSearchTerms([...searchTerms, newSearchTerm.trim()]);
       setNewSearchTerm('');
       setShowSearchTermInput(false);
@@ -306,29 +321,35 @@ export function GoogleMapsPanel({ brandName, competitors, locationCode = 2840, l
     );
   };
 
-  // Search terms setup
-  const SearchTermsSetup = () => (
-    <div className="bg-gradient-to-r from-green-50 to-blue-50 dark:from-green-900/20 dark:to-blue-900/20 rounded-xl shadow-sm p-6 border border-green-200 dark:border-green-800 mb-6">
+  // Category search terms setup - for measuring visibility in category searches
+  const CategorySearchSetup = () => (
+    <div className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 rounded-xl shadow-sm p-6 border border-blue-200 dark:border-blue-800 mb-6">
       <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2 flex items-center gap-2">
-        <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
         </svg>
-        Custom Search Terms (Optional)
+        Category Search Terms
+        <span className="text-xs font-normal px-2 py-0.5 bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400 rounded-full">
+          Recommended
+        </span>
       </h3>
-      <p className="text-sm text-gray-600 dark:text-gray-300 mb-4">
-        Add local search terms relevant to your industry (e.g., "tire shop near me", "auto repair")
+      <p className="text-sm text-gray-600 dark:text-gray-300 mb-2">
+        <strong>Question answered:</strong> When someone searches for your service, do you show up?
+      </p>
+      <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">
+        Add search terms customers use to find businesses like yours (e.g., "tire shop near me", "auto repair", "best tires")
       </p>
 
       <div className="flex flex-wrap gap-2 mb-3">
         {searchTerms.map((term) => (
           <span
             key={term}
-            className="inline-flex items-center gap-1 px-3 py-1 bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300 rounded-full text-sm"
+            className="inline-flex items-center gap-1 px-3 py-1 bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 rounded-full text-sm"
           >
             {term}
             <button
               onClick={() => removeSearchTerm(term)}
-              className="ml-1 text-green-600 hover:text-red-600 transition-colors"
+              className="ml-1 text-blue-600 hover:text-red-600 transition-colors"
             >
               <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -345,12 +366,12 @@ export function GoogleMapsPanel({ brandName, competitors, locationCode = 2840, l
             value={newSearchTerm}
             onChange={(e) => setNewSearchTerm(e.target.value)}
             placeholder="e.g., tire shop near me"
-            className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-green-500"
+            className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-blue-500"
             onKeyDown={(e) => e.key === 'Enter' && addSearchTerm()}
           />
           <button
             onClick={addSearchTerm}
-            className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 text-sm"
+            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm"
           >
             Add
           </button>
@@ -364,11 +385,20 @@ export function GoogleMapsPanel({ brandName, competitors, locationCode = 2840, l
       ) : (
         <button
           onClick={() => setShowSearchTermInput(true)}
-          disabled={searchTerms.length >= 3}
-          className="text-sm text-green-600 hover:text-green-700 font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+          disabled={searchTerms.length >= 5}
+          className="text-sm text-blue-600 hover:text-blue-700 font-medium disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          + Add search term ({3 - searchTerms.length} remaining)
+          + Add search term ({5 - searchTerms.length} remaining)
         </button>
+      )}
+
+      {searchTerms.length === 0 && (
+        <p className="mt-3 text-xs text-amber-600 dark:text-amber-400 flex items-center gap-1">
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+          </svg>
+          Without category terms, we can only measure your local footprint (locations + reviews), not actual search visibility.
+        </p>
       )}
     </div>
   );
@@ -377,54 +407,70 @@ export function GoogleMapsPanel({ brandName, competitors, locationCode = 2840, l
   if (!data && !isLoading && !error) {
     return (
       <div className="space-y-6">
-        <SearchTermsSetup />
-
+        {/* What We Measure Explanation */}
         <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6">
-          <div className="text-center">
-            <div className="w-16 h-16 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center mx-auto mb-4">
-              <svg className="w-8 h-8 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-              </svg>
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+            <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+            </svg>
+            Google Maps Analysis
+          </h3>
+
+          <div className="grid md:grid-cols-2 gap-4 mb-6">
+            {/* Category Visibility */}
+            <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-4 border border-blue-200 dark:border-blue-800">
+              <div className="flex items-center gap-2 mb-2">
+                <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+                <h4 className="font-semibold text-blue-800 dark:text-blue-200">Category Visibility</h4>
+              </div>
+              <p className="text-sm text-blue-700 dark:text-blue-300 mb-2">
+                <strong>Question:</strong> When customers search for your service, do you appear?
+              </p>
+              <p className="text-xs text-blue-600 dark:text-blue-400">
+                Example: "tire shop near me", "auto repair"
+              </p>
             </div>
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
-              Local Visibility & Customer Attention
-            </h3>
-            <p className="text-sm text-gray-600 dark:text-gray-300 mb-2 max-w-md mx-auto">
-              Understand your brand's presence in Google Maps local search results.
-            </p>
-            <div className="text-left max-w-md mx-auto mb-4 space-y-2">
-              <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
-                <svg className="w-4 h-4 text-green-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+
+            {/* Local Footprint */}
+            <div className="bg-green-50 dark:bg-green-900/20 rounded-lg p-4 border border-green-200 dark:border-green-800">
+              <div className="flex items-center gap-2 mb-2">
+                <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
                 </svg>
-                <span><strong>Local Visibility:</strong> How often does your brand appear?</span>
+                <h4 className="font-semibold text-green-800 dark:text-green-200">Local Footprint</h4>
               </div>
-              <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
-                <svg className="w-4 h-4 text-purple-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
-                </svg>
-                <span><strong>Customer Attention:</strong> What share of reviews do you own?</span>
-              </div>
-              <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
-                <svg className="w-4 h-4 text-orange-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                </svg>
-                <span><strong>Competitive Position:</strong> Where do you rank vs competitors?</span>
-              </div>
+              <p className="text-sm text-green-700 dark:text-green-300 mb-2">
+                <strong>Question:</strong> How many locations do you have vs competitors?
+              </p>
+              <p className="text-xs text-green-600 dark:text-green-400">
+                Measures your presence + customer engagement (reviews)
+              </p>
             </div>
-            <button
-              onClick={fetchGoogleMaps}
-              className="px-6 py-2.5 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium flex items-center gap-2 mx-auto"
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-              </svg>
-              Analyze Local Presence
-            </button>
           </div>
+        </div>
+
+        {/* Category Search Setup */}
+        <CategorySearchSetup />
+
+        {/* Run Analysis Button */}
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6">
+          <button
+            onClick={fetchGoogleMaps}
+            className="w-full px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium flex items-center justify-center gap-2"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+            </svg>
+            Analyze Local Presence
+          </button>
+          <p className="text-xs text-gray-500 dark:text-gray-400 text-center mt-2">
+            {searchTerms.length > 0
+              ? `Will analyze: Brand searches + ${searchTerms.length} category search${searchTerms.length !== 1 ? 'es' : ''}`
+              : 'Will analyze: Brand searches only (add category terms for full visibility analysis)'
+            }
+          </p>
         </div>
       </div>
     );
@@ -478,96 +524,209 @@ export function GoogleMapsPanel({ brandName, competitors, locationCode = 2840, l
       {/* Analysis timestamp */}
       <div className="flex items-center justify-between text-sm text-gray-500 dark:text-gray-400">
         <span>Analysis from: {formatDateTime(data.timestamp)}</span>
-        <span>Searched: {data.searchedKeywords?.slice(0, 3).join(', ')}</span>
+        <span>Location: {data.location}</span>
       </div>
 
-      {/* Core Metrics - Visibility & Attention */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6 border-l-4 border-green-500">
-          <div className="flex items-center gap-3 mb-2">
-            <div className="w-10 h-10 bg-green-100 dark:bg-green-900/30 rounded-lg flex items-center justify-center">
-              <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-              </svg>
-            </div>
-            <div>
-              <p className="text-sm font-medium text-gray-700 dark:text-gray-300">Local Visibility</p>
-              <p className="text-2xl font-bold text-gray-900 dark:text-white">{data.sov.byListings}%</p>
-            </div>
-          </div>
-          <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
-            How often does your brand appear in local search results?
-          </p>
-          <p className="text-xs text-green-600 dark:text-green-400 mt-1">
-            {data.yourBrand?.totalListings || 0} of {(() => {
-              const total = (data.yourBrand?.totalListings || 0) + data.competitors.reduce((sum, c) => sum + c.totalListings, 0);
-              return total;
-            })()} total listings in results
-          </p>
-        </div>
-
-        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6 border-l-4 border-purple-500">
-          <div className="flex items-center gap-3 mb-2">
-            <div className="w-10 h-10 bg-purple-100 dark:bg-purple-900/30 rounded-lg flex items-center justify-center">
-              <svg className="w-5 h-5 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-              </svg>
-            </div>
-            <div>
-              <p className="text-sm font-medium text-gray-700 dark:text-gray-300">Customer Attention</p>
-              <p className="text-2xl font-bold text-gray-900 dark:text-white">{data.sov.byReviews}%</p>
-            </div>
-          </div>
-          <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
-            What share of customer feedback do you own?
-          </p>
-          <p className="text-xs text-purple-600 dark:text-purple-400 mt-1">
-            {formatNumber(data.yourBrand?.totalReviews || 0)} reviews ({data.yourBrand?.avgRating?.toFixed(1) || 'N/A'}★ avg)
-          </p>
-        </div>
-      </div>
-
-      {/* Your Brand Summary */}
-      {data.yourBrand && (
-        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6">
-          <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-            <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+      {/* ============================================ */}
+      {/* SECTION 1: CATEGORY VISIBILITY */}
+      {/* ============================================ */}
+      {data.categoryVisibility && data.categoryVisibility.searchTerms.length > 0 && (
+        <div className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 rounded-xl shadow-sm p-6 border border-blue-200 dark:border-blue-800">
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2 flex items-center gap-2">
+            <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
             </svg>
-            Your Brand: {data.yourBrand.name}
+            Category Visibility
           </h3>
+          <p className="text-sm text-gray-600 dark:text-gray-300 mb-4">
+            <strong>Question:</strong> When customers search for your service, do you show up?
+          </p>
 
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
-            <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3">
-              <p className="text-xs text-gray-500 dark:text-gray-400">Locations</p>
-              <p className="text-xl font-bold text-gray-900 dark:text-white">{data.yourBrand.totalListings}</p>
-            </div>
-            <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3">
-              <p className="text-xs text-gray-500 dark:text-gray-400">Avg Rating</p>
-              <StarRating rating={data.yourBrand.avgRating} />
-            </div>
-            <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3">
-              <p className="text-xs text-gray-500 dark:text-gray-400">Total Reviews</p>
-              <p className="text-xl font-bold text-gray-900 dark:text-white">{formatNumber(data.yourBrand.totalReviews)}</p>
-            </div>
-            <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3">
-              <p className="text-xs text-gray-500 dark:text-gray-400">Best Rank</p>
-              <p className="text-xl font-bold text-gray-900 dark:text-white">#{data.yourBrand.topRank}</p>
+          {/* Main metric */}
+          <div className="bg-white dark:bg-gray-800 rounded-lg p-4 mb-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-500 dark:text-gray-400">Appearance Rate</p>
+                <p className="text-3xl font-bold text-blue-600 dark:text-blue-400">
+                  {data.categoryVisibility.brandAppearanceRate}%
+                </p>
+              </div>
+              <div className="text-right">
+                <p className="text-sm text-gray-500 dark:text-gray-400">Avg Rank When Appearing</p>
+                <p className="text-2xl font-bold text-gray-900 dark:text-white">
+                  {data.categoryVisibility.avgRankWhenAppearing !== null
+                    ? `#${data.categoryVisibility.avgRankWhenAppearing}`
+                    : 'N/A'}
+                </p>
+              </div>
             </div>
           </div>
 
-          {data.yourBrand.categories.length > 0 && (
-            <div className="flex flex-wrap gap-2">
-              {data.yourBrand.categories.map((cat) => (
-                <span key={cat} className="px-2 py-1 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 text-xs rounded-full">
-                  {cat}
-                </span>
-              ))}
-            </div>
+          {/* Results by search term */}
+          <div className="space-y-2 mb-4">
+            <p className="text-sm font-medium text-gray-700 dark:text-gray-300">Results by Search Term:</p>
+            {data.categoryVisibility.results.map((result) => (
+              <div
+                key={result.keyword}
+                className={`flex items-center justify-between p-3 rounded-lg ${
+                  result.yourBrandAppears
+                    ? 'bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800'
+                    : 'bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800'
+                }`}
+              >
+                <div className="flex items-center gap-2">
+                  {result.yourBrandAppears ? (
+                    <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                  ) : (
+                    <svg className="w-5 h-5 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  )}
+                  <span className="text-sm font-medium text-gray-900 dark:text-white">"{result.keyword}"</span>
+                </div>
+                <div className="text-right">
+                  {result.yourBrandAppears ? (
+                    <span className="text-sm text-green-600 dark:text-green-400 font-medium">
+                      Rank #{result.yourBrandRank}
+                    </span>
+                  ) : (
+                    <span className="text-sm text-red-600 dark:text-red-400">Not found</span>
+                  )}
+                  {result.competitorAppearances.length > 0 && (
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                      Competitors: {result.competitorAppearances.map(c => `${c.name} #${c.rank}`).join(', ')}
+                    </p>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Formula */}
+          {data.methodology?.categoryVisibilityFormula && (
+            <details className="text-xs">
+              <summary className="text-blue-600 dark:text-blue-400 cursor-pointer hover:underline">
+                How is this calculated?
+              </summary>
+              <div className="mt-2 bg-white dark:bg-gray-800 rounded p-3 font-mono text-gray-700 dark:text-gray-300">
+                {data.methodology.categoryVisibilityFormula}
+              </div>
+            </details>
           )}
         </div>
       )}
+
+      {/* No category terms notice */}
+      {(!data.categoryVisibility || data.categoryVisibility.searchTerms.length === 0) && (
+        <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl p-4">
+          <div className="flex items-start gap-3">
+            <svg className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+            <div>
+              <p className="text-sm font-medium text-amber-800 dark:text-amber-200">Category Visibility Not Measured</p>
+              <p className="text-xs text-amber-700 dark:text-amber-300 mt-1">
+                Add category search terms (e.g., "tire shop near me") to measure if customers find you when searching for your service.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ============================================ */}
+      {/* SECTION 2: LOCAL FOOTPRINT */}
+      {/* ============================================ */}
+      <div className="bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20 rounded-xl shadow-sm p-6 border border-green-200 dark:border-green-800">
+        <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2 flex items-center gap-2">
+          <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+          </svg>
+          Local Footprint
+        </h3>
+        <p className="text-sm text-gray-600 dark:text-gray-300 mb-4">
+          <strong>Question:</strong> How many locations do you have vs competitors, and how much customer engagement (reviews)?
+        </p>
+
+        {/* Two metrics side by side */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+          {/* Local Presence */}
+          <div className="bg-white dark:bg-gray-800 rounded-lg p-4">
+            <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">Local Presence</p>
+            <p className="text-3xl font-bold text-green-600 dark:text-green-400">{data.sov.byListings}%</p>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
+              Your locations / Total market locations
+            </p>
+            <p className="text-xs text-green-600 dark:text-green-400 mt-1">
+              {data.yourBrand?.totalListings || 0} of {(data.yourBrand?.totalListings || 0) + data.competitors.reduce((sum, c) => sum + c.totalListings, 0)} locations
+            </p>
+          </div>
+
+          {/* Review Share */}
+          <div className="bg-white dark:bg-gray-800 rounded-lg p-4">
+            <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">Review Share</p>
+            <p className="text-3xl font-bold text-purple-600 dark:text-purple-400">{data.sov.byReviews}%</p>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
+              Your reviews / Total market reviews
+            </p>
+            <p className="text-xs text-purple-600 dark:text-purple-400 mt-1">
+              {formatNumber(data.yourBrand?.totalReviews || 0)} of {formatNumber((data.yourBrand?.totalReviews || 0) + data.competitors.reduce((sum, c) => sum + c.totalReviews, 0))} reviews
+            </p>
+          </div>
+        </div>
+
+        {/* Formulas */}
+        <details className="text-xs mb-4">
+          <summary className="text-green-600 dark:text-green-400 cursor-pointer hover:underline">
+            How is this calculated?
+          </summary>
+          <div className="mt-2 space-y-2">
+            {data.methodology?.presenceFormula && (
+              <div className="bg-white dark:bg-gray-800 rounded p-3 font-mono text-gray-700 dark:text-gray-300">
+                <strong>Local Presence:</strong> {data.methodology.presenceFormula}
+              </div>
+            )}
+            {data.methodology?.reviewShareFormula && (
+              <div className="bg-white dark:bg-gray-800 rounded p-3 font-mono text-gray-700 dark:text-gray-300">
+                <strong>Review Share:</strong> {data.methodology.reviewShareFormula}
+              </div>
+            )}
+            {data.methodology?.brandMatchingMethod && (
+              <div className="bg-white dark:bg-gray-800 rounded p-3 text-gray-700 dark:text-gray-300">
+                <strong>Method:</strong> {data.methodology.brandMatchingMethod}
+              </div>
+            )}
+          </div>
+        </details>
+
+        {/* Your Brand Stats */}
+        {data.yourBrand && (
+          <div className="bg-white dark:bg-gray-800 rounded-lg p-4">
+            <h4 className="text-sm font-semibold text-gray-900 dark:text-white mb-3 flex items-center gap-2">
+              Your Brand: {data.yourBrand.name}
+            </h4>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <div className="text-center">
+                <p className="text-2xl font-bold text-gray-900 dark:text-white">{data.yourBrand.totalListings}</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400">Locations</p>
+              </div>
+              <div className="text-center">
+                <p className="text-2xl font-bold text-gray-900 dark:text-white">{data.yourBrand.avgRating.toFixed(1)}★</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400">Avg Rating</p>
+              </div>
+              <div className="text-center">
+                <p className="text-2xl font-bold text-gray-900 dark:text-white">{formatNumber(data.yourBrand.totalReviews)}</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400">Total Reviews</p>
+              </div>
+              <div className="text-center">
+                <p className="text-2xl font-bold text-gray-900 dark:text-white">#{data.yourBrand.topRank || 'N/A'}</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400">Best Rank</p>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
 
       {/* Brand Comparison */}
       {allBrands.length > 0 && (

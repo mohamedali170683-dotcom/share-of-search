@@ -48,6 +48,14 @@ interface BrandLocalData {
   categories: string[];
 }
 
+interface CategorySearchResult {
+  keyword: string;
+  totalResults: number;
+  yourBrandAppears: boolean;
+  yourBrandRank: number | null;
+  competitorAppearances: { name: string; rank: number }[];
+}
+
 interface GoogleMapsResponse {
   yourBrand: BrandLocalData | null;
   competitors: BrandLocalData[];
@@ -56,12 +64,20 @@ interface GoogleMapsResponse {
     byListings: number;
     byReviews: number;
   };
+  // Category visibility - how often brand appears in category searches
+  categoryVisibility?: {
+    searchTerms: string[];
+    results: CategorySearchResult[];
+    brandAppearanceRate: number; // % of category searches where brand appears
+    avgRankWhenAppearing: number | null;
+  };
   searchedKeywords: string[];
   location: string;
   timestamp: string;
   methodology: {
-    visibilityFormula: string;
-    reviewSOVFormula: string;
+    presenceFormula: string;
+    reviewShareFormula: string;
+    categoryVisibilityFormula?: string;
     brandMatchingMethod: string;
     dataSource: string;
   };
@@ -287,69 +303,151 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       : [];
 
     const validSearchTerms = Array.isArray(searchTerms)
-      ? searchTerms.filter((t): t is string => typeof t === 'string').slice(0, 3)
+      ? searchTerms.filter((t): t is string => typeof t === 'string').slice(0, 5)
       : [];
 
-    // Search for brand names and additional terms
-    const searchKeywords = [brandName, ...validCompetitors, ...validSearchTerms];
+    // ============================================
+    // PART 1: Brand Searches (for Local Footprint)
+    // ============================================
+    const brandKeywords = [brandName, ...validCompetitors];
 
-    console.log(`Fetching Google Maps data for: ${searchKeywords.join(', ')}`);
+    console.log(`Fetching brand searches: ${brandKeywords.join(', ')}`);
 
-    // Fetch Google Maps results for ALL keywords in parallel
-    const results = await Promise.all(
-      searchKeywords.map(keyword => fetchGoogleMaps(keyword, locationCode, languageCode, auth))
+    const brandResults = await Promise.all(
+      brandKeywords.map(keyword => fetchGoogleMaps(keyword, locationCode, languageCode, auth))
     );
 
-    // Collect all listings from parallel results
-    const allListings: BusinessListing[] = [];
+    // Collect brand listings
+    const brandListings: BusinessListing[] = [];
     let apiStatus = 'ok';
 
-    for (const result of results) {
-      allListings.push(...result.listings);
+    for (const result of brandResults) {
+      brandListings.push(...result.listings);
       if (result.status !== 'Ok.' && result.status !== 'ok') {
         apiStatus = result.status;
       }
     }
 
-    console.log(`Total listings collected: ${allListings.length}`);
+    // Aggregate by brand for Local Footprint
+    const yourBrandData = aggregateBrandListings(brandListings, brandName);
+    const competitorData = validCompetitors.map(comp =>
+      aggregateBrandListings(brandListings, comp)
+    );
+
+    // Calculate Local Footprint SOV
+    const sov = calculateLocalSOV(yourBrandData, competitorData);
+
+    // ============================================
+    // PART 2: Category Searches (for Category Visibility)
+    // ============================================
+    let categoryVisibility: GoogleMapsResponse['categoryVisibility'] = undefined;
+
+    if (validSearchTerms.length > 0) {
+      console.log(`Fetching category searches: ${validSearchTerms.join(', ')}`);
+
+      const categoryResults = await Promise.all(
+        validSearchTerms.map(async (term) => {
+          const result = await fetchGoogleMaps(term, locationCode, languageCode, auth);
+          return { term, listings: result.listings };
+        })
+      );
+
+      const categorySearchResults: CategorySearchResult[] = categoryResults.map(({ term, listings }) => {
+        // Check if your brand appears in this category search
+        const yourBrandListing = listings.find(l => listingMatchesBrand(l, brandName));
+
+        // Check competitor appearances
+        const competitorAppearances = validCompetitors
+          .map(comp => {
+            const compListing = listings.find(l => listingMatchesBrand(l, comp));
+            return compListing ? { name: comp, rank: compListing.rank } : null;
+          })
+          .filter((c): c is { name: string; rank: number } => c !== null);
+
+        return {
+          keyword: term,
+          totalResults: listings.length,
+          yourBrandAppears: !!yourBrandListing,
+          yourBrandRank: yourBrandListing?.rank ?? null,
+          competitorAppearances,
+        };
+      });
+
+      // Calculate category visibility metrics
+      const appearanceCount = categorySearchResults.filter(r => r.yourBrandAppears).length;
+      const brandAppearanceRate = validSearchTerms.length > 0
+        ? Math.round((appearanceCount / validSearchTerms.length) * 100)
+        : 0;
+
+      const ranksWhenAppearing = categorySearchResults
+        .filter(r => r.yourBrandRank !== null)
+        .map(r => r.yourBrandRank as number);
+      const avgRankWhenAppearing = ranksWhenAppearing.length > 0
+        ? Math.round(ranksWhenAppearing.reduce((a, b) => a + b, 0) / ranksWhenAppearing.length)
+        : null;
+
+      categoryVisibility = {
+        searchTerms: validSearchTerms,
+        results: categorySearchResults,
+        brandAppearanceRate,
+        avgRankWhenAppearing,
+      };
+    }
+
+    // ============================================
+    // PART 3: Combine All Listings for Display
+    // ============================================
+    const allListings = [...brandListings];
+
+    // Add category search listings too (for the listings view)
+    if (validSearchTerms.length > 0) {
+      const categoryListingsResults = await Promise.all(
+        validSearchTerms.map(term => fetchGoogleMaps(term, locationCode, languageCode, auth))
+      );
+      for (const result of categoryListingsResults) {
+        allListings.push(...result.listings);
+      }
+    }
 
     // Deduplicate all listings by place ID
     const uniqueAllListings = Array.from(
       new Map(allListings.map(l => [l.placeId, l])).values()
     ).sort((a, b) => a.rank - b.rank);
 
-    // Aggregate by brand
-    const yourBrandData = aggregateBrandListings(allListings, brandName);
-    const competitorData = validCompetitors.map(comp =>
-      aggregateBrandListings(allListings, comp)
-    );
-
-    // Calculate SOV
-    const sov = calculateLocalSOV(yourBrandData, competitorData);
-
-    // Calculate totals for methodology
+    // ============================================
+    // PART 4: Build Methodology Explanations
+    // ============================================
     const totalListings = yourBrandData.totalListings + competitorData.reduce((s, c) => s + c.totalListings, 0);
     const totalReviews = yourBrandData.totalReviews + competitorData.reduce((s, c) => s + c.totalReviews, 0);
 
-    // Build methodology explanation
-    const methodology = {
-      visibilityFormula: `Visibility SOV = (Your Listings / Total Listings) × 100 = (${yourBrandData.totalListings} / ${totalListings}) × 100 = ${sov.byListings}%`,
-      reviewSOVFormula: `Review SOV = (Your Reviews / Total Reviews) × 100 = (${yourBrandData.totalReviews.toLocaleString()} / ${totalReviews.toLocaleString()}) × 100 = ${sov.byReviews}%`,
-      brandMatchingMethod: 'Listings are matched to brands by: 1) Searching Google Maps for brand names, 2) Filtering listings where the business title contains the brand name or domain matches the brand.',
-      dataSource: 'Data is fetched from Google Maps via DataForSEO SERP API. Up to 100 listings are analyzed per search query.',
+    const methodology: GoogleMapsResponse['methodology'] = {
+      presenceFormula: `Local Presence = (Your Locations / Total Market Locations) × 100 = (${yourBrandData.totalListings} / ${totalListings}) × 100 = ${sov.byListings}%`,
+      reviewShareFormula: `Review Share = (Your Reviews / Total Market Reviews) × 100 = (${yourBrandData.totalReviews.toLocaleString()} / ${totalReviews.toLocaleString()}) × 100 = ${sov.byReviews}%`,
+      brandMatchingMethod: 'We search Google Maps for each brand name, then count locations where the business title contains the brand name.',
+      dataSource: 'Google Maps via DataForSEO SERP API. Up to 100 listings analyzed per search.',
     };
+
+    if (categoryVisibility) {
+      methodology.categoryVisibilityFormula = `Category Visibility = (Searches Where You Appear / Total Category Searches) × 100 = (${categoryVisibility.results.filter(r => r.yourBrandAppears).length} / ${validSearchTerms.length}) × 100 = ${categoryVisibility.brandAppearanceRate}%`;
+    }
+
+    // ============================================
+    // PART 5: Build Response
+    // ============================================
+    const searchKeywords = [...brandKeywords, ...validSearchTerms];
 
     const response: GoogleMapsResponse = {
       yourBrand: yourBrandData.totalListings > 0 ? yourBrandData : null,
       competitors: competitorData.filter(c => c.totalListings > 0),
       allListings: uniqueAllListings.slice(0, 50),
       sov,
+      categoryVisibility,
       searchedKeywords: searchKeywords,
       location: `Location code: ${locationCode}`,
       timestamp: new Date().toISOString(),
       methodology,
       debug: {
-        totalListingsFetched: allListings.length,
+        totalListingsFetched: uniqueAllListings.length,
         apiStatus,
       },
     };

@@ -1204,9 +1204,6 @@ export function YouTubeSOVPanel({ brandName, competitors, locationCode = 2840, l
   if (!data && !isLoading && !error) {
     return (
       <div className="space-y-6">
-        {/* Owned vs Earned Setup - Prominent at top */}
-        <ChannelSetupSection />
-
         <SavedAnalysesSection />
         <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6">
           <div className="text-center">
@@ -1285,9 +1282,6 @@ export function YouTubeSOVPanel({ brandName, competitors, locationCode = 2840, l
 
   return (
     <div className="space-y-6">
-      {/* Owned vs Earned Setup - Always visible at top */}
-      <ChannelSetupSection />
-
       {/* Methodology Explanation */}
       <MethodologySection />
 
@@ -1492,7 +1486,7 @@ export function YouTubeSOVPanel({ brandName, competitors, locationCode = 2840, l
                   If incorrect, click the <span className="font-mono bg-amber-100 dark:bg-amber-800 px-1 rounded">×</span> to remove and manually add the correct channel URL or handle (e.g., @ContinentalCorporation).
                 </p>
                 <p className="text-amber-700 dark:text-amber-300 mt-1">
-                  <strong>Views shown</strong> are <strong>total channel lifetime views</strong> from YouTube Data API - representing the channel's overall reach, not just recent performance.
+                  <strong>Views shown</strong> are <strong>total channel lifetime views</strong> from YouTube Data API. <strong>Changing a channel will affect all metrics</strong> (video counts, views, SOV calculations).
                 </p>
               </div>
             </div>
@@ -1560,16 +1554,14 @@ export function YouTubeSOVPanel({ brandName, competitors, locationCode = 2840, l
                             </svg>
                             <span className="truncate max-w-[180px]">{primaryChannel.name || primaryChannel.id}</span>
                           </a>
-                          {/* Remove button for competitor channels */}
-                          {!isYourBrand && (
-                            <button
-                              onClick={() => removeCompetitorChannel(brand.name, primaryChannel.id)}
-                              className="text-gray-400 hover:text-red-600 text-xs ml-1"
-                              title="Remove channel"
-                            >
-                              ×
-                            </button>
-                          )}
+                          {/* Remove button for all channels (brand and competitors) */}
+                          <button
+                            onClick={() => isYourBrand ? removeOwnedChannel(primaryChannel.id) : removeCompetitorChannel(brand.name, primaryChannel.id)}
+                            className="text-gray-400 hover:text-red-600 text-xs ml-1"
+                            title="Remove channel"
+                          >
+                            ×
+                          </button>
                         </div>
                       )}
                     </div>
@@ -1588,6 +1580,54 @@ export function YouTubeSOVPanel({ brandName, competitors, locationCode = 2840, l
                       style={{ width: `${viewsPercentage}%` }}
                     />
                   </div>
+
+                  {/* Your brand channel management - only show if no channel configured */}
+                  {isYourBrand && ownedChannels.length === 0 && (
+                    <div className="mt-1">
+                      {showChannelInput ? (
+                        <div className="flex gap-2">
+                          <input
+                            type="text"
+                            value={channelInput}
+                            onChange={(e) => setChannelInput(e.target.value)}
+                            placeholder={`@${brand.name.replace(/\s+/g, '')} or channel URL`}
+                            className="flex-1 px-2 py-1 border border-gray-300 dark:border-gray-600 rounded text-xs bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+                            onKeyDown={(e) => e.key === 'Enter' && !isAddingChannel && handleAddChannel()}
+                            disabled={isAddingChannel}
+                          />
+                          <button
+                            onClick={handleAddChannel}
+                            disabled={isAddingChannel}
+                            className="px-2 py-1 bg-red-600 text-white rounded text-xs hover:bg-red-700 disabled:opacity-50 flex items-center gap-1"
+                          >
+                            {isAddingChannel ? (
+                              <>
+                                <svg className="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24">
+                                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+                                </svg>
+                                Fetching...
+                              </>
+                            ) : 'Add'}
+                          </button>
+                          <button
+                            onClick={() => { setShowChannelInput(false); setChannelInput(''); }}
+                            className="text-xs text-gray-500 hover:text-gray-700"
+                            disabled={isAddingChannel}
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => setShowChannelInput(true)}
+                          className="text-xs text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
+                        >
+                          + Add your YouTube channel
+                        </button>
+                      )}
+                    </div>
+                  )}
 
                   {/* Competitor channel management - only show if no channel configured */}
                   {!isYourBrand && compChannels.length === 0 && (
@@ -1632,107 +1672,6 @@ export function YouTubeSOVPanel({ brandName, competitors, locationCode = 2840, l
         </div>
         );
       })()}
-
-      {/* AI Strategic Insights */}
-      {hasVideos && (isLoadingInsights || insights || insightsError) && (
-        <div className="bg-gradient-to-br from-indigo-50 to-purple-50 dark:from-indigo-900/20 dark:to-purple-900/20 rounded-xl shadow-sm p-6 border border-indigo-200 dark:border-indigo-800">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
-              <svg className="w-5 h-5 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
-              </svg>
-              AI Strategic Insights
-              {isLoadingInsights && (
-                <span className="text-xs font-normal text-indigo-600 dark:text-indigo-400">(generating...)</span>
-              )}
-            </h3>
-          </div>
-
-          {isLoadingInsights && (
-            <div className="flex items-center justify-center py-8">
-              <svg className="w-6 h-6 animate-spin text-indigo-600 mr-3" fill="none" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-              </svg>
-              <span className="text-gray-600 dark:text-gray-300">Generating strategic insights based on your YouTube data...</span>
-            </div>
-          )}
-
-          {insightsError && (
-            <div className="text-center py-4">
-              <p className="text-red-600 dark:text-red-400 text-sm mb-2">{insightsError}</p>
-              <button
-                onClick={() => {
-                  const brandVideos = data.allVideos.filter(v => v.isBrandOwned);
-                  const ownedVideos = ownedChannelId ? brandVideos.filter(v => getMediaType(v) === 'owned') : [];
-                  const earnedVideos = ownedChannelId ? brandVideos.filter(v => getMediaType(v) === 'earned') : [];
-                  const ownedViews = ownedVideos.reduce((sum, v) => sum + v.viewsCount, 0);
-                  const earnedViews = earnedVideos.reduce((sum, v) => sum + v.viewsCount, 0);
-                  const earnedSources = computeEarnedMediaSources(earnedVideos);
-                  fetchAIInsights(data, ownedVideos.length, earnedVideos.length, ownedViews, earnedViews, earnedSources);
-                }}
-                className="text-indigo-600 hover:text-indigo-700 text-sm font-medium"
-              >
-                Try Again
-              </button>
-            </div>
-          )}
-
-          {insights && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              {/* Summary - Full Width */}
-              <div className="md:col-span-2 bg-white dark:bg-gray-800 rounded-lg p-4 border-l-4 border-indigo-500">
-                <p className="text-gray-800 dark:text-gray-200 font-medium">{insights.summary}</p>
-              </div>
-
-              {/* Key Gap */}
-              <div className="bg-red-50 dark:bg-red-900/20 rounded-lg p-4 border-l-4 border-red-500">
-                <h4 className="font-semibold text-red-800 dark:text-red-200 text-xs uppercase tracking-wide mb-1">Gap to Close</h4>
-                <p className="text-red-700 dark:text-red-300 text-sm">{insights.keyGap}</p>
-              </div>
-
-              {/* Top Action */}
-              <div className="bg-emerald-50 dark:bg-emerald-900/20 rounded-lg p-4 border-l-4 border-emerald-500">
-                <h4 className="font-semibold text-emerald-800 dark:text-emerald-200 text-xs uppercase tracking-wide mb-1">Top Action</h4>
-                <p className="text-emerald-700 dark:text-emerald-300 text-sm">{insights.topAction}</p>
-              </div>
-
-              {/* Competitor Threat - Full Width */}
-              <div className="md:col-span-2 bg-orange-50 dark:bg-orange-900/20 rounded-lg p-4 border-l-4 border-orange-500">
-                <h4 className="font-semibold text-orange-800 dark:text-orange-200 text-xs uppercase tracking-wide mb-1">Competitor Threat</h4>
-                <p className="text-orange-700 dark:text-orange-300 text-sm">{insights.competitorThreat}</p>
-              </div>
-
-              {/* Earned Media Insight - Full Width (new) */}
-              {insights.earnedMediaInsight && (
-                <div className="md:col-span-2 bg-purple-50 dark:bg-purple-900/20 rounded-lg p-4 border-l-4 border-purple-500">
-                  <h4 className="font-semibold text-purple-800 dark:text-purple-200 text-xs uppercase tracking-wide mb-1">Earned Media Insight</h4>
-                  <p className="text-purple-700 dark:text-purple-300 text-sm">{insights.earnedMediaInsight}</p>
-                </div>
-              )}
-
-              {/* Regenerate button */}
-              <div className="md:col-span-2 text-center pt-2">
-                <button
-                  onClick={() => {
-                    setInsights(null);
-                    const brandVideos = data.allVideos.filter(v => v.isBrandOwned);
-                    const ownedVideos = ownedChannelId ? brandVideos.filter(v => getMediaType(v) === 'owned') : [];
-                    const earnedVideos = ownedChannelId ? brandVideos.filter(v => getMediaType(v) === 'earned') : [];
-                    const ownedViews = ownedVideos.reduce((sum, v) => sum + v.viewsCount, 0);
-                    const earnedViews = earnedVideos.reduce((sum, v) => sum + v.viewsCount, 0);
-                    const earnedSources = computeEarnedMediaSources(earnedVideos);
-                    fetchAIInsights(data, ownedVideos.length, earnedVideos.length, ownedViews, earnedViews, earnedSources);
-                  }}
-                  className="text-indigo-600 hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300 text-sm font-medium"
-                >
-                  Regenerate Insights
-                </button>
-              </div>
-            </div>
-          )}
-        </div>
-      )}
 
       {/* Owned vs Earned Media Visual Breakdown */}
       {hasVideos && ownedChannels.length > 0 && (() => {
@@ -2033,6 +1972,105 @@ export function YouTubeSOVPanel({ brandName, competitors, locationCode = 2840, l
           </div>
         );
       })()}
+
+      {/* AI Strategic Insights - Conclusion section */}
+      {hasVideos && (isLoadingInsights || insights || insightsError) && (
+        <div className="bg-gradient-to-br from-indigo-50 to-purple-50 dark:from-indigo-900/20 dark:to-purple-900/20 rounded-xl shadow-sm p-6 border border-indigo-200 dark:border-indigo-800">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+              <svg className="w-5 h-5 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+              </svg>
+              Conclusion & Recommendations
+              {isLoadingInsights && (
+                <span className="text-xs font-normal text-indigo-600 dark:text-indigo-400">(generating...)</span>
+              )}
+            </h3>
+          </div>
+
+          {isLoadingInsights && (
+            <div className="flex items-center justify-center py-6">
+              <svg className="w-5 h-5 animate-spin text-indigo-600 mr-2" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+              </svg>
+              <span className="text-gray-600 dark:text-gray-300 text-sm">Analyzing data...</span>
+            </div>
+          )}
+
+          {insightsError && (
+            <div className="text-center py-3">
+              <p className="text-red-600 dark:text-red-400 text-sm mb-2">{insightsError}</p>
+              <button
+                onClick={() => {
+                  const brandVideos = data.allVideos.filter(v => v.isBrandOwned);
+                  const ownedVideos = ownedChannelId ? brandVideos.filter(v => getMediaType(v) === 'owned') : [];
+                  const earnedVideos = ownedChannelId ? brandVideos.filter(v => getMediaType(v) === 'earned') : [];
+                  const ownedViews = ownedVideos.reduce((sum, v) => sum + v.viewsCount, 0);
+                  const earnedViews = earnedVideos.reduce((sum, v) => sum + v.viewsCount, 0);
+                  const earnedSources = computeEarnedMediaSources(earnedVideos);
+                  fetchAIInsights(data, ownedVideos.length, earnedVideos.length, ownedViews, earnedViews, earnedSources);
+                }}
+                className="text-indigo-600 hover:text-indigo-700 text-sm font-medium"
+              >
+                Try Again
+              </button>
+            </div>
+          )}
+
+          {insights && (
+            <div className="space-y-3">
+              {/* Summary */}
+              <div className="bg-white dark:bg-gray-800 rounded-lg p-3 border-l-4 border-indigo-500">
+                <p className="text-gray-800 dark:text-gray-200 text-sm">{insights.summary}</p>
+              </div>
+
+              {/* Key insights in compact grid */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                <div className="bg-red-50 dark:bg-red-900/20 rounded-lg p-3 border-l-3 border-red-500">
+                  <h4 className="font-semibold text-red-800 dark:text-red-200 text-xs uppercase tracking-wide mb-1">Gap</h4>
+                  <p className="text-red-700 dark:text-red-300 text-xs">{insights.keyGap}</p>
+                </div>
+                <div className="bg-emerald-50 dark:bg-emerald-900/20 rounded-lg p-3 border-l-3 border-emerald-500">
+                  <h4 className="font-semibold text-emerald-800 dark:text-emerald-200 text-xs uppercase tracking-wide mb-1">Action</h4>
+                  <p className="text-emerald-700 dark:text-emerald-300 text-xs">{insights.topAction}</p>
+                </div>
+                <div className="bg-orange-50 dark:bg-orange-900/20 rounded-lg p-3 border-l-3 border-orange-500">
+                  <h4 className="font-semibold text-orange-800 dark:text-orange-200 text-xs uppercase tracking-wide mb-1">Threat</h4>
+                  <p className="text-orange-700 dark:text-orange-300 text-xs">{insights.competitorThreat}</p>
+                </div>
+              </div>
+
+              {/* Earned Media Insight */}
+              {insights.earnedMediaInsight && (
+                <div className="bg-purple-50 dark:bg-purple-900/20 rounded-lg p-3 border-l-3 border-purple-500">
+                  <h4 className="font-semibold text-purple-800 dark:text-purple-200 text-xs uppercase tracking-wide mb-1">Earned Media</h4>
+                  <p className="text-purple-700 dark:text-purple-300 text-xs">{insights.earnedMediaInsight}</p>
+                </div>
+              )}
+
+              {/* Regenerate button */}
+              <div className="text-center pt-1">
+                <button
+                  onClick={() => {
+                    setInsights(null);
+                    const brandVideos = data.allVideos.filter(v => v.isBrandOwned);
+                    const ownedVideos = ownedChannelId ? brandVideos.filter(v => getMediaType(v) === 'owned') : [];
+                    const earnedVideos = ownedChannelId ? brandVideos.filter(v => getMediaType(v) === 'earned') : [];
+                    const ownedViews = ownedVideos.reduce((sum, v) => sum + v.viewsCount, 0);
+                    const earnedViews = earnedVideos.reduce((sum, v) => sum + v.viewsCount, 0);
+                    const earnedSources = computeEarnedMediaSources(earnedVideos);
+                    fetchAIInsights(data, ownedVideos.length, earnedVideos.length, ownedViews, earnedViews, earnedSources);
+                  }}
+                  className="text-indigo-600 hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300 text-xs font-medium"
+                >
+                  Regenerate
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* No videos found message */}
       {!hasVideos && (

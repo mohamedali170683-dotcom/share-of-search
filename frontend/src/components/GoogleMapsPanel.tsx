@@ -104,103 +104,139 @@ interface LocalInsights {
   competitorInsight?: string;
 }
 
+// Brand type: 'manufacturer' = makes products sold by others, 'retailer' = has physical locations
+type BrandType = 'manufacturer' | 'retailer';
+
+interface BrandInfo {
+  industry: string;
+  type: BrandType;
+}
+
 // Known brand-to-industry mappings for common brands
-const BRAND_INDUSTRY_MAP: Record<string, string> = {
-  // Tire brands
-  'continental': 'tires',
-  'michelin': 'tires',
-  'bridgestone': 'tires',
-  'goodyear': 'tires',
-  'pirelli': 'tires',
-  'dunlop': 'tires',
-  'hankook': 'tires',
-  'yokohama': 'tires',
-  'firestone': 'tires',
-  'cooper': 'tires',
-  'toyo': 'tires',
-  'bfgoodrich': 'tires',
-  'kumho': 'tires',
-  'falken': 'tires',
-  'nexen': 'tires',
-  // Auto brands
-  'toyota': 'auto dealer',
-  'honda': 'auto dealer',
-  'ford': 'auto dealer',
-  'chevrolet': 'auto dealer',
-  'bmw': 'auto dealer',
-  'mercedes': 'auto dealer',
-  'audi': 'auto dealer',
-  'volkswagen': 'auto dealer',
-  'nissan': 'auto dealer',
-  'hyundai': 'auto dealer',
-  // Fast food
-  'mcdonalds': 'fast food',
-  'burger king': 'fast food',
-  'wendys': 'fast food',
-  'kfc': 'fast food',
-  'subway': 'fast food',
-  'dominos': 'pizza',
-  'pizza hut': 'pizza',
-  'papa johns': 'pizza',
-  // Coffee
-  'starbucks': 'coffee shop',
-  'dunkin': 'coffee shop',
-  // Hotels
-  'marriott': 'hotel',
-  'hilton': 'hotel',
-  'hyatt': 'hotel',
-  'holiday inn': 'hotel',
+const BRAND_INDUSTRY_MAP: Record<string, BrandInfo> = {
+  // Tire MANUFACTURERS (make tires, sold through dealers)
+  'continental': { industry: 'tires', type: 'manufacturer' },
+  'michelin': { industry: 'tires', type: 'manufacturer' },
+  'bridgestone': { industry: 'tires', type: 'manufacturer' },
+  'goodyear': { industry: 'tires', type: 'manufacturer' },
+  'pirelli': { industry: 'tires', type: 'manufacturer' },
+  'dunlop': { industry: 'tires', type: 'manufacturer' },
+  'hankook': { industry: 'tires', type: 'manufacturer' },
+  'yokohama': { industry: 'tires', type: 'manufacturer' },
+  'cooper': { industry: 'tires', type: 'manufacturer' },
+  'toyo': { industry: 'tires', type: 'manufacturer' },
+  'bfgoodrich': { industry: 'tires', type: 'manufacturer' },
+  'kumho': { industry: 'tires', type: 'manufacturer' },
+  'falken': { industry: 'tires', type: 'manufacturer' },
+  'nexen': { industry: 'tires', type: 'manufacturer' },
+  // Tire RETAILERS (have physical stores)
+  'firestone': { industry: 'tires', type: 'retailer' },
+  'discount tire': { industry: 'tires', type: 'retailer' },
+  'tire rack': { industry: 'tires', type: 'retailer' },
+  'big o tires': { industry: 'tires', type: 'retailer' },
+  'les schwab': { industry: 'tires', type: 'retailer' },
+  // Auto brands (dealers)
+  'toyota': { industry: 'auto dealer', type: 'retailer' },
+  'honda': { industry: 'auto dealer', type: 'retailer' },
+  'ford': { industry: 'auto dealer', type: 'retailer' },
+  'chevrolet': { industry: 'auto dealer', type: 'retailer' },
+  'bmw': { industry: 'auto dealer', type: 'retailer' },
+  'mercedes': { industry: 'auto dealer', type: 'retailer' },
+  'audi': { industry: 'auto dealer', type: 'retailer' },
+  'volkswagen': { industry: 'auto dealer', type: 'retailer' },
+  'nissan': { industry: 'auto dealer', type: 'retailer' },
+  'hyundai': { industry: 'auto dealer', type: 'retailer' },
+  // Fast food (retailers with locations)
+  'mcdonalds': { industry: 'fast food', type: 'retailer' },
+  'burger king': { industry: 'fast food', type: 'retailer' },
+  'wendys': { industry: 'fast food', type: 'retailer' },
+  'kfc': { industry: 'fast food', type: 'retailer' },
+  'subway': { industry: 'fast food', type: 'retailer' },
+  'dominos': { industry: 'pizza', type: 'retailer' },
+  'pizza hut': { industry: 'pizza', type: 'retailer' },
+  'papa johns': { industry: 'pizza', type: 'retailer' },
+  // Coffee (retailers)
+  'starbucks': { industry: 'coffee shop', type: 'retailer' },
+  'dunkin': { industry: 'coffee shop', type: 'retailer' },
+  // Hotels (retailers)
+  'marriott': { industry: 'hotel', type: 'retailer' },
+  'hilton': { industry: 'hotel', type: 'retailer' },
+  'hyatt': { industry: 'hotel', type: 'retailer' },
+  'holiday inn': { industry: 'hotel', type: 'retailer' },
 };
 
-// Infer industry from brand name and competitors
-function inferIndustry(brandName: string, competitors: string[], providedIndustry?: string): string {
-  // If a valid industry is provided (not "General"), use it
-  if (providedIndustry && providedIndustry.toLowerCase() !== 'general') {
-    return providedIndustry;
-  }
+interface InferredBrandInfo {
+  industry: string;
+  type: BrandType;
+}
 
+// Infer industry and brand type from brand name and competitors
+function inferBrandInfo(brandName: string, competitors: string[], providedIndustry?: string): InferredBrandInfo {
   const allBrands = [brandName, ...competitors].map(b => b.toLowerCase().trim());
 
-  // Check each brand against our known mappings
+  // Check each brand against our known mappings (prioritize main brand)
   for (const brand of allBrands) {
-    for (const [knownBrand, industry] of Object.entries(BRAND_INDUSTRY_MAP)) {
+    for (const [knownBrand, info] of Object.entries(BRAND_INDUSTRY_MAP)) {
       if (brand.includes(knownBrand) || knownBrand.includes(brand)) {
-        return industry;
+        return info;
       }
     }
+  }
+
+  // If a valid industry is provided (not "General"), use it with default retailer type
+  if (providedIndustry && providedIndustry.toLowerCase() !== 'general') {
+    return { industry: providedIndustry, type: 'retailer' };
   }
 
   // Keyword-based detection from brand names
   const combinedText = allBrands.join(' ');
 
-  if (/tire|tyre|wheel|rim/i.test(combinedText)) return 'tires';
-  if (/auto|car|vehicle|motor|dealer/i.test(combinedText)) return 'auto service';
-  if (/pizza|burger|food|restaurant|cafe|diner/i.test(combinedText)) return 'restaurant';
-  if (/hotel|inn|resort|lodge|motel/i.test(combinedText)) return 'hotel';
-  if (/bank|credit|finance|loan/i.test(combinedText)) return 'banking';
-  if (/insurance|insure/i.test(combinedText)) return 'insurance';
-  if (/dental|dentist|orthodont/i.test(combinedText)) return 'dentist';
-  if (/doctor|medical|clinic|health/i.test(combinedText)) return 'medical clinic';
-  if (/gym|fitness|workout/i.test(combinedText)) return 'gym';
-  if (/salon|hair|beauty|spa/i.test(combinedText)) return 'salon';
-  if (/lawyer|attorney|legal/i.test(combinedText)) return 'lawyer';
-  if (/plumb|electric|hvac|contractor/i.test(combinedText)) return 'home services';
-  if (/real estate|realtor|property/i.test(combinedText)) return 'real estate';
+  if (/tire|tyre|wheel|rim/i.test(combinedText)) return { industry: 'tires', type: 'manufacturer' };
+  if (/auto|car|vehicle|motor|dealer/i.test(combinedText)) return { industry: 'auto service', type: 'retailer' };
+  if (/pizza|burger|food|restaurant|cafe|diner/i.test(combinedText)) return { industry: 'restaurant', type: 'retailer' };
+  if (/hotel|inn|resort|lodge|motel/i.test(combinedText)) return { industry: 'hotel', type: 'retailer' };
+  if (/bank|credit|finance|loan/i.test(combinedText)) return { industry: 'banking', type: 'retailer' };
+  if (/insurance|insure/i.test(combinedText)) return { industry: 'insurance', type: 'retailer' };
+  if (/dental|dentist|orthodont/i.test(combinedText)) return { industry: 'dentist', type: 'retailer' };
+  if (/doctor|medical|clinic|health/i.test(combinedText)) return { industry: 'medical clinic', type: 'retailer' };
+  if (/gym|fitness|workout/i.test(combinedText)) return { industry: 'gym', type: 'retailer' };
+  if (/salon|hair|beauty|spa/i.test(combinedText)) return { industry: 'salon', type: 'retailer' };
+  if (/lawyer|attorney|legal/i.test(combinedText)) return { industry: 'lawyer', type: 'retailer' };
+  if (/plumb|electric|hvac|contractor/i.test(combinedText)) return { industry: 'home services', type: 'retailer' };
+  if (/real estate|realtor|property/i.test(combinedText)) return { industry: 'real estate', type: 'retailer' };
 
   // Fallback - return empty to indicate we couldn't detect
-  return '';
+  return { industry: '', type: 'retailer' };
 }
 
-// Generate default search terms based on industry
-function generateDefaultSearchTerms(industry: string): string[] {
+// Generate default search terms based on industry and brand type
+function generateDefaultSearchTerms(industry: string, brandType: BrandType, brandName: string): string[] {
   if (!industry || industry.toLowerCase() === 'general') {
     return []; // Don't generate useless terms
   }
 
   const industryLower = industry.toLowerCase();
+  const brandLower = brandName.toLowerCase();
   const terms: string[] = [];
 
-  // Industry-specific search terms
+  // For MANUFACTURERS: search for "[brand] dealer/authorized" rather than generic category
+  if (brandType === 'manufacturer') {
+    if (industryLower.includes('tire')) {
+      terms.push(`${brandLower} tires dealer`);
+      terms.push(`${brandLower} tires near me`);
+      terms.push(`buy ${brandLower} tires`);
+      terms.push(`${brandLower} authorized dealer`);
+    } else {
+      // Generic manufacturer terms
+      terms.push(`${brandLower} dealer near me`);
+      terms.push(`${brandLower} authorized dealer`);
+      terms.push(`buy ${brandLower}`);
+      terms.push(`${brandLower} store`);
+    }
+    return terms.slice(0, 4);
+  }
+
+  // For RETAILERS: use category-based searches
   if (industryLower.includes('tire')) {
     terms.push('tire shop near me');
     terms.push('best tire shop');
@@ -268,8 +304,10 @@ function generateDefaultSearchTerms(industry: string): string[] {
 }
 
 export function GoogleMapsPanel({ brandName, competitors, locationCode = 2840, languageCode = 'en', industry }: GoogleMapsPanelProps) {
-  // Infer the actual industry from brand/competitors if "General" or empty
-  const detectedIndustry = inferIndustry(brandName, competitors, industry);
+  // Infer the actual industry and brand type from brand/competitors
+  const brandInfo = inferBrandInfo(brandName, competitors, industry);
+  const detectedIndustry = brandInfo.industry;
+  const brandType = brandInfo.type;
 
   const [data, setData] = useState<GoogleMapsResponse | null>(null);
   const [savedAnalyses, setSavedAnalyses] = useState<SavedAnalysis[]>([]);
@@ -284,7 +322,7 @@ export function GoogleMapsPanel({ brandName, competitors, locationCode = 2840, l
   // Custom search terms - initialize with industry-based defaults
   const [searchTerms, setSearchTerms] = useState<string[]>(() => {
     if (detectedIndustry) {
-      return generateDefaultSearchTerms(detectedIndustry);
+      return generateDefaultSearchTerms(detectedIndustry, brandType, brandName);
     }
     return [];
   });
@@ -300,11 +338,11 @@ export function GoogleMapsPanel({ brandName, competitors, locationCode = 2840, l
   // Initialize search terms when detected industry changes (only once)
   useEffect(() => {
     if (detectedIndustry && !hasInitializedTerms && searchTerms.length === 0) {
-      setSearchTerms(generateDefaultSearchTerms(detectedIndustry));
+      setSearchTerms(generateDefaultSearchTerms(detectedIndustry, brandType, brandName));
       setIndustryKeyword(detectedIndustry);
       setHasInitializedTerms(true);
     }
-  }, [detectedIndustry, hasInitializedTerms, searchTerms.length]);
+  }, [detectedIndustry, brandType, brandName, hasInitializedTerms, searchTerms.length]);
 
   // Load saved analyses on mount
   useEffect(() => {
@@ -551,16 +589,26 @@ export function GoogleMapsPanel({ brandName, competitors, locationCode = 2840, l
         <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
         </svg>
-        Category Search Terms
+        {brandType === 'manufacturer' ? 'Dealer/Distributor Search Terms' : 'Category Search Terms'}
         {detectedIndustry && (
           <span className="text-xs font-normal px-2 py-0.5 bg-green-100 dark:bg-green-900/40 text-green-600 dark:text-green-400 rounded-full">
-            Detected: {detectedIndustry}
+            {detectedIndustry} ({brandType})
           </span>
         )}
       </h3>
       <p className="text-sm text-gray-600 dark:text-gray-300 mb-2">
-        <strong>Question answered:</strong> When someone searches for your service, do you show up?
+        {brandType === 'manufacturer' ? (
+          <><strong>Question answered:</strong> When someone searches for where to buy your products, do dealers appear?</>
+        ) : (
+          <><strong>Question answered:</strong> When someone searches for your service, do you show up?</>
+        )}
       </p>
+      {brandType === 'manufacturer' && (
+        <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-3 mb-4 text-sm text-amber-700 dark:text-amber-300">
+          <strong>Note:</strong> As a {detectedIndustry} manufacturer, {brandName} doesn't have retail stores.
+          We're searching for dealers/distributors that carry your products. This measures your distribution visibility.
+        </div>
+      )}
 
       {/* Keyword Suggestions Section */}
       <div className="bg-white dark:bg-gray-800 rounded-lg p-4 mb-4 border border-blue-100 dark:border-gray-700">
@@ -830,7 +878,7 @@ export function GoogleMapsPanel({ brandName, competitors, locationCode = 2840, l
       </div>
 
       {/* ============================================ */}
-      {/* SECTION 1: CATEGORY VISIBILITY */}
+      {/* SECTION 1: CATEGORY/DEALER VISIBILITY */}
       {/* ============================================ */}
       {data.categoryVisibility && data.categoryVisibility.searchTerms.length > 0 && (
         <div className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 rounded-xl shadow-sm p-6 border border-blue-200 dark:border-blue-800">
@@ -838,10 +886,14 @@ export function GoogleMapsPanel({ brandName, competitors, locationCode = 2840, l
             <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
             </svg>
-            Category Visibility
+            {brandType === 'manufacturer' ? 'Dealer/Distributor Visibility' : 'Category Visibility'}
           </h3>
           <p className="text-sm text-gray-600 dark:text-gray-300 mb-4">
-            <strong>Question:</strong> When customers search for your service, do you show up?
+            {brandType === 'manufacturer' ? (
+              <><strong>Question:</strong> When customers search for where to buy {brandName}, do dealers appear?</>
+            ) : (
+              <><strong>Question:</strong> When customers search for your service, do you show up?</>
+            )}
           </p>
 
           {/* Main metric */}

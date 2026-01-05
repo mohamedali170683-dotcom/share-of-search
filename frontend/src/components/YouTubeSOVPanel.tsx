@@ -122,7 +122,6 @@ export function YouTubeSOVPanel({ brandName, competitors, locationCode = 2840, l
   const [savedAnalyses, setSavedAnalyses] = useState<SavedAnalysis[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [showMethodology, setShowMethodology] = useState(false);
 
   // AI Insights
   const [insights, setInsights] = useState<YouTubeInsights | null>(null);
@@ -707,41 +706,6 @@ export function YouTubeSOVPanel({ brandName, competitors, locationCode = 2840, l
     localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
   };
 
-  const deleteAnalysis = (id: string) => {
-    const updated = savedAnalyses.filter(a => a.id !== id);
-    setSavedAnalyses(updated);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
-
-    // Clear current data if we deleted the current analysis
-    const deleted = savedAnalyses.find(a => a.id === id);
-    if (deleted && data && deleted.data.timestamp === data.timestamp) {
-      setData(null);
-    }
-  };
-
-  const loadAnalysis = (analysis: SavedAnalysis) => {
-    setData(analysis.data);
-    // Also generate AI insights for loaded analysis
-    if (analysis.data.allVideos && analysis.data.allVideos.length > 0) {
-      const brandVideos = analysis.data.allVideos.filter((v: YouTubeVideo) => v.isBrandOwned);
-      const ownedVideos = ownedChannelId ? brandVideos.filter((v: YouTubeVideo) => {
-        const channelIdLower = v.channelId?.toLowerCase() || '';
-        const channelNameNormalized = (v.channelName || '').toLowerCase().replace(/@/g, '').replace(/[^a-z0-9]/g, '');
-        const ownedIdLower = ownedChannelId.toLowerCase();
-        const ownedIdNormalized = ownedChannelId.toLowerCase().replace(/@/g, '').replace(/[^a-z0-9]/g, '');
-        return channelIdLower === ownedIdLower ||
-               channelIdLower.includes(ownedIdLower) ||
-               channelNameNormalized.includes(ownedIdNormalized) ||
-               ownedIdNormalized.includes(channelNameNormalized);
-      }) : [];
-      const earnedVideos = ownedChannelId ? brandVideos.filter((v: YouTubeVideo) => !ownedVideos.includes(v)) : [];
-      const ownedViewsCount = ownedVideos.reduce((sum: number, v: YouTubeVideo) => sum + v.viewsCount, 0);
-      const earnedViewsCount = earnedVideos.reduce((sum: number, v: YouTubeVideo) => sum + v.viewsCount, 0);
-      const earnedSources = computeEarnedMediaSources(earnedVideos);
-      fetchAIInsights(analysis.data, ownedVideos.length, earnedVideos.length, ownedViewsCount, earnedViewsCount, earnedSources);
-    }
-  };
-
   const deleteCurrentAnalysis = () => {
     if (!brandName) return;
 
@@ -1011,198 +975,10 @@ export function YouTubeSOVPanel({ brandName, competitors, locationCode = 2840, l
     });
   };
 
-  // Methodology explanation component
-  const MethodologySection = () => (
-    <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl p-4 mb-6">
-      <button
-        onClick={() => setShowMethodology(!showMethodology)}
-        className="flex items-center justify-between w-full text-left"
-      >
-        <div className="flex items-center gap-2">
-          <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-          </svg>
-          <span className="font-medium text-blue-800 dark:text-blue-200">How is YouTube SOV Calculated? (Formulas & Methodology)</span>
-        </div>
-        <svg className={`w-5 h-5 text-blue-600 transition-transform ${showMethodology ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-        </svg>
-      </button>
-
-      {showMethodology && (
-        <div className="mt-4 space-y-4 text-sm text-blue-800 dark:text-blue-200">
-          <div>
-            <h4 className="font-semibold mb-2">Share of Search (by Video Count)</h4>
-            <p className="text-blue-700 dark:text-blue-300 mb-2">
-              Measures how many videos in YouTube search results mention your brand in their title compared to competitors.
-            </p>
-            <div className="bg-white dark:bg-gray-800 rounded p-3 font-mono text-xs">
-              <p className="font-bold">Formula: SOS = (Your Brand Videos / Total Identified Brand Videos) × 100</p>
-              {data && (
-                <p className="mt-2 text-blue-600 dark:text-blue-400">
-                  <strong>Your Calculation:</strong> ({data.yourBrand.totalVideosInTop20} / {data.yourBrand.totalVideosInTop20 + data.competitors.reduce((sum, c) => sum + c.totalVideosInTop20, 0)}) × 100 = <strong>{data.sov.byCount}%</strong>
-                </p>
-              )}
-            </div>
-          </div>
-
-          <div>
-            <h4 className="font-semibold mb-2">Share of Voice (by Views)</h4>
-            <p className="text-blue-700 dark:text-blue-300 mb-2">
-              Measures your brand's audience reach based on total views on videos mentioning your brand.
-            </p>
-            <div className="bg-white dark:bg-gray-800 rounded p-3 font-mono text-xs">
-              <p className="font-bold">Formula: SOV = (Your Brand Video Views / Total Brand Video Views) × 100</p>
-              {data && (
-                <p className="mt-2 text-blue-600 dark:text-blue-400">
-                  <strong>Your Calculation:</strong> ({formatViews(data.yourBrand.totalViews)} / {formatViews(data.yourBrand.totalViews + data.competitors.reduce((sum, c) => sum + c.totalViews, 0))}) × 100 = <strong>{data.sov.byViews}%</strong>
-                </p>
-              )}
-            </div>
-          </div>
-
-          <div>
-            <h4 className="font-semibold mb-2">Brand Comparison Method</h4>
-            <p className="text-blue-700 dark:text-blue-300">
-              <strong>Step 1:</strong> Search YouTube for each brand name (your brand + competitors).<br/>
-              <strong>Step 2:</strong> Collect videos from search results (up to 100 per search).<br/>
-              <strong>Step 3:</strong> Filter videos where the <strong>video title contains the brand name</strong>.<br/>
-              <strong>Step 4:</strong> Count videos and sum views for each brand.
-            </p>
-          </div>
-
-          <div>
-            <h4 className="font-semibold mb-2">Owned Media Calculation</h4>
-            <p className="text-blue-700 dark:text-blue-300">
-              <strong>Method 1 (DataForSEO):</strong> Search YouTube for your channel name/handle, then filter results to only videos from your channel. Limited to ~100-200 videos.<br/>
-              <strong>Method 2 (YouTube Data API v3):</strong> When configured, we fetch accurate channel statistics directly from YouTube, including total video count, subscriber count, and total views.
-            </p>
-            {ownedChannels.some(c => c.videoCount !== undefined) && (
-              <div className="mt-2 bg-emerald-50 dark:bg-emerald-900/30 rounded p-2">
-                <p className="text-xs font-medium text-emerald-700 dark:text-emerald-300">
-                  YouTube Data API Active - Showing accurate channel statistics
-                </p>
-              </div>
-            )}
-          </div>
-
-          {/* API Limitations Warning */}
-          <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-700 rounded-lg p-3">
-            <h4 className="font-semibold mb-2 text-yellow-800 dark:text-yellow-200 flex items-center gap-2">
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-              </svg>
-              Important Limitations
-            </h4>
-            <ul className="text-yellow-700 dark:text-yellow-300 text-xs space-y-1">
-              <li>• <strong>DataForSEO is a SEARCH API</strong>, not a channel listing API. It cannot retrieve ALL videos from a channel.</li>
-              <li>• Owned channel videos are limited to what appears in YouTube search results (typically 100-200 videos max).</li>
-              <li>• If your channel has 400+ videos, only ~100-150 may be captured via search.</li>
-              {ownedChannels.some(c => c.videoCount !== undefined) ? (
-                <li className="text-emerald-700 dark:text-emerald-400">• <strong>YouTube Data API v3 is configured</strong> - accurate channel video counts are shown above.</li>
-              ) : (
-                <li>• For complete channel video counts, add <code className="bg-yellow-100 dark:bg-yellow-800 px-1 rounded">YOUTUBE_API_KEY</code> to environment variables.</li>
-              )}
-              <li>• Brand matching is based on video titles only - videos without brand name in title are not counted.</li>
-            </ul>
-            {data?.methodology?.limitations && data.methodology.limitations.length > 0 && (
-              <div className="mt-2 pt-2 border-t border-yellow-300 dark:border-yellow-700">
-                <p className="text-xs text-yellow-600 dark:text-yellow-400 font-medium">Analysis-specific notes:</p>
-                {data.methodology.limitations.slice(0, 3).map((lim, i) => (
-                  <p key={i} className="text-xs text-yellow-600 dark:text-yellow-400">• {lim}</p>
-                ))}
-              </div>
-            )}
-          </div>
-
-          <div>
-            <h4 className="font-semibold mb-2">Data Sources (Combined)</h4>
-            <div className="space-y-2">
-              <div className="flex items-start gap-2">
-                <span className="w-2 h-2 bg-emerald-500 rounded-full mt-2 flex-shrink-0"></span>
-                <div>
-                  <p className="text-blue-700 dark:text-blue-300">
-                    <strong>YouTube Data API v3</strong> (for your brand): Provides accurate channel statistics including total video count, subscriber count, and total views. Used for SOV calculations when configured.
-                  </p>
-                </div>
-              </div>
-              <div className="flex items-start gap-2">
-                <span className="w-2 h-2 bg-gray-400 rounded-full mt-2 flex-shrink-0"></span>
-                <div>
-                  <p className="text-blue-700 dark:text-blue-300">
-                    <strong>DataForSEO SERP API</strong> (for competitors): Fetches videos from YouTube search results (up to 100 per search). Used for competitor analysis since we don't have direct access to their channel statistics.
-                  </p>
-                </div>
-              </div>
-            </div>
-            {ownedChannels.some(c => c.videoCount !== undefined) && (
-              <div className="mt-3 bg-emerald-50 dark:bg-emerald-900/30 rounded p-2">
-                <p className="text-xs font-medium text-emerald-700 dark:text-emerald-300">
-                  Your SOV is calculated using accurate YouTube API data for your brand vs. search-based data for competitors.
-                </p>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-    </div>
-  );
-
-  // Saved analyses section
-  const SavedAnalysesSection = () => {
-    if (savedAnalyses.length === 0) return null;
-
-    return (
-      <div className="bg-gray-50 dark:bg-gray-800/50 rounded-xl p-4 mb-6">
-        <h4 className="font-medium text-gray-900 dark:text-white mb-3 flex items-center gap-2">
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-          </svg>
-          Previous Analyses
-        </h4>
-        <div className="space-y-2">
-          {savedAnalyses.map((analysis) => (
-            <div
-              key={analysis.id}
-              className={`flex items-center justify-between p-3 rounded-lg border ${
-                data?.timestamp === analysis.data.timestamp
-                  ? 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800'
-                  : 'bg-white dark:bg-gray-700 border-gray-200 dark:border-gray-600'
-              }`}
-            >
-              <button
-                onClick={() => loadAnalysis(analysis)}
-                className="flex-1 text-left"
-              >
-                <p className="font-medium text-gray-900 dark:text-white text-sm">{analysis.brandName}</p>
-                <p className="text-xs text-gray-500 dark:text-gray-400">
-                  {formatDateTime(analysis.createdAt)} • SOV: {analysis.data.sov.byViews}%
-                </p>
-              </button>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  deleteAnalysis(analysis.id);
-                }}
-                className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors"
-                title="Delete analysis"
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                </svg>
-              </button>
-            </div>
-          ))}
-        </div>
-      </div>
-    );
-  };
-
   // Initial state - show fetch button
   if (!data && !isLoading && !error) {
     return (
       <div className="space-y-6">
-        <SavedAnalysesSection />
         <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6">
           <div className="text-center">
             <div className="w-16 h-16 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -1251,7 +1027,6 @@ export function YouTubeSOVPanel({ brandName, competitors, locationCode = 2840, l
   if (error) {
     return (
       <div className="space-y-6">
-        <SavedAnalysesSection />
         <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6">
           <div className="text-center">
             <div className="w-12 h-12 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center mx-auto mb-3">
@@ -1280,12 +1055,6 @@ export function YouTubeSOVPanel({ brandName, competitors, locationCode = 2840, l
 
   return (
     <div className="space-y-6">
-      {/* Methodology Explanation */}
-      <MethodologySection />
-
-      {/* Saved Analyses */}
-      <SavedAnalysesSection />
-
       {/* Analysis timestamp */}
       <div className="flex items-center justify-between text-sm text-gray-500 dark:text-gray-400">
         <span>Analysis from: {formatDateTime(data.timestamp)}</span>
@@ -1337,14 +1106,13 @@ export function YouTubeSOVPanel({ brandName, competitors, locationCode = 2840, l
         const displaySOVByCount = hasYouTubeAPIStats ? adjustedSOVByCount : data.sov.byCount;
         const displaySOVByViews = hasYouTubeAPIStats ? adjustedSOVByViews : data.sov.byViews;
 
-        // Gap analysis: difference between content share and attention share
-        const contentAttentionGap = displaySOVByViews - displaySOVByCount;
-        const hasSignificantGap = Math.abs(contentAttentionGap) >= 5;
-
         return (
-      <div className="space-y-4">
+      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6">
+        <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-1">YouTube Visibility & Attention</h3>
+        <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">How visible is your brand on YouTube compared to competitors?</p>
+
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6 border-l-4 border-red-500">
+          <div className="p-4 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800">
             <div className="flex items-center gap-3 mb-2">
               <div className="w-10 h-10 bg-red-100 dark:bg-red-900/30 rounded-lg flex items-center justify-center">
                 <svg className="w-5 h-5 text-red-600" fill="currentColor" viewBox="0 0 24 24">
@@ -1352,19 +1120,19 @@ export function YouTubeSOVPanel({ brandName, competitors, locationCode = 2840, l
                 </svg>
               </div>
               <div>
-                <p className="text-sm text-gray-500 dark:text-gray-400">Share of Content</p>
-                <p className="text-2xl font-bold text-gray-900 dark:text-white">{displaySOVByCount}%</p>
+                <p className="text-sm font-medium text-red-800 dark:text-red-200">Content Visibility</p>
+                <p className="text-2xl font-bold text-red-900 dark:text-red-100">{displaySOVByCount}%</p>
               </div>
             </div>
-            <p className="text-xs text-gray-500 dark:text-gray-400">
-              {yourBrandVideoCount.toLocaleString()} videos in your library
+            <p className="text-xs text-red-700 dark:text-red-300 font-medium">
+              {yourBrandVideoCount.toLocaleString()} videos
             </p>
-            <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
-              Your share of total YouTube content vs competitors
+            <p className="text-xs text-red-600 dark:text-red-400 mt-1">
+              How much of YouTube content features your brand?
             </p>
           </div>
 
-          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6 border-l-4 border-purple-500">
+          <div className="p-4 rounded-lg bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800">
             <div className="flex items-center gap-3 mb-2">
               <div className="w-10 h-10 bg-purple-100 dark:bg-purple-900/30 rounded-lg flex items-center justify-center">
                 <svg className="w-5 h-5 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1373,54 +1141,17 @@ export function YouTubeSOVPanel({ brandName, competitors, locationCode = 2840, l
                 </svg>
               </div>
               <div>
-                <p className="text-sm text-gray-500 dark:text-gray-400">Share of Attention</p>
-                <p className="text-2xl font-bold text-gray-900 dark:text-white">{displaySOVByViews}%</p>
+                <p className="text-sm font-medium text-purple-800 dark:text-purple-200">Audience Attention</p>
+                <p className="text-2xl font-bold text-purple-900 dark:text-purple-100">{displaySOVByViews}%</p>
               </div>
             </div>
-            <p className="text-xs text-gray-500 dark:text-gray-400">
-              {formatViews(yourBrandViews)} total views
+            <p className="text-xs text-purple-700 dark:text-purple-300 font-medium">
+              {formatViews(yourBrandViews)} views
             </p>
-            <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
-              Your share of viewer engagement (30+ sec watches)
+            <p className="text-xs text-purple-600 dark:text-purple-400 mt-1">
+              How much of total views are going to your brand?
             </p>
           </div>
-        </div>
-
-        {/* Gap Analysis Insight */}
-        {hasSignificantGap && (
-          <div className={`rounded-lg p-4 ${contentAttentionGap > 0 ? 'bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800' : 'bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800'}`}>
-            <div className="flex items-start gap-3">
-              <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${contentAttentionGap > 0 ? 'bg-emerald-100 dark:bg-emerald-800' : 'bg-amber-100 dark:bg-amber-800'}`}>
-                {contentAttentionGap > 0 ? (
-                  <svg className="w-4 h-4 text-emerald-600 dark:text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
-                  </svg>
-                ) : (
-                  <svg className="w-4 h-4 text-amber-600 dark:text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 17h8m0 0V9m0 8l-8-8-4 4-6-6" />
-                  </svg>
-                )}
-              </div>
-              <div>
-                <p className={`font-semibold text-sm ${contentAttentionGap > 0 ? 'text-emerald-800 dark:text-emerald-200' : 'text-amber-800 dark:text-amber-200'}`}>
-                  {contentAttentionGap > 0 ? 'High-Performing Content' : 'Content Opportunity Gap'}
-                </p>
-                <p className={`text-xs mt-1 ${contentAttentionGap > 0 ? 'text-emerald-700 dark:text-emerald-300' : 'text-amber-700 dark:text-amber-300'}`}>
-                  {contentAttentionGap > 0
-                    ? `Your content is outperforming: ${displaySOVByCount}% of videos generate ${displaySOVByViews}% of attention (+${Math.abs(contentAttentionGap).toFixed(1)}pp). Your videos are highly engaging - consider producing more content.`
-                    : `Content underperforming: ${displaySOVByCount}% of videos only capture ${displaySOVByViews}% of attention (-${Math.abs(contentAttentionGap).toFixed(1)}pp). Focus on improving video quality, thumbnails, titles, or topics.`
-                  }
-                </p>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* What is a YouTube View - Methodology Note */}
-        <div className="bg-gray-50 dark:bg-gray-700/30 rounded-lg p-3 border border-gray-200 dark:border-gray-600">
-          <p className="text-xs text-gray-600 dark:text-gray-400">
-            <strong>How we measure:</strong> "Share of Content" = your video library size vs competitors. "Share of Attention" = your share of YouTube views (counted when viewers watch 30+ seconds). A gap between these metrics reveals if your content strategy needs more volume or better engagement.
-          </p>
         </div>
       </div>
         );
@@ -1466,12 +1197,31 @@ export function YouTubeSOVPanel({ brandName, competitors, locationCode = 2840, l
         const allViews = [yourBrandViews, ...competitors.map(c => getCompetitorStats(c).viewCount)];
         const adjustedMaxViews = Math.max(...allViews, 1);
 
+        // Determine brand position for key insight
+        const sortedByViews = [
+          { name: data.yourBrand.name, views: yourBrandViews, isYourBrand: true },
+          ...competitors.map(c => ({ name: c, views: getCompetitorStats(c).viewCount, isYourBrand: false }))
+        ].sort((a, b) => b.views - a.views);
+        const yourPosition = sortedByViews.findIndex(b => b.isYourBrand) + 1;
+        const leader = sortedByViews[0];
+        const isLeading = yourPosition === 1;
+
         return (
         <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6">
-          <div className="flex items-center justify-between mb-2">
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-              Brand Comparison
-            </h3>
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-1">Brand Comparison</h3>
+          <p className="text-sm text-gray-500 dark:text-gray-400 mb-2">How does your YouTube presence stack up against competitors?</p>
+
+          {/* Key Insight Banner */}
+          <div className={`mb-4 p-3 rounded-lg ${isLeading ? 'bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800' : 'bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800'}`}>
+            <p className={`text-sm font-medium ${isLeading ? 'text-emerald-800 dark:text-emerald-200' : 'text-amber-800 dark:text-amber-200'}`}>
+              {isLeading
+                ? `Your brand leads on YouTube with ${formatViews(yourBrandViews)} views`
+                : `Your brand is #${yourPosition} of ${sortedByViews.length} — ${leader.name} leads with ${formatViews(leader.views)} views`
+              }
+            </p>
+          </div>
+
+          <div className="flex items-center justify-end mb-2">
             {!hasAnyCompetitorAPIStats && (
               <button
                 onClick={autoFetchAllCompetitorChannels}
@@ -1509,25 +1259,6 @@ export function YouTubeSOVPanel({ brandName, competitors, locationCode = 2840, l
                 : `${competitorsWithAPIStats.length} competitor(s) use YouTube API data`}
             </p>
           )}
-
-          {/* Disclaimer about channel verification */}
-          <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-lg p-3 mb-4">
-            <div className="flex items-start gap-2">
-              <svg className="w-4 h-4 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-              <div className="text-xs text-amber-800 dark:text-amber-200">
-                <p className="font-medium mb-1">Channel Verification</p>
-                <p className="text-amber-700 dark:text-amber-300">
-                  Auto-detected channels may not always be the official brand channel. Please verify each channel is correct by clicking the link.
-                  If incorrect, click the <span className="font-mono bg-amber-100 dark:bg-amber-800 px-1 rounded">×</span> to remove and manually add the correct channel URL or handle (e.g., @ContinentalCorporation).
-                </p>
-                <p className="text-amber-700 dark:text-amber-300 mt-1">
-                  <strong>Views shown</strong> are <strong>total channel lifetime views</strong> from YouTube Data API. <strong>Changing a channel will affect all metrics</strong> (video counts, views, SOV calculations).
-                </p>
-              </div>
-            </div>
-          </div>
 
           <div className="space-y-4">
             {allBrands.map((brand, idx) => {
@@ -1997,15 +1728,13 @@ export function YouTubeSOVPanel({ brandName, competitors, locationCode = 2840, l
 
         return (
           <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6">
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-1 flex items-center gap-2">
               <svg className="w-5 h-5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
               </svg>
               Owned vs Earned Media
-              <span className="text-sm font-normal text-gray-500 dark:text-gray-400">
-                (click segments to drill down)
-              </span>
             </h3>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">How much of your YouTube presence do you control? Click segments to explore.</p>
 
             <div className="flex flex-col lg:flex-row items-center gap-8">
               {/* Donut Chart */}
@@ -2178,139 +1907,7 @@ export function YouTubeSOVPanel({ brandName, competitors, locationCode = 2840, l
                 return null;
               }
 
-              // Get the best video from each source for context
-              const getTopVideoForSource = (channelName: string) => {
-                return filteredEarnedVideos
-                  .filter(v => v.channelName === channelName)
-                  .sort((a, b) => b.viewsCount - a.viewsCount)[0];
-              };
-
-              // Categorize video by title
-              const getVideoCategory = (title: string) => {
-                const t = title.toLowerCase();
-                if (t.includes('review')) return { label: 'Review', color: 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300' };
-                if (t.includes('comparison') || t.includes(' vs ')) return { label: 'Comparison', color: 'bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300' };
-                if (t.includes('tutorial') || t.includes('how to')) return { label: 'Tutorial', color: 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300' };
-                if (t.includes('unboxing')) return { label: 'Unboxing', color: 'bg-pink-100 dark:bg-pink-900/30 text-pink-700 dark:text-pink-300' };
-                if (t.includes('test')) return { label: 'Test', color: 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300' };
-                if (t.includes('top') || t.includes('best')) return { label: 'Best-of List', color: 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300' };
-                return { label: 'Mention', color: 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300' };
-              };
-
-              return (
-                <div className="mt-4 border-t border-gray-200 dark:border-gray-700 pt-4">
-                  <div className="flex items-center justify-between mb-3">
-                    <h4 className="font-semibold text-purple-800 dark:text-purple-200 text-sm flex items-center gap-2">
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-                      </svg>
-                      Who's Talking About {data.yourBrand.name}?
-                      <span className="text-xs font-normal text-gray-500">({sources.length} channels)</span>
-                    </h4>
-                    {(irrelevantCount > 0 || dismissedCount > 0) && (
-                      <span className="text-xs text-gray-500 dark:text-gray-400">
-                        {irrelevantCount > 0 && `${irrelevantCount} filtered`}
-                        {irrelevantCount > 0 && dismissedCount > 0 && ', '}
-                        {dismissedCount > 0 && (
-                          <>
-                            {dismissedCount} dismissed
-                            <button
-                              onClick={() => {
-                                const existing = localStorage.getItem(DISMISSED_VIDEOS_KEY);
-                                const dismissedByBrand = existing ? JSON.parse(existing) : {};
-                                dismissedByBrand[brandName.toLowerCase()] = [];
-                                localStorage.setItem(DISMISSED_VIDEOS_KEY, JSON.stringify(dismissedByBrand));
-                                setDismissedVideoIds([]);
-                              }}
-                              className="ml-1 text-purple-600 hover:text-purple-700 underline"
-                            >
-                              (restore)
-                            </button>
-                          </>
-                        )}
-                      </span>
-                    )}
-                  </div>
-                  <div className="space-y-3">
-                    {sources.slice(0, 5).map((source, idx) => {
-                      const topVideo = getTopVideoForSource(source.channelName);
-                      const category = topVideo ? getVideoCategory(topVideo.title) : null;
-
-                      return (
-                        <div
-                          key={source.channelName}
-                          className="p-3 bg-purple-50 dark:bg-purple-900/20 rounded-lg"
-                        >
-                          <div className="flex items-center justify-between mb-2">
-                            <div className="flex items-center gap-2">
-                              <span className="w-6 h-6 flex items-center justify-center bg-purple-200 dark:bg-purple-800 text-purple-700 dark:text-purple-300 rounded-full text-xs font-medium">
-                                {idx + 1}
-                              </span>
-                              <span className="text-sm text-gray-800 dark:text-gray-200 font-medium">
-                                {source.channelName}
-                              </span>
-                            </div>
-                            <div className="text-right text-xs text-gray-600 dark:text-gray-400">
-                              <span className="font-medium">{source.videoCount} video{source.videoCount > 1 ? 's' : ''}</span>
-                              <span className="mx-1">•</span>
-                              <span>{formatViews(source.totalViews)} views</span>
-                            </div>
-                          </div>
-                          {topVideo && (
-                            <div className="flex items-start gap-2 mt-2 p-2 bg-white dark:bg-gray-800 rounded border border-purple-200 dark:border-purple-700">
-                              <a
-                                href={topVideo.url}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="flex items-start gap-2 flex-1 hover:opacity-80 transition-opacity"
-                              >
-                                {topVideo.thumbnail && (
-                                  <img
-                                    src={topVideo.thumbnail}
-                                    alt={topVideo.title}
-                                    className="w-16 h-10 object-cover rounded flex-shrink-0"
-                                  />
-                                )}
-                                <div className="flex-1 min-w-0">
-                                  <p className="text-xs text-gray-800 dark:text-gray-200 line-clamp-1 font-medium">{topVideo.title}</p>
-                                  <div className="flex items-center gap-2 mt-1">
-                                    <span className="text-xs text-gray-500">{formatViews(topVideo.viewsCount)} views</span>
-                                    {category && (
-                                      <span className={`text-xs px-1.5 py-0.5 rounded ${category.color}`}>
-                                        {category.label}
-                                      </span>
-                                    )}
-                                  </div>
-                                </div>
-                              </a>
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  dismissVideo(topVideo.videoId, topVideo.title);
-                                }}
-                                className="flex-shrink-0 p-1 text-gray-400 hover:text-red-500 transition-colors"
-                                title="Dismiss as irrelevant"
-                              >
-                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                                </svg>
-                              </button>
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
-                    {sources.length > 5 && (
-                      <p className="text-xs text-gray-500 dark:text-gray-400 text-center pt-1">
-                        + {sources.length - 5} more channels
-                      </p>
-                    )}
-                  </div>
-                  <p className="text-xs text-purple-600 dark:text-purple-400 mt-3 italic">
-                    Earned media = videos by other creators mentioning your brand. Click ✕ to dismiss irrelevant videos.
-                  </p>
-                </div>
-              );
+              return null;
             })()}
 
             {/* Drill-down video list */}
@@ -2465,38 +2062,31 @@ export function YouTubeSOVPanel({ brandName, competitors, locationCode = 2840, l
           )}
 
           {insights && (
-            <div className="space-y-3">
-              {/* Summary */}
-              <div className="bg-white dark:bg-gray-800 rounded-lg p-3 border-l-4 border-indigo-500">
+            <div className="space-y-4">
+              {/* Key Conclusion */}
+              <div className="bg-white dark:bg-gray-800 rounded-lg p-4 border-l-4 border-indigo-500">
+                <h4 className="font-semibold text-indigo-800 dark:text-indigo-200 text-sm mb-2 flex items-center gap-2">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  Key Conclusion
+                </h4>
                 <p className="text-gray-800 dark:text-gray-200 text-sm">{insights.summary}</p>
               </div>
 
-              {/* Key insights in compact grid */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
-                <div className="bg-red-50 dark:bg-red-900/20 rounded-lg p-3 border-l-3 border-red-500">
-                  <h4 className="font-semibold text-red-800 dark:text-red-200 text-xs uppercase tracking-wide mb-1">Gap</h4>
-                  <p className="text-red-700 dark:text-red-300 text-xs">{insights.keyGap}</p>
-                </div>
-                <div className="bg-emerald-50 dark:bg-emerald-900/20 rounded-lg p-3 border-l-3 border-emerald-500">
-                  <h4 className="font-semibold text-emerald-800 dark:text-emerald-200 text-xs uppercase tracking-wide mb-1">Action</h4>
-                  <p className="text-emerald-700 dark:text-emerald-300 text-xs">{insights.topAction}</p>
-                </div>
-                <div className="bg-orange-50 dark:bg-orange-900/20 rounded-lg p-3 border-l-3 border-orange-500">
-                  <h4 className="font-semibold text-orange-800 dark:text-orange-200 text-xs uppercase tracking-wide mb-1">Threat</h4>
-                  <p className="text-orange-700 dark:text-orange-300 text-xs">{insights.competitorThreat}</p>
-                </div>
+              {/* Priority Action */}
+              <div className="bg-emerald-50 dark:bg-emerald-900/20 rounded-lg p-4 border-l-4 border-emerald-500">
+                <h4 className="font-semibold text-emerald-800 dark:text-emerald-200 text-sm mb-2 flex items-center gap-2">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                  </svg>
+                  Priority Action
+                </h4>
+                <p className="text-emerald-700 dark:text-emerald-300 text-sm">{insights.topAction}</p>
               </div>
 
-              {/* Earned Media Insight */}
-              {insights.earnedMediaInsight && (
-                <div className="bg-purple-50 dark:bg-purple-900/20 rounded-lg p-3 border-l-3 border-purple-500">
-                  <h4 className="font-semibold text-purple-800 dark:text-purple-200 text-xs uppercase tracking-wide mb-1">Earned Media</h4>
-                  <p className="text-purple-700 dark:text-purple-300 text-xs">{insights.earnedMediaInsight}</p>
-                </div>
-              )}
-
               {/* Regenerate button */}
-              <div className="text-center pt-1">
+              <div className="text-center">
                 <button
                   onClick={() => {
                     setInsights(null);
@@ -2510,7 +2100,7 @@ export function YouTubeSOVPanel({ brandName, competitors, locationCode = 2840, l
                   }}
                   className="text-indigo-600 hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300 text-xs font-medium"
                 >
-                  Regenerate
+                  Regenerate insights
                 </button>
               </div>
             </div>

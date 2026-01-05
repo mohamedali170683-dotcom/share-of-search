@@ -119,6 +119,11 @@ export function GoogleMapsPanel({ brandName, competitors, locationCode = 2840, l
   const [newSearchTerm, setNewSearchTerm] = useState('');
   const [showSearchTermInput, setShowSearchTermInput] = useState(false);
 
+  // Keyword suggestions
+  const [keywordSuggestions, setKeywordSuggestions] = useState<{ keyword: string; searchVolume: number }[]>([]);
+  const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(false);
+  const [industryKeyword, setIndustryKeyword] = useState('');
+
   // Load saved analyses on mount
   useEffect(() => {
     const saved = localStorage.getItem(STORAGE_KEY);
@@ -271,6 +276,42 @@ export function GoogleMapsPanel({ brandName, competitors, locationCode = 2840, l
     setSearchTerms(searchTerms.filter(t => t !== term));
   };
 
+  const fetchKeywordSuggestions = async (seedKeyword: string) => {
+    if (!seedKeyword.trim()) return;
+
+    setIsLoadingSuggestions(true);
+    try {
+      const response = await fetch('/api/keyword-suggestions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          seedKeyword: seedKeyword.trim(),
+          locationCode,
+          languageCode,
+          includeLocalModifiers: true,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch suggestions');
+      }
+
+      const result = await response.json();
+      setKeywordSuggestions(result.suggestions || []);
+    } catch (err) {
+      console.error('Failed to fetch keyword suggestions:', err);
+      setKeywordSuggestions([]);
+    } finally {
+      setIsLoadingSuggestions(false);
+    }
+  };
+
+  const addSuggestedKeyword = (keyword: string) => {
+    if (searchTerms.length < 5 && !searchTerms.includes(keyword)) {
+      setSearchTerms([...searchTerms, keyword]);
+    }
+  };
+
   const formatNumber = (num: number): string => {
     if (num >= 1000000) return `${(num / 1000000).toFixed(1)}M`;
     if (num >= 1000) return `${(num / 1000).toFixed(1)}K`;
@@ -336,8 +377,80 @@ export function GoogleMapsPanel({ brandName, competitors, locationCode = 2840, l
       <p className="text-sm text-gray-600 dark:text-gray-300 mb-2">
         <strong>Question answered:</strong> When someone searches for your service, do you show up?
       </p>
-      <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">
-        Add search terms customers use to find businesses like yours (e.g., "tire shop near me", "auto repair", "best tires")
+
+      {/* Keyword Suggestions Section */}
+      <div className="bg-white dark:bg-gray-800 rounded-lg p-4 mb-4 border border-blue-100 dark:border-gray-700">
+        <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+          Get keyword suggestions based on your industry:
+        </p>
+        <div className="flex gap-2 mb-3">
+          <input
+            type="text"
+            value={industryKeyword}
+            onChange={(e) => setIndustryKeyword(e.target.value)}
+            placeholder="Enter industry keyword (e.g., tires, pizza, dentist)"
+            className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-blue-500"
+            onKeyDown={(e) => e.key === 'Enter' && fetchKeywordSuggestions(industryKeyword)}
+          />
+          <button
+            onClick={() => fetchKeywordSuggestions(industryKeyword)}
+            disabled={isLoadingSuggestions || !industryKeyword.trim()}
+            className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 text-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+          >
+            {isLoadingSuggestions ? (
+              <>
+                <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                </svg>
+                Loading...
+              </>
+            ) : (
+              <>
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                </svg>
+                Suggest Keywords
+              </>
+            )}
+          </button>
+        </div>
+
+        {/* Display suggestions */}
+        {keywordSuggestions.length > 0 && (
+          <div>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">Click to add (sorted by search volume):</p>
+            <div className="flex flex-wrap gap-2">
+              {keywordSuggestions.map((suggestion) => (
+                <button
+                  key={suggestion.keyword}
+                  onClick={() => addSuggestedKeyword(suggestion.keyword)}
+                  disabled={searchTerms.includes(suggestion.keyword) || searchTerms.length >= 5}
+                  className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
+                    searchTerms.includes(suggestion.keyword)
+                      ? 'bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300 cursor-not-allowed'
+                      : searchTerms.length >= 5
+                        ? 'bg-gray-100 dark:bg-gray-700 text-gray-400 cursor-not-allowed'
+                        : 'bg-indigo-100 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-200 dark:hover:bg-indigo-900/60 cursor-pointer'
+                  }`}
+                >
+                  {suggestion.keyword}
+                  {suggestion.searchVolume > 0 && (
+                    <span className="ml-1 text-indigo-500 dark:text-indigo-400">
+                      ({formatNumber(suggestion.searchVolume)}/mo)
+                    </span>
+                  )}
+                  {searchTerms.includes(suggestion.keyword) && ' ✓'}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Selected terms */}
+      <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
+        Selected search terms ({searchTerms.length}/5):
       </p>
 
       <div className="flex flex-wrap gap-2 mb-3">
@@ -357,15 +470,19 @@ export function GoogleMapsPanel({ brandName, competitors, locationCode = 2840, l
             </button>
           </span>
         ))}
+        {searchTerms.length === 0 && (
+          <span className="text-sm text-gray-400 dark:text-gray-500 italic">No terms selected</span>
+        )}
       </div>
 
+      {/* Manual add option */}
       {showSearchTermInput ? (
         <div className="flex gap-2">
           <input
             type="text"
             value={newSearchTerm}
             onChange={(e) => setNewSearchTerm(e.target.value)}
-            placeholder="e.g., tire shop near me"
+            placeholder="Or type custom term..."
             className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-blue-500"
             onKeyDown={(e) => e.key === 'Enter' && addSearchTerm()}
           />
@@ -388,7 +505,7 @@ export function GoogleMapsPanel({ brandName, competitors, locationCode = 2840, l
           disabled={searchTerms.length >= 5}
           className="text-sm text-blue-600 hover:text-blue-700 font-medium disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          + Add search term ({5 - searchTerms.length} remaining)
+          + Add custom term ({5 - searchTerms.length} remaining)
         </button>
       )}
 

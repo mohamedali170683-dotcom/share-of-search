@@ -104,37 +104,173 @@ interface LocalInsights {
   competitorInsight?: string;
 }
 
+// Known brand-to-industry mappings for common brands
+const BRAND_INDUSTRY_MAP: Record<string, string> = {
+  // Tire brands
+  'continental': 'tires',
+  'michelin': 'tires',
+  'bridgestone': 'tires',
+  'goodyear': 'tires',
+  'pirelli': 'tires',
+  'dunlop': 'tires',
+  'hankook': 'tires',
+  'yokohama': 'tires',
+  'firestone': 'tires',
+  'cooper': 'tires',
+  'toyo': 'tires',
+  'bfgoodrich': 'tires',
+  'kumho': 'tires',
+  'falken': 'tires',
+  'nexen': 'tires',
+  // Auto brands
+  'toyota': 'auto dealer',
+  'honda': 'auto dealer',
+  'ford': 'auto dealer',
+  'chevrolet': 'auto dealer',
+  'bmw': 'auto dealer',
+  'mercedes': 'auto dealer',
+  'audi': 'auto dealer',
+  'volkswagen': 'auto dealer',
+  'nissan': 'auto dealer',
+  'hyundai': 'auto dealer',
+  // Fast food
+  'mcdonalds': 'fast food',
+  'burger king': 'fast food',
+  'wendys': 'fast food',
+  'kfc': 'fast food',
+  'subway': 'fast food',
+  'dominos': 'pizza',
+  'pizza hut': 'pizza',
+  'papa johns': 'pizza',
+  // Coffee
+  'starbucks': 'coffee shop',
+  'dunkin': 'coffee shop',
+  // Hotels
+  'marriott': 'hotel',
+  'hilton': 'hotel',
+  'hyatt': 'hotel',
+  'holiday inn': 'hotel',
+};
+
+// Infer industry from brand name and competitors
+function inferIndustry(brandName: string, competitors: string[], providedIndustry?: string): string {
+  // If a valid industry is provided (not "General"), use it
+  if (providedIndustry && providedIndustry.toLowerCase() !== 'general') {
+    return providedIndustry;
+  }
+
+  const allBrands = [brandName, ...competitors].map(b => b.toLowerCase().trim());
+
+  // Check each brand against our known mappings
+  for (const brand of allBrands) {
+    for (const [knownBrand, industry] of Object.entries(BRAND_INDUSTRY_MAP)) {
+      if (brand.includes(knownBrand) || knownBrand.includes(brand)) {
+        return industry;
+      }
+    }
+  }
+
+  // Keyword-based detection from brand names
+  const combinedText = allBrands.join(' ');
+
+  if (/tire|tyre|wheel|rim/i.test(combinedText)) return 'tires';
+  if (/auto|car|vehicle|motor|dealer/i.test(combinedText)) return 'auto service';
+  if (/pizza|burger|food|restaurant|cafe|diner/i.test(combinedText)) return 'restaurant';
+  if (/hotel|inn|resort|lodge|motel/i.test(combinedText)) return 'hotel';
+  if (/bank|credit|finance|loan/i.test(combinedText)) return 'banking';
+  if (/insurance|insure/i.test(combinedText)) return 'insurance';
+  if (/dental|dentist|orthodont/i.test(combinedText)) return 'dentist';
+  if (/doctor|medical|clinic|health/i.test(combinedText)) return 'medical clinic';
+  if (/gym|fitness|workout/i.test(combinedText)) return 'gym';
+  if (/salon|hair|beauty|spa/i.test(combinedText)) return 'salon';
+  if (/lawyer|attorney|legal/i.test(combinedText)) return 'lawyer';
+  if (/plumb|electric|hvac|contractor/i.test(combinedText)) return 'home services';
+  if (/real estate|realtor|property/i.test(combinedText)) return 'real estate';
+
+  // Fallback - return empty to indicate we couldn't detect
+  return '';
+}
+
 // Generate default search terms based on industry
 function generateDefaultSearchTerms(industry: string): string[] {
+  if (!industry || industry.toLowerCase() === 'general') {
+    return []; // Don't generate useless terms
+  }
+
   const industryLower = industry.toLowerCase();
   const terms: string[] = [];
 
-  // Add "near me" variant
-  terms.push(`${industryLower} near me`);
-
-  // Add "best" variant
-  terms.push(`best ${industryLower}`);
-
-  // Add common local modifiers based on industry type
-  if (industryLower.includes('tire') || industryLower.includes('auto') || industryLower.includes('car')) {
-    terms.push(`${industryLower} shop`);
-    terms.push(`${industryLower} service`);
-  } else if (industryLower.includes('restaurant') || industryLower.includes('food') || industryLower.includes('pizza')) {
-    terms.push(`${industryLower} delivery`);
-    terms.push(`${industryLower} takeout`);
-  } else if (industryLower.includes('hotel') || industryLower.includes('lodging')) {
-    terms.push(`${industryLower} deals`);
-    terms.push(`cheap ${industryLower}`);
+  // Industry-specific search terms
+  if (industryLower.includes('tire')) {
+    terms.push('tire shop near me');
+    terms.push('best tire shop');
+    terms.push('tire installation');
+    terms.push('tire repair near me');
+  } else if (industryLower.includes('auto') || industryLower.includes('car') || industryLower.includes('dealer')) {
+    terms.push('auto repair near me');
+    terms.push('car dealer near me');
+    terms.push('auto service');
+    terms.push('car maintenance');
+  } else if (industryLower.includes('pizza')) {
+    terms.push('pizza near me');
+    terms.push('best pizza');
+    terms.push('pizza delivery');
+    terms.push('pizza takeout');
+  } else if (industryLower.includes('restaurant') || industryLower.includes('food')) {
+    terms.push('restaurants near me');
+    terms.push('best restaurants');
+    terms.push('food delivery');
+    terms.push('takeout near me');
+  } else if (industryLower.includes('hotel')) {
+    terms.push('hotels near me');
+    terms.push('best hotels');
+    terms.push('hotel deals');
+    terms.push('cheap hotels');
+  } else if (industryLower.includes('coffee')) {
+    terms.push('coffee shop near me');
+    terms.push('best coffee');
+    terms.push('cafe near me');
+    terms.push('coffee delivery');
+  } else if (industryLower.includes('dentist') || industryLower.includes('dental')) {
+    terms.push('dentist near me');
+    terms.push('best dentist');
+    terms.push('dental clinic');
+    terms.push('emergency dentist');
+  } else if (industryLower.includes('gym') || industryLower.includes('fitness')) {
+    terms.push('gym near me');
+    terms.push('best gym');
+    terms.push('fitness center');
+    terms.push('24 hour gym');
+  } else if (industryLower.includes('salon') || industryLower.includes('hair')) {
+    terms.push('hair salon near me');
+    terms.push('best salon');
+    terms.push('haircut near me');
+    terms.push('beauty salon');
+  } else if (industryLower.includes('lawyer') || industryLower.includes('attorney')) {
+    terms.push('lawyer near me');
+    terms.push('best lawyer');
+    terms.push('attorney near me');
+    terms.push('law firm');
+  } else if (industryLower.includes('bank')) {
+    terms.push('bank near me');
+    terms.push('best bank');
+    terms.push('atm near me');
+    terms.push('credit union');
   } else {
-    // Generic local terms
-    terms.push(`local ${industryLower}`);
-    terms.push(`${industryLower} store`);
+    // Generic but still useful
+    terms.push(`${industryLower} near me`);
+    terms.push(`best ${industryLower}`);
+    terms.push(`${industryLower} services`);
+    terms.push(`top ${industryLower}`);
   }
 
-  return terms.slice(0, 5);
+  return terms.slice(0, 4);
 }
 
 export function GoogleMapsPanel({ brandName, competitors, locationCode = 2840, languageCode = 'en', industry }: GoogleMapsPanelProps) {
+  // Infer the actual industry from brand/competitors if "General" or empty
+  const detectedIndustry = inferIndustry(brandName, competitors, industry);
+
   const [data, setData] = useState<GoogleMapsResponse | null>(null);
   const [savedAnalyses, setSavedAnalyses] = useState<SavedAnalysis[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -147,8 +283,8 @@ export function GoogleMapsPanel({ brandName, competitors, locationCode = 2840, l
 
   // Custom search terms - initialize with industry-based defaults
   const [searchTerms, setSearchTerms] = useState<string[]>(() => {
-    if (industry) {
-      return generateDefaultSearchTerms(industry);
+    if (detectedIndustry) {
+      return generateDefaultSearchTerms(detectedIndustry);
     }
     return [];
   });
@@ -159,16 +295,16 @@ export function GoogleMapsPanel({ brandName, competitors, locationCode = 2840, l
   // Keyword suggestions
   const [keywordSuggestions, setKeywordSuggestions] = useState<{ keyword: string; searchVolume: number }[]>([]);
   const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(false);
-  const [industryKeyword, setIndustryKeyword] = useState(industry || '');
+  const [industryKeyword, setIndustryKeyword] = useState(detectedIndustry || '');
 
-  // Initialize search terms when industry changes (only once)
+  // Initialize search terms when detected industry changes (only once)
   useEffect(() => {
-    if (industry && !hasInitializedTerms && searchTerms.length === 0) {
-      setSearchTerms(generateDefaultSearchTerms(industry));
-      setIndustryKeyword(industry);
+    if (detectedIndustry && !hasInitializedTerms && searchTerms.length === 0) {
+      setSearchTerms(generateDefaultSearchTerms(detectedIndustry));
+      setIndustryKeyword(detectedIndustry);
       setHasInitializedTerms(true);
     }
-  }, [industry, hasInitializedTerms, searchTerms.length]);
+  }, [detectedIndustry, hasInitializedTerms, searchTerms.length]);
 
   // Load saved analyses on mount
   useEffect(() => {
@@ -416,9 +552,9 @@ export function GoogleMapsPanel({ brandName, competitors, locationCode = 2840, l
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
         </svg>
         Category Search Terms
-        {industry && (
+        {detectedIndustry && (
           <span className="text-xs font-normal px-2 py-0.5 bg-green-100 dark:bg-green-900/40 text-green-600 dark:text-green-400 rounded-full">
-            Auto-filled from: {industry}
+            Detected: {detectedIndustry}
           </span>
         )}
       </h3>

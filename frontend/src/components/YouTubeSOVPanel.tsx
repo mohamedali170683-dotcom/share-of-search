@@ -244,20 +244,6 @@ export function YouTubeSOVPanel({ brandName, competitors, locationCode = 2840, l
     saveChannelConfig(updated, competitorChannels);
   };
 
-  // Refresh stats for all owned channels
-  const refreshChannelStats = async () => {
-    const updatedChannels = await Promise.all(
-      ownedChannels.map(async (channel) => {
-        const stats = await fetchChannelStats(channel.id);
-        if (stats.videoCount !== undefined) {
-          return { ...channel, ...stats };
-        }
-        return channel;
-      })
-    );
-    saveChannelConfig(updatedChannels, competitorChannels);
-  };
-
   // Remove an owned channel
   const removeOwnedChannel = (channelId: string) => {
     const updated = ownedChannels.filter(c => c.id !== channelId);

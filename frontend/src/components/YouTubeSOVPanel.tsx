@@ -197,85 +197,125 @@ export function YouTubeSOVPanel({ brandName, competitors, locationCode = 2840, l
 
 
   // Check if a video is relevant to the brand context (comprehensive relevance filter)
+  // This filter works for ANY brand by detecting common irrelevant content patterns
   const isVideoRelevantToBrand = (video: YouTubeVideo, brand: string): boolean => {
     const titleLower = video.title.toLowerCase();
     const channelLower = (video.channelName || '').toLowerCase();
     const brandLower = brand.toLowerCase();
 
-    // Tire/auto context keywords - video MUST have at least one of these to be relevant
-    const autoContextKeywords = [
-      'tire', 'tyre', 'tires', 'tyres', 'wheel', 'wheels', 'rim', 'rims',
-      'car', 'cars', 'vehicle', 'vehicles', 'auto', 'automotive', 'automobile',
-      'driving', 'drive', 'driver', 'road', 'highway',
-      'race', 'racing', 'motorsport', 'f1', 'formula', 'nascar', 'rally', 'drift',
-      'suv', 'truck', 'sedan', 'coupe', 'hatchback', 'crossover',
-      'brake', 'brakes', 'suspension', 'handling', 'grip', 'traction',
-      'winter', 'summer', 'all-season', 'performance', 'sport',
-      'review', 'test', 'comparison', 'vs', 'versus',
-      'install', 'installation', 'change', 'swap', 'upgrade',
-      'mpg', 'fuel', 'mileage', 'economy',
-      'noise', 'comfort', 'wet', 'dry', 'snow', 'ice',
-      // German auto terms
-      'reifen', 'fahrzeug', 'wagen', 'auto', 'pkw', 'lkw',
+    // ============================================
+    // GENERIC IRRELEVANT CONTENT DETECTION
+    // These patterns indicate entertainment/unrelated content for ANY brand
+    // ============================================
+
+    // Entertainment/Media channels - almost always irrelevant for business brands
+    const entertainmentChannelPatterns = [
+      'comedy', 'funny', 'humor', 'jokes', 'sketch', 'parody', 'satire',
+      'music', 'vevo', 'records', 'official artist', 'lyrics',
+      'movie', 'film', 'trailer', 'cinema', 'hollywood',
+      'tv show', 'series', 'episode', 'netflix', 'hbo', 'disney', 'amazon prime', 'hulu', 'peacock',
+      'gaming', 'gamer', 'gameplay', 'let\'s play', 'twitch', 'esports',
+      'cooking', 'recipe', 'chef', 'kitchen', 'food network', 'tasty',
+      'vlog', 'daily vlog', 'lifestyle', 'family vlog',
     ];
 
-    // Known irrelevant patterns for specific brands
-    const irrelevantPatterns: Record<string, string[]> = {
-      'continental': [
-        'breakfast', 'hotel', 'cuisine', 'food', 'restaurant', 'dining', 'meal', 'brunch',
-        'flight', 'airline', 'airways', 'aviation', 'airport', 'plane',
-        'drift', 'divide', 'congress', 'army', 'soldier', 'war', 'battle',
-        'key & peele', 'key and peele', 'comedy', 'sketch', 'skit', 'funny',
-        'music video', 'official video', 'official music', 'rap', 'hip hop', 'song', 'album', 'feat.',
-        'movie', 'film', 'trailer', 'netflix', 'hbo', 'amazon prime', 'disney',
-        'peacock', 'john wick', 'lincoln',
-      ],
-      'bridgestone': [
-        'golf', 'country club', 'pga', 'tournament', 'invitational',
-      ],
-      'michelin': [
-        'star', 'restaurant', 'chef', 'dining', 'guide', 'culinary', 'cuisine', 'food', 'meal',
-        'bib gourmand', 'fine dining', 'gourmet',
-      ],
-      'goodyear': [
-        'blimp', 'airship', 'zeppelin',
-      ],
-      'pirelli': [
-        'calendar', 'photography', 'model', 'photoshoot',
-      ],
+    // Entertainment content in titles - generic patterns
+    const entertainmentTitlePatterns = [
+      'official video', 'official music', 'music video', 'lyric video', 'audio',
+      'full movie', 'full episode', 'trailer', 'teaser', 'behind the scenes',
+      'comedy', 'funny', 'hilarious', 'prank', 'challenge', 'react',
+      'feat.', 'ft.', '(official)', '[official]',
+      'gameplay', 'walkthrough', 'let\'s play', 'playthrough',
+      'mukbang', 'asmr', 'relaxing', 'sleep', 'meditation',
+      'recipe', 'how to cook', 'cooking', 'baking',
+      'unboxing' // unless combined with product context
+    ];
+
+    // Check if this looks like entertainment content
+    const isEntertainmentChannel = entertainmentChannelPatterns.some(p => channelLower.includes(p));
+    const hasEntertainmentTitle = entertainmentTitlePatterns.some(p => titleLower.includes(p));
+
+    // ============================================
+    // BRAND-SPECIFIC IRRELEVANT PATTERNS
+    // Common words that share brand names but are unrelated
+    // ============================================
+    const brandSpecificIrrelevant: Record<string, string[]> = {
+      // Tire brands with common word conflicts
+      'continental': ['breakfast', 'hotel', 'airline', 'flight', 'drift', 'divide', 'congress', 'army'],
+      'michelin': ['star', 'restaurant', 'chef', 'dining', 'guide', 'gourmet', 'bib gourmand'],
+      'bridgestone': ['golf', 'country club', 'pga', 'invitational'],
+      'goodyear': ['blimp', 'airship'],
+      'pirelli': ['calendar', 'model', 'photoshoot'],
+      // Tech brands
+      'apple': ['fruit', 'recipe', 'pie', 'cider', 'orchard', 'farm'],
+      'amazon': ['rainforest', 'river', 'jungle', 'wildlife', 'tribe'],
+      'oracle': ['tarot', 'psychic', 'fortune', 'prophecy', 'spiritual'],
+      'shell': ['beach', 'seashell', 'ocean', 'craft'],
+      // Other common conflicts
+      'crown': ['royal', 'king', 'queen', 'princess', 'monarchy', 'tiara'],
+      'target': ['shooting', 'archery', 'bullseye', 'aim'],
+      'visa': ['immigration', 'passport', 'embassy', 'travel document'],
+      'jaguar': ['animal', 'wildlife', 'zoo', 'cat', 'jungle'],
+      'puma': ['animal', 'wildlife', 'zoo', 'cat'],
+      'dove': ['bird', 'soap', 'chocolate'], // context dependent
     };
 
-    // Known irrelevant channel names
-    const irrelevantChannels = [
-      'peacock', 'comedy central', 'key & peele', 'netflix', 'hbo', 'amazon',
-      'music', 'vevo', 'official', 'records', 'entertainment',
+    const brandPatterns = brandSpecificIrrelevant[brandLower] || [];
+    const hasBrandSpecificIrrelevant = brandPatterns.some(p => titleLower.includes(p));
+
+    // ============================================
+    // POSITIVE CONTEXT DETECTION
+    // Keywords that indicate business/product relevance
+    // ============================================
+
+    // Generic business/product context (works for any industry)
+    const businessContextKeywords = [
+      // Product-related
+      'review', 'test', 'comparison', 'vs', 'versus', 'best', 'top',
+      'unboxing', 'hands on', 'hands-on', 'first look', 'first impression',
+      'guide', 'tutorial', 'how to', 'tips', 'advice',
+      'buy', 'purchase', 'price', 'cost', 'worth it', 'value',
+      'quality', 'performance', 'durability', 'reliability',
+      'pros and cons', 'honest', 'real', 'truth about',
+      // Industry mentions
+      'industry', 'market', 'business', 'company', 'brand', 'manufacturer',
+      'product', 'service', 'solution', 'technology', 'innovation',
+      'launch', 'release', 'new', 'latest', 'updated', '2024', '2025', '2026',
+      // Automotive specific (common for tire brands)
+      'tire', 'tyre', 'wheel', 'car', 'vehicle', 'auto', 'automotive',
+      'driving', 'road', 'race', 'racing', 'motorsport', 'f1', 'formula',
+      'suv', 'truck', 'sedan', 'brake', 'suspension', 'handling',
+      // German automotive terms
+      'reifen', 'fahrzeug', 'wagen', 'pkw', 'lkw',
     ];
 
-    // Check if channel name suggests irrelevant content
-    const isIrrelevantChannel = irrelevantChannels.some(c => channelLower.includes(c));
+    const hasBusinessContext = businessContextKeywords.some(k => titleLower.includes(k));
 
-    // Check for brand-specific irrelevant patterns
-    const brandPatterns = irrelevantPatterns[brandLower] || [];
-    const hasIrrelevantPattern = brandPatterns.some(pattern => titleLower.includes(pattern));
+    // ============================================
+    // DECISION LOGIC
+    // ============================================
 
-    // Check if title has auto context
-    const hasAutoContext = autoContextKeywords.some(k => titleLower.includes(k));
-
-    // For earned media (not from the brand's official channel), require auto context
-    // If it has an irrelevant pattern OR is from an irrelevant channel, definitely filter it out
-    if (hasIrrelevantPattern || isIrrelevantChannel) {
-      // Only keep if it explicitly has auto context despite the irrelevant pattern
-      return hasAutoContext;
+    // 1. If from entertainment channel AND no business context → filter out
+    if (isEntertainmentChannel && !hasBusinessContext) {
+      return false;
     }
 
-    // For videos without obvious irrelevant patterns, still prefer those with auto context
-    // But don't filter out videos that might be legitimate brand mentions
-    // Check if the title actually mentions the brand name meaningfully
-    if (!titleLower.includes(brandLower)) {
-      // Brand not even in title - likely irrelevant
-      return hasAutoContext;
+    // 2. If title has entertainment patterns AND no business context → filter out
+    if (hasEntertainmentTitle && !hasBusinessContext) {
+      return false;
     }
 
+    // 3. If has brand-specific irrelevant pattern AND no business context → filter out
+    if (hasBrandSpecificIrrelevant && !hasBusinessContext) {
+      return false;
+    }
+
+    // 4. If brand name not in title at all, require business context
+    if (!titleLower.includes(brandLower) && !hasBusinessContext) {
+      return false;
+    }
+
+    // 5. Otherwise, consider it potentially relevant
     return true;
   };
 

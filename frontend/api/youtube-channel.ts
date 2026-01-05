@@ -444,7 +444,7 @@ async function resolveChannelId(
       searchUrl.searchParams.set('part', 'snippet');
       searchUrl.searchParams.set('type', 'channel');
       searchUrl.searchParams.set('q', handle);
-      searchUrl.searchParams.set('maxResults', '5');
+      searchUrl.searchParams.set('maxResults', '10'); // Get more results for better matching
       searchUrl.searchParams.set('key', apiKey);
 
       const searchResponse = await fetch(searchUrl.toString());
@@ -455,16 +455,17 @@ async function resolveChannelId(
         console.log(`[YouTube API] Handle search returned ${items.length} results for ${handle}`);
 
         if (items.length > 0) {
-          // Try to find best match by checking customUrl
+          // Try to find EXACT match by checking customUrl
           const handleLower = handle.toLowerCase().replace('@', '');
 
+          // First pass: look for exact customUrl match
           for (const item of items) {
             const channelId = item.id?.channelId || item.snippet?.channelId;
             if (!channelId) continue;
 
             // Verify channel and check customUrl
             const verifyUrl = new URL('https://www.googleapis.com/youtube/v3/channels');
-            verifyUrl.searchParams.set('part', 'snippet');
+            verifyUrl.searchParams.set('part', 'snippet,statistics');
             verifyUrl.searchParams.set('id', channelId);
             verifyUrl.searchParams.set('key', apiKey);
 
@@ -473,21 +474,50 @@ async function resolveChannelId(
               const verifyData = await verifyResponse.json();
               const channel = verifyData.items?.[0];
               const customUrl = (channel?.snippet?.customUrl || '').toLowerCase().replace('@', '');
+              const videoCount = parseInt(channel?.statistics?.videoCount || '0', 10);
 
-              // Check for match (exact or partial)
-              if (customUrl === handleLower || customUrl.includes(handleLower) || handleLower.includes(customUrl)) {
-                console.log(`Found exact match for ${handle}: ${channel?.snippet?.title} (${channelId})`);
+              // EXACT match only - the customUrl must match the handle exactly
+              if (customUrl === handleLower) {
+                console.log(`[YouTube API] EXACT match for ${handle}: ${channel?.snippet?.title} (${channelId}, ${videoCount} videos)`);
                 return { channelId };
               }
             }
           }
 
-          // If no exact match, return first result
-          const firstChannelId = items[0].id?.channelId || items[0].snippet?.channelId;
-          if (firstChannelId) {
-            console.log(`No exact match for ${handle}, using first result: ${firstChannelId}`);
-            return { channelId: firstChannelId };
+          // Second pass: if no exact match, look for very close matches (case differences only)
+          for (const item of items) {
+            const channelId = item.id?.channelId || item.snippet?.channelId;
+            if (!channelId) continue;
+
+            const verifyUrl = new URL('https://www.googleapis.com/youtube/v3/channels');
+            verifyUrl.searchParams.set('part', 'snippet,statistics');
+            verifyUrl.searchParams.set('id', channelId);
+            verifyUrl.searchParams.set('key', apiKey);
+
+            const verifyResponse = await fetch(verifyUrl.toString());
+            if (verifyResponse.ok) {
+              const verifyData = await verifyResponse.json();
+              const channel = verifyData.items?.[0];
+              const customUrl = (channel?.snippet?.customUrl || '').toLowerCase().replace('@', '');
+              const channelTitle = (channel?.snippet?.title || '').toLowerCase();
+              const videoCount = parseInt(channel?.statistics?.videoCount || '0', 10);
+
+              // Close match: customUrl contains the handle or handle contains customUrl
+              // But only if the handle has a significant portion of the customUrl
+              if (customUrl && handleLower && (
+                (customUrl.includes(handleLower) && handleLower.length >= customUrl.length * 0.8) ||
+                (handleLower.includes(customUrl) && customUrl.length >= handleLower.length * 0.8)
+              )) {
+                console.log(`[YouTube API] Close match for ${handle}: ${channel?.snippet?.title} (${channelId}, ${videoCount} videos, customUrl: @${customUrl})`);
+                return { channelId };
+              }
+            }
           }
+
+          // If still no match, DON'T use first result - return error instead
+          // This prevents wrong channels from being selected
+          console.warn(`[YouTube API] No matching channel found for handle ${handle} - all ${items.length} results checked`);
+          return { channelId: null, error: `Channel ${handle} not found. Please verify the handle is correct.` };
         }
       } else {
         const errorText = await searchResponse.text();
@@ -500,6 +530,9 @@ async function resolveChannelId(
     } catch (error) {
       console.error('[YouTube API] Error resolving handle:', error);
     }
+
+    // If we get here for a handle, it wasn't found
+    return { channelId: null, error: `Channel ${handle} not found. Please verify the handle is correct.` };
   }
 
   // For brand names (not handles), use multi-strategy search

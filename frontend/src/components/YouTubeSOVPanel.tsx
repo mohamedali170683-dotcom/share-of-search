@@ -1467,7 +1467,7 @@ export function YouTubeSOVPanel({ brandName, competitors, locationCode = 2840, l
             )}
           </div>
           {(hasYouTubeAPIStats || hasAnyCompetitorAPIStats) && (
-            <p className="text-xs text-emerald-600 dark:text-emerald-400 mb-4 flex items-center gap-1">
+            <p className="text-xs text-emerald-600 dark:text-emerald-400 mb-2 flex items-center gap-1">
               <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
@@ -1478,6 +1478,26 @@ export function YouTubeSOVPanel({ brandName, competitors, locationCode = 2840, l
                 : `${competitorsWithAPIStats.length} competitor(s) use YouTube API data`}
             </p>
           )}
+
+          {/* Disclaimer about channel verification */}
+          <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-lg p-3 mb-4">
+            <div className="flex items-start gap-2">
+              <svg className="w-4 h-4 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <div className="text-xs text-amber-800 dark:text-amber-200">
+                <p className="font-medium mb-1">Channel Verification</p>
+                <p className="text-amber-700 dark:text-amber-300">
+                  Auto-detected channels may not always be the official brand channel. Please verify each channel is correct by clicking the link.
+                  If incorrect, click the <span className="font-mono bg-amber-100 dark:bg-amber-800 px-1 rounded">×</span> to remove and manually add the correct channel URL or handle (e.g., @ContinentalCorporation).
+                </p>
+                <p className="text-amber-700 dark:text-amber-300 mt-1">
+                  <strong>Views shown</strong> are <strong>total channel lifetime views</strong> from YouTube Data API - representing the channel's overall reach, not just recent performance.
+                </p>
+              </div>
+            </div>
+          </div>
+
           <div className="space-y-4">
             {allBrands.map((brand, idx) => {
               const isYourBrand = idx === 0;

@@ -975,33 +975,204 @@ export function YouTubeSOVPanel({ brandName, competitors, locationCode = 2840, l
     });
   };
 
-  // Initial state - show fetch button
+  // Check if setup is complete (at least brand channel configured)
+  const isSetupComplete = ownedChannels.length > 0;
+
+  // Initial state - show Channel Setup section
   if (!data && !isLoading && !error) {
     return (
       <div className="space-y-6">
         <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6">
-          <div className="text-center">
+          <div className="text-center mb-6">
             <div className="w-16 h-16 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center mx-auto mb-4">
               <svg className="w-8 h-8 text-red-600 dark:text-red-400" fill="currentColor" viewBox="0 0 24 24">
                 <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
               </svg>
             </div>
             <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
-              YouTube Share of Voice
+              YouTube Share of Voice Analysis
             </h3>
-            <p className="text-sm text-gray-500 dark:text-gray-400 mb-4 max-w-md mx-auto">
-              Analyze your brand's presence in YouTube search results compared to competitors.
-              See which videos rank for brand searches and measure your share of voice by views.
+            <p className="text-sm text-gray-500 dark:text-gray-400 max-w-md mx-auto">
+              Configure YouTube channels for your brand and competitors to get accurate visibility metrics.
             </p>
+          </div>
+
+          {/* Step 1: Your Brand's YouTube Channel(s) */}
+          <div className="mb-6">
+            <div className="flex items-center gap-2 mb-3">
+              <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${ownedChannels.length > 0 ? 'bg-emerald-500 text-white' : 'bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-400'}`}>
+                {ownedChannels.length > 0 ? '✓' : '1'}
+              </span>
+              <h4 className="font-semibold text-gray-900 dark:text-white">Your Brand's YouTube Channel(s)</h4>
+              <span className="text-xs text-red-500">*Required</span>
+            </div>
+
+            {/* Added channels list */}
+            {ownedChannels.length > 0 && (
+              <div className="space-y-2 mb-3">
+                {ownedChannels.map((channel) => (
+                  <div key={channel.id} className="flex items-center justify-between p-3 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-lg">
+                    <div className="flex items-center gap-2">
+                      <span className="w-2 h-2 bg-emerald-500 rounded-full"></span>
+                      <a href={`https://youtube.com/channel/${channel.id}`} target="_blank" rel="noopener noreferrer" className="text-sm font-medium text-emerald-700 dark:text-emerald-300 hover:underline">
+                        {channel.name}
+                      </a>
+                      {channel.videoCount !== undefined && (
+                        <span className="text-xs text-emerald-600 dark:text-emerald-400">
+                          ({channel.videoCount.toLocaleString()} videos)
+                        </span>
+                      )}
+                    </div>
+                    <button
+                      onClick={() => removeOwnedChannel(channel.id)}
+                      className="p-1 text-gray-400 hover:text-red-500 transition-colors"
+                      title="Remove channel"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Add channel input */}
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={channelInput}
+                onChange={(e) => setChannelInput(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleAddChannel()}
+                placeholder="Enter YouTube channel URL or @handle"
+                className="flex-1 px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 focus:ring-2 focus:ring-red-500 focus:border-transparent"
+              />
+              <button
+                onClick={handleAddChannel}
+                disabled={!channelInput.trim()}
+                className="px-4 py-2 bg-red-600 text-white text-sm rounded-lg hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                Add
+              </button>
+            </div>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
+              Examples: @YourBrandOfficial, youtube.com/@YourBrand, or channel URL
+            </p>
+          </div>
+
+          {/* Step 2: Competitor YouTube Channels */}
+          <div className="mb-6">
+            <div className="flex items-center gap-2 mb-3">
+              <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${Object.keys(competitorChannels).some(k => competitorChannels[k]?.length > 0) ? 'bg-emerald-500 text-white' : 'bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-400'}`}>
+                {Object.keys(competitorChannels).some(k => competitorChannels[k]?.length > 0) ? '✓' : '2'}
+              </span>
+              <h4 className="font-semibold text-gray-900 dark:text-white">Competitor YouTube Channels</h4>
+              <span className="text-xs text-gray-500">(Optional but recommended)</span>
+            </div>
+
+            <div className="space-y-3">
+              {competitors.map((competitor) => {
+                const channels = competitorChannels[competitor] || [];
+                const isAdding = showCompetitorChannelInput === competitor;
+
+                return (
+                  <div key={competitor} className="p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="font-medium text-gray-800 dark:text-gray-200">{competitor}</span>
+                      {channels.length > 0 && (
+                        <span className="text-xs text-emerald-600 dark:text-emerald-400">
+                          {channels.length} channel{channels.length > 1 ? 's' : ''} added
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Added competitor channels */}
+                    {channels.length > 0 && (
+                      <div className="space-y-1 mb-2">
+                        {channels.map((channel) => (
+                          <div key={channel.id} className="flex items-center justify-between py-1 px-2 bg-white dark:bg-gray-800 rounded text-sm">
+                            <a href={`https://youtube.com/channel/${channel.id}`} target="_blank" rel="noopener noreferrer" className="text-blue-600 dark:text-blue-400 hover:underline truncate">
+                              {channel.name}
+                            </a>
+                            <button
+                              onClick={() => removeCompetitorChannel(competitor, channel.id)}
+                              className="p-0.5 text-gray-400 hover:text-red-500"
+                            >
+                              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                              </svg>
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Add competitor channel */}
+                    {isAdding ? (
+                      <div className="flex gap-2">
+                        <input
+                          type="text"
+                          value={competitorChannelInput}
+                          onChange={(e) => setCompetitorChannelInput(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') handleAddCompetitorChannel(competitor);
+                            if (e.key === 'Escape') setShowCompetitorChannelInput(null);
+                          }}
+                          placeholder="Channel URL or @handle"
+                          className="flex-1 px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                          autoFocus
+                        />
+                        <button
+                          onClick={() => handleAddCompetitorChannel(competitor)}
+                          className="px-2 py-1 bg-blue-600 text-white text-xs rounded hover:bg-blue-700"
+                        >
+                          Add
+                        </button>
+                        <button
+                          onClick={() => setShowCompetitorChannelInput(null)}
+                          className="px-2 py-1 text-gray-500 text-xs hover:text-gray-700"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => {
+                          setShowCompetitorChannelInput(competitor);
+                          setCompetitorChannelInput('');
+                        }}
+                        className="text-xs text-blue-600 dark:text-blue-400 hover:underline"
+                      >
+                        + Add {competitor}'s YouTube channel
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Run Analysis Button */}
+          <div className="border-t border-gray-200 dark:border-gray-700 pt-6">
             <button
               onClick={fetchYouTubeSOV}
-              className="px-6 py-2.5 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-medium flex items-center gap-2 mx-auto"
+              disabled={!isSetupComplete}
+              className={`w-full px-6 py-3 rounded-lg font-medium flex items-center justify-center gap-2 transition-colors ${
+                isSetupComplete
+                  ? 'bg-red-600 text-white hover:bg-red-700'
+                  : 'bg-gray-200 dark:bg-gray-700 text-gray-500 dark:text-gray-400 cursor-not-allowed'
+              }`}
             >
               <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
                 <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
               </svg>
-              Analyze YouTube Presence
+              {isSetupComplete ? 'Run YouTube Analysis' : 'Add your brand channel to continue'}
             </button>
+            {!isSetupComplete && (
+              <p className="text-xs text-amber-600 dark:text-amber-400 text-center mt-2">
+                Please add at least your brand's YouTube channel to run the analysis
+              </p>
+            )}
           </div>
         </div>
       </div>

@@ -77,11 +77,15 @@ const STORAGE_KEY = 'google-maps-analyses';
 
 interface LocalInsights {
   summary: string;
-  strengths: string[];
-  opportunities: string[];
-  competitorInsight: string;
-  reviewStrategy: string;
+  keyConclusion: string;
   priorityAction: string;
+  reviewStrategy: string;
+  competitorThreat: string;
+  quickWins: string[];
+  // Legacy fields for backwards compatibility
+  strengths?: string[];
+  opportunities?: string[];
+  competitorInsight?: string;
 }
 
 export function GoogleMapsPanel({ brandName, competitors, locationCode = 2840, languageCode = 'en' }: GoogleMapsPanelProps) {
@@ -89,7 +93,6 @@ export function GoogleMapsPanel({ brandName, competitors, locationCode = 2840, l
   const [savedAnalyses, setSavedAnalyses] = useState<SavedAnalysis[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [showMethodology, setShowMethodology] = useState(false);
 
   // AI Insights
   const [insights, setInsights] = useState<LocalInsights | null>(null);
@@ -303,86 +306,6 @@ export function GoogleMapsPanel({ brandName, competitors, locationCode = 2840, l
     );
   };
 
-  // Methodology section
-  const MethodologySection = () => (
-    <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl p-4 mb-6">
-      <button
-        onClick={() => setShowMethodology(!showMethodology)}
-        className="flex items-center justify-between w-full text-left"
-      >
-        <div className="flex items-center gap-2">
-          <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-          </svg>
-          <span className="font-medium text-blue-800 dark:text-blue-200">How is Local SEO Analyzed? (Formulas & Methodology)</span>
-        </div>
-        <svg className={`w-5 h-5 text-blue-600 transition-transform ${showMethodology ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-        </svg>
-      </button>
-
-      {showMethodology && (
-        <div className="mt-4 space-y-4 text-sm text-blue-800 dark:text-blue-200">
-          <div>
-            <h4 className="font-semibold mb-2">Local Visibility Score (by Listings)</h4>
-            <p className="text-blue-700 dark:text-blue-300 mb-2">
-              Measures how often your business appears in Google Maps search results compared to competitors.
-            </p>
-            <div className="bg-white dark:bg-gray-800 rounded p-3 font-mono text-xs">
-              <p className="font-bold">Formula: Visibility SOV = (Your Listings / Total Listings) × 100</p>
-              {data?.methodology?.visibilityFormula && (
-                <p className="mt-2 text-blue-600 dark:text-blue-400">
-                  <strong>Your Calculation:</strong> {data.methodology.visibilityFormula}
-                </p>
-              )}
-            </div>
-          </div>
-
-          <div>
-            <h4 className="font-semibold mb-2">Review Share of Voice</h4>
-            <p className="text-blue-700 dark:text-blue-300 mb-2">
-              Compares your total review count to competitors. More reviews = stronger trust signals.
-            </p>
-            <div className="bg-white dark:bg-gray-800 rounded p-3 font-mono text-xs">
-              <p className="font-bold">Formula: Review SOV = (Your Reviews / Total Reviews) × 100</p>
-              {data?.methodology?.reviewSOVFormula && (
-                <p className="mt-2 text-blue-600 dark:text-blue-400">
-                  <strong>Your Calculation:</strong> {data.methodology.reviewSOVFormula}
-                </p>
-              )}
-            </div>
-          </div>
-
-          <div>
-            <h4 className="font-semibold mb-2">Brand Comparison Method</h4>
-            <p className="text-blue-700 dark:text-blue-300">
-              <strong>Step 1:</strong> Search Google Maps for each brand name (your brand + competitors).<br/>
-              <strong>Step 2:</strong> Collect listings from search results (up to 100 per search).<br/>
-              <strong>Step 3:</strong> Match listings to brands where the <strong>business title contains the brand name</strong> or <strong>domain matches the brand</strong>.<br/>
-              <strong>Step 4:</strong> Count listings and sum reviews for each brand.
-            </p>
-          </div>
-
-          <div>
-            <h4 className="font-semibold mb-2">Rating Analysis</h4>
-            <p className="text-blue-700 dark:text-blue-300">
-              Average rating is calculated as a weighted average across all locations (weighted by review count).
-              Higher ratings improve click-through rates and conversions.
-            </p>
-          </div>
-
-          <div>
-            <h4 className="font-semibold mb-2">Data Source</h4>
-            <p className="text-blue-700 dark:text-blue-300">
-              Results are fetched from <strong>Google Maps via DataForSEO SERP API</strong>.
-              Analysis includes up to 100 listings per search query. Data reflects what appears in Google Maps search results at the time of analysis.
-            </p>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-
   // Search terms setup
   const SearchTermsSetup = () => (
     <div className="bg-gradient-to-r from-green-50 to-blue-50 dark:from-green-900/20 dark:to-blue-900/20 rounded-xl shadow-sm p-6 border border-green-200 dark:border-green-800 mb-6">
@@ -465,11 +388,32 @@ export function GoogleMapsPanel({ brandName, competitors, locationCode = 2840, l
               </svg>
             </div>
             <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
-              Google Maps & Local SEO
+              Local Visibility & Customer Attention
             </h3>
-            <p className="text-sm text-gray-500 dark:text-gray-400 mb-4 max-w-md mx-auto">
-              Analyze your brand's local presence on Google Maps. See rankings, reviews, and compare against competitors in your area.
+            <p className="text-sm text-gray-600 dark:text-gray-300 mb-2 max-w-md mx-auto">
+              Understand your brand's presence in Google Maps local search results.
             </p>
+            <div className="text-left max-w-md mx-auto mb-4 space-y-2">
+              <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
+                <svg className="w-4 h-4 text-green-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                </svg>
+                <span><strong>Local Visibility:</strong> How often does your brand appear?</span>
+              </div>
+              <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
+                <svg className="w-4 h-4 text-purple-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
+                </svg>
+                <span><strong>Customer Attention:</strong> What share of reviews do you own?</span>
+              </div>
+              <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
+                <svg className="w-4 h-4 text-orange-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                </svg>
+                <span><strong>Competitive Position:</strong> Where do you rank vs competitors?</span>
+              </div>
+            </div>
             <button
               onClick={fetchGoogleMaps}
               className="px-6 py-2.5 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium flex items-center gap-2 mx-auto"
@@ -531,47 +475,55 @@ export function GoogleMapsPanel({ brandName, competitors, locationCode = 2840, l
 
   return (
     <div className="space-y-6">
-      <MethodologySection />
-
       {/* Analysis timestamp */}
       <div className="flex items-center justify-between text-sm text-gray-500 dark:text-gray-400">
         <span>Analysis from: {formatDateTime(data.timestamp)}</span>
         <span>Searched: {data.searchedKeywords?.slice(0, 3).join(', ')}</span>
       </div>
 
-      {/* SOV Summary Cards */}
+      {/* Core Metrics - Visibility & Attention */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6 border-l-4 border-green-500">
           <div className="flex items-center gap-3 mb-2">
             <div className="w-10 h-10 bg-green-100 dark:bg-green-900/30 rounded-lg flex items-center justify-center">
               <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
               </svg>
             </div>
             <div>
-              <p className="text-sm text-gray-500 dark:text-gray-400">Visibility (by listings)</p>
+              <p className="text-sm font-medium text-gray-700 dark:text-gray-300">Local Visibility</p>
               <p className="text-2xl font-bold text-gray-900 dark:text-white">{data.sov.byListings}%</p>
             </div>
           </div>
-          <p className="text-xs text-gray-500 dark:text-gray-400">
-            {data.yourBrand?.totalListings || 0} listings found in search results
+          <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
+            How often does your brand appear in local search results?
+          </p>
+          <p className="text-xs text-green-600 dark:text-green-400 mt-1">
+            {data.yourBrand?.totalListings || 0} of {(() => {
+              const total = (data.yourBrand?.totalListings || 0) + data.competitors.reduce((sum, c) => sum + c.totalListings, 0);
+              return total;
+            })()} total listings in results
           </p>
         </div>
 
-        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6 border-l-4 border-yellow-500">
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6 border-l-4 border-purple-500">
           <div className="flex items-center gap-3 mb-2">
-            <div className="w-10 h-10 bg-yellow-100 dark:bg-yellow-900/30 rounded-lg flex items-center justify-center">
-              <svg className="w-5 h-5 text-yellow-600" fill="currentColor" viewBox="0 0 20 20">
-                <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+            <div className="w-10 h-10 bg-purple-100 dark:bg-purple-900/30 rounded-lg flex items-center justify-center">
+              <svg className="w-5 h-5 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
               </svg>
             </div>
             <div>
-              <p className="text-sm text-gray-500 dark:text-gray-400">Review Share of Voice</p>
+              <p className="text-sm font-medium text-gray-700 dark:text-gray-300">Customer Attention</p>
               <p className="text-2xl font-bold text-gray-900 dark:text-white">{data.sov.byReviews}%</p>
             </div>
           </div>
-          <p className="text-xs text-gray-500 dark:text-gray-400">
-            {formatNumber(data.yourBrand?.totalReviews || 0)} total reviews
+          <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
+            What share of customer feedback do you own?
+          </p>
+          <p className="text-xs text-purple-600 dark:text-purple-400 mt-1">
+            {formatNumber(data.yourBrand?.totalReviews || 0)} reviews ({data.yourBrand?.avgRating?.toFixed(1) || 'N/A'}★ avg)
           </p>
         </div>
       </div>
@@ -661,7 +613,7 @@ export function GoogleMapsPanel({ brandName, competitors, locationCode = 2840, l
         </div>
       )}
 
-      {/* AI Insights */}
+      {/* Conclusion & Recommendation */}
       {(isLoadingInsights || insights || insightsError) && (
         <div className="bg-gradient-to-br from-indigo-50 to-green-50 dark:from-indigo-900/20 dark:to-green-900/20 rounded-xl shadow-sm p-6 border border-indigo-200 dark:border-indigo-800">
           <div className="flex items-center justify-between mb-4">
@@ -669,7 +621,7 @@ export function GoogleMapsPanel({ brandName, competitors, locationCode = 2840, l
               <svg className="w-5 h-5 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
               </svg>
-              AI Strategic Insights
+              Conclusion & Recommendation
             </h3>
           </div>
 
@@ -697,140 +649,203 @@ export function GoogleMapsPanel({ brandName, competitors, locationCode = 2840, l
 
           {insights && (
             <div className="space-y-4">
+              {/* Summary */}
               <div className="bg-white dark:bg-gray-800 rounded-lg p-4">
                 <p className="text-gray-700 dark:text-gray-300">{insights.summary}</p>
               </div>
 
-              {/* Priority Action */}
-              <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4">
-                <h4 className="font-semibold text-red-800 dark:text-red-200 text-sm flex items-center gap-2">
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                  </svg>
-                  Priority Action
-                </h4>
-                <p className="text-red-700 dark:text-red-300 text-sm mt-1">{insights.priorityAction}</p>
-              </div>
-
+              {/* Two Column: Key Conclusion + Priority Action */}
               <div className="grid md:grid-cols-2 gap-4">
-                {/* Strengths */}
-                <div className="bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-lg p-4">
-                  <h4 className="font-semibold text-emerald-800 dark:text-emerald-200 text-sm mb-2">Strengths</h4>
-                  <ul className="space-y-2">
-                    {insights.strengths.map((s, i) => (
-                      <li key={i} className="text-emerald-700 dark:text-emerald-300 text-sm flex items-start gap-2">
-                        <span className="text-emerald-500 mt-1">•</span>
-                        <span>{s}</span>
-                      </li>
-                    ))}
-                  </ul>
+                {/* Key Conclusion */}
+                <div className="bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800 rounded-lg p-4">
+                  <h4 className="font-semibold text-indigo-800 dark:text-indigo-200 text-sm flex items-center gap-2 mb-2">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    Key Conclusion
+                  </h4>
+                  <p className="text-indigo-700 dark:text-indigo-300 text-sm">{insights.keyConclusion}</p>
                 </div>
 
-                {/* Opportunities */}
-                <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
-                  <h4 className="font-semibold text-blue-800 dark:text-blue-200 text-sm mb-2">Opportunities</h4>
-                  <ul className="space-y-2">
-                    {insights.opportunities.map((o, i) => (
-                      <li key={i} className="text-blue-700 dark:text-blue-300 text-sm flex items-start gap-2">
-                        <span className="text-blue-500 mt-1">•</span>
-                        <span>{o}</span>
-                      </li>
-                    ))}
-                  </ul>
+                {/* Priority Action */}
+                <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4">
+                  <h4 className="font-semibold text-red-800 dark:text-red-200 text-sm flex items-center gap-2 mb-2">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                    </svg>
+                    Priority Action
+                  </h4>
+                  <p className="text-red-700 dark:text-red-300 text-sm">{insights.priorityAction}</p>
                 </div>
               </div>
 
-              {/* Review Strategy */}
-              <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4">
-                <h4 className="font-semibold text-yellow-800 dark:text-yellow-200 text-sm flex items-center gap-2">
-                  <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                    <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-                  </svg>
-                  Review Strategy
-                </h4>
-                <p className="text-yellow-700 dark:text-yellow-300 text-sm mt-1">{insights.reviewStrategy}</p>
+              {/* Quick Wins */}
+              {insights.quickWins && insights.quickWins.length > 0 && (
+                <div className="bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-lg p-4">
+                  <h4 className="font-semibold text-emerald-800 dark:text-emerald-200 text-sm flex items-center gap-2 mb-2">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                    Quick Wins
+                  </h4>
+                  <ul className="space-y-2">
+                    {insights.quickWins.map((win, i) => (
+                      <li key={i} className="text-emerald-700 dark:text-emerald-300 text-sm flex items-start gap-2">
+                        <span className="text-emerald-500 mt-0.5 font-bold">{i + 1}.</span>
+                        <span>{win}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {/* Additional Insights Row */}
+              <div className="grid md:grid-cols-2 gap-4">
+                {/* Competitor Threat */}
+                {insights.competitorThreat && (
+                  <div className="bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-lg p-4">
+                    <h4 className="font-semibold text-orange-800 dark:text-orange-200 text-sm flex items-center gap-2 mb-2">
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                      </svg>
+                      Competitor Threat
+                    </h4>
+                    <p className="text-orange-700 dark:text-orange-300 text-sm">{insights.competitorThreat}</p>
+                  </div>
+                )}
+
+                {/* Review Strategy */}
+                {insights.reviewStrategy && (
+                  <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4">
+                    <h4 className="font-semibold text-yellow-800 dark:text-yellow-200 text-sm flex items-center gap-2 mb-2">
+                      <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                        <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                      </svg>
+                      Review Strategy
+                    </h4>
+                    <p className="text-yellow-700 dark:text-yellow-300 text-sm">{insights.reviewStrategy}</p>
+                  </div>
+                )}
               </div>
             </div>
           )}
         </div>
       )}
 
-      {/* Top Listings */}
-      {data.allListings.length > 0 && (
-        <details className="bg-white dark:bg-gray-800 rounded-xl shadow-sm">
-          <summary className="p-6 cursor-pointer list-none">
-            <div className="flex items-center justify-between">
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
-                <svg className="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 10h16M4 14h16M4 18h16" />
-                </svg>
-                All Listings in Search Results
-                <span className="text-sm font-normal text-gray-500 dark:text-gray-400">
-                  ({data.allListings.length} businesses)
-                </span>
-              </h3>
-              <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-              </svg>
-            </div>
-          </summary>
-          <div className="px-6 pb-6">
-            <div className="space-y-3 max-h-[600px] overflow-y-auto">
-              {data.allListings.map((listing) => {
-                const isYourBrand = data.yourBrand && listing.title.toLowerCase().includes(data.yourBrand.name.toLowerCase());
+      {/* Listings Grouped by Category */}
+      {data.allListings.length > 0 && (() => {
+        // Group listings by category
+        const listingsByCategory = data.allListings.reduce((acc, listing) => {
+          const category = listing.category || 'Other';
+          if (!acc[category]) {
+            acc[category] = [];
+          }
+          acc[category].push(listing);
+          return acc;
+        }, {} as Record<string, typeof data.allListings>);
 
-                return (
-                  <div
-                    key={listing.placeId}
-                    className={`flex items-start gap-4 p-3 rounded-lg border ${
-                      isYourBrand
-                        ? 'bg-green-50 dark:bg-green-900/10 border-green-200 dark:border-green-800'
-                        : 'border-gray-200 dark:border-gray-700'
-                    }`}
-                  >
-                    <div className="flex-shrink-0 w-8 h-8 bg-gray-100 dark:bg-gray-700 rounded-full flex items-center justify-center">
-                      <span className="text-sm font-bold text-gray-600 dark:text-gray-300">#{listing.rank}</span>
-                    </div>
-                    {listing.mainImage && (
-                      <img
-                        src={listing.mainImage}
-                        alt={listing.title}
-                        className="w-16 h-16 object-cover rounded flex-shrink-0"
-                      />
-                    )}
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <h4 className="font-medium text-gray-900 dark:text-white text-sm">
-                          {listing.title}
-                        </h4>
-                        {isYourBrand && (
-                          <span className="px-2 py-0.5 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 text-xs rounded-full">
-                            Your Brand
+        // Sort categories by count (most listings first)
+        const sortedCategories = Object.entries(listingsByCategory)
+          .sort((a, b) => b[1].length - a[1].length);
+
+        return (
+          <details className="bg-white dark:bg-gray-800 rounded-xl shadow-sm">
+            <summary className="p-6 cursor-pointer list-none">
+              <div className="flex items-center justify-between">
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+                  <svg className="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                  </svg>
+                  Listings by Category
+                  <span className="text-sm font-normal text-gray-500 dark:text-gray-400">
+                    ({data.allListings.length} businesses in {sortedCategories.length} categories)
+                  </span>
+                </h3>
+                <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
+              </div>
+            </summary>
+            <div className="px-6 pb-6">
+              <div className="space-y-6 max-h-[700px] overflow-y-auto">
+                {sortedCategories.map(([category, listings]) => {
+                  const yourBrandCount = listings.filter(l =>
+                    data.yourBrand && l.title.toLowerCase().includes(data.yourBrand.name.toLowerCase())
+                  ).length;
+
+                  return (
+                    <div key={category} className="border-b border-gray-200 dark:border-gray-700 pb-4 last:border-0">
+                      {/* Category Header */}
+                      <div className="flex items-center justify-between mb-3">
+                        <div className="flex items-center gap-2">
+                          <span className="px-3 py-1 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 text-sm font-medium rounded-full">
+                            {category}
                           </span>
-                        )}
-                        {listing.isClaimed && (
-                          <span className="px-2 py-0.5 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 text-xs rounded-full">
-                            Claimed
+                          <span className="text-sm text-gray-500 dark:text-gray-400">
+                            {listings.length} listing{listings.length !== 1 ? 's' : ''}
                           </span>
-                        )}
+                          {yourBrandCount > 0 && (
+                            <span className="px-2 py-0.5 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 text-xs rounded-full">
+                              {yourBrandCount} yours
+                            </span>
+                          )}
+                        </div>
                       </div>
-                      <div className="flex items-center gap-2 mt-1">
-                        {listing.rating && <StarRating rating={listing.rating} count={listing.ratingCount} />}
-                        {listing.category && (
-                          <span className="text-xs text-gray-500 dark:text-gray-400">• {listing.category}</span>
-                        )}
+
+                      {/* Listings Grid */}
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        {listings.map((listing) => {
+                          const isYourBrand = data.yourBrand && listing.title.toLowerCase().includes(data.yourBrand.name.toLowerCase());
+
+                          return (
+                            <div
+                              key={listing.placeId}
+                              className={`flex items-start gap-3 p-3 rounded-lg border ${
+                                isYourBrand
+                                  ? 'bg-green-50 dark:bg-green-900/10 border-green-200 dark:border-green-800'
+                                  : 'border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50'
+                              }`}
+                            >
+                              <div className="flex-shrink-0 w-7 h-7 bg-gray-100 dark:bg-gray-700 rounded-full flex items-center justify-center">
+                                <span className="text-xs font-bold text-gray-600 dark:text-gray-300">#{listing.rank}</span>
+                              </div>
+                              {listing.mainImage && (
+                                <img
+                                  src={listing.mainImage}
+                                  alt={listing.title}
+                                  className="w-12 h-12 object-cover rounded flex-shrink-0"
+                                />
+                              )}
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <h4 className="font-medium text-gray-900 dark:text-white text-sm truncate">
+                                    {listing.title}
+                                  </h4>
+                                  {isYourBrand && (
+                                    <span className="px-1.5 py-0.5 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 text-xs rounded">
+                                      You
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="flex items-center gap-2 mt-0.5">
+                                  {listing.rating && <StarRating rating={listing.rating} count={listing.ratingCount} />}
+                                </div>
+                                <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 truncate">
+                                  {listing.address}
+                                </p>
+                              </div>
+                            </div>
+                          );
+                        })}
                       </div>
-                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 truncate">
-                        {listing.address}
-                      </p>
                     </div>
-                  </div>
-                );
-              })}
+                  );
+                })}
+              </div>
             </div>
-          </div>
-        </details>
-      )}
+          </details>
+        );
+      })()}
 
       {/* No listings message */}
       {data.allListings.length === 0 && (

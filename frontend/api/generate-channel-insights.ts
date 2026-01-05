@@ -83,12 +83,31 @@ interface PaidAdsData {
   };
 }
 
+interface BrandLocalData {
+  name: string;
+  totalListings: number;
+  avgRating: number;
+  totalReviews: number;
+  topRank: number | null;
+  categories: string[];
+}
+
+interface GoogleMapsData {
+  yourBrand: BrandLocalData;
+  competitors: BrandLocalData[];
+  sov: {
+    byListings: number;
+    byReviews: number;
+  };
+}
+
 interface RequestBody {
-  type: 'youtube' | 'paid-ads';
+  type: 'youtube' | 'paid-ads' | 'google-maps';
   brandName: string;
   industry?: string;
   youtubeData?: YouTubeData;
   paidAdsData?: PaidAdsData;
+  mapsData?: GoogleMapsData;
   competitors?: string[];
 }
 
@@ -111,7 +130,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
-    const { type, brandName, industry, youtubeData, paidAdsData, competitors } = req.body as RequestBody;
+    const { type, brandName, industry, youtubeData, paidAdsData, mapsData, competitors } = req.body as RequestBody;
 
     if (!brandName) {
       return res.status(400).json({ error: 'Brand name is required' });
@@ -245,6 +264,70 @@ ${!hasData ? 'Since no paid data exists, focus recommendations on whether/how th
 
 Return ONLY valid JSON:
 {"summary": "...", "strengths": ["...", "..."], "opportunities": ["...", "..."], "competitorInsight": "...", "budgetRecommendation": "...", "priorityAction": "..."}`;
+
+    } else if (type === 'google-maps' && mapsData) {
+      // Build competitor list with their local presence data
+      const competitorList = mapsData.competitors
+        .map(c => `- ${c.name}: ${c.totalListings} listings, ${c.avgRating.toFixed(1)}★ avg rating, ${c.totalReviews.toLocaleString()} total reviews${c.topRank ? `, best rank #${c.topRank}` : ''}`)
+        .join('\n');
+
+      const yourData = mapsData.yourBrand;
+      const hasData = yourData && yourData.totalListings > 0;
+
+      // Calculate competitive position
+      const totalMarketListings = yourData.totalListings + mapsData.competitors.reduce((sum, c) => sum + c.totalListings, 0);
+      const totalMarketReviews = yourData.totalReviews + mapsData.competitors.reduce((sum, c) => sum + c.totalReviews, 0);
+
+      const bestCompetitorByReviews = mapsData.competitors.reduce((best, c) =>
+        c.totalReviews > (best?.totalReviews || 0) ? c : best, mapsData.competitors[0]);
+      const bestCompetitorByRating = mapsData.competitors.reduce((best, c) =>
+        c.avgRating > (best?.avgRating || 0) ? c : best, mapsData.competitors[0]);
+
+      prompt = `You are a Local SEO strategist analyzing Google Maps/Local Pack presence for ${brandName}${industry ? ` in the ${industry} industry` : ''}.
+
+LOCAL SEO CONTEXT:
+- LOCAL VISIBILITY = How often your brand appears in local search results (Google Maps, Local Pack)
+- LOCAL ATTENTION = How much engagement (reviews, ratings) your listings receive vs competitors
+- This directly impacts foot traffic, phone calls, and local customer acquisition
+
+${brandName.toUpperCase()}'S LOCAL PRESENCE:
+- Total Listings Found: ${yourData?.totalListings || 0}
+- Average Rating: ${yourData?.avgRating?.toFixed(1) || 'N/A'}★
+- Total Reviews: ${yourData?.totalReviews?.toLocaleString() || 0}
+- Best Ranking Position: ${yourData?.topRank ? `#${yourData.topRank}` : 'Not in top results'}
+- Categories: ${yourData?.categories?.join(', ') || 'N/A'}
+
+SHARE OF LOCAL PRESENCE:
+- By Listings: ${mapsData.sov.byListings}% of local results
+- By Reviews: ${mapsData.sov.byReviews}% of total reviews
+
+MARKET CONTEXT:
+- Total Listings in Market: ${totalMarketListings}
+- Total Reviews in Market: ${totalMarketReviews.toLocaleString()}
+
+COMPETITOR LOCAL PRESENCE:
+${competitorList || 'No competitor data available'}
+
+KEY COMPETITOR INSIGHTS:
+- Most Reviews: ${bestCompetitorByReviews?.name || 'N/A'} (${bestCompetitorByReviews?.totalReviews?.toLocaleString() || 0} reviews)
+- Highest Rated: ${bestCompetitorByRating?.name || 'N/A'} (${bestCompetitorByRating?.avgRating?.toFixed(1) || 0}★)
+
+${!hasData ? 'NOTE: No listings were found for this brand. They may not have claimed their Google Business Profile or have minimal local presence.' : ''}
+
+Analyze this local SEO data and provide ACTIONABLE insights. Focus on:
+1. How visible is this brand in local search vs competitors?
+2. Is their review quantity and quality competitive?
+3. What specific actions would improve their local visibility?
+
+Return ONLY valid JSON with these EXACT keys:
+{
+  "summary": "2-sentence assessment of ${brandName}'s local visibility and competitive position",
+  "keyConclusion": "The single most important finding about their local presence (be specific with numbers)",
+  "priorityAction": "One specific, actionable recommendation they can implement this week to improve local visibility",
+  "reviewStrategy": "Specific advice on review acquisition or rating improvement",
+  "competitorThreat": "Which competitor poses the biggest local threat and why",
+  "quickWins": ["3 quick wins they can implement immediately to boost local visibility"]
+}`;
 
     } else {
       return res.status(400).json({ error: 'Invalid request type or missing data' });

@@ -780,6 +780,7 @@ function App() {
           competitors={actualCompetitors}
           locationCode={currentLocation.code}
           languageCode={currentLanguage}
+          industry={brandContext?.industry}
         />
       )}
     </main>

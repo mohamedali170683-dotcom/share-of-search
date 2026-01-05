@@ -86,6 +86,7 @@ interface GoogleMapsPanelProps {
   competitors: string[];
   locationCode?: number;
   languageCode?: string;
+  industry?: string;
 }
 
 const STORAGE_KEY = 'google-maps-analyses';
@@ -103,7 +104,37 @@ interface LocalInsights {
   competitorInsight?: string;
 }
 
-export function GoogleMapsPanel({ brandName, competitors, locationCode = 2840, languageCode = 'en' }: GoogleMapsPanelProps) {
+// Generate default search terms based on industry
+function generateDefaultSearchTerms(industry: string): string[] {
+  const industryLower = industry.toLowerCase();
+  const terms: string[] = [];
+
+  // Add "near me" variant
+  terms.push(`${industryLower} near me`);
+
+  // Add "best" variant
+  terms.push(`best ${industryLower}`);
+
+  // Add common local modifiers based on industry type
+  if (industryLower.includes('tire') || industryLower.includes('auto') || industryLower.includes('car')) {
+    terms.push(`${industryLower} shop`);
+    terms.push(`${industryLower} service`);
+  } else if (industryLower.includes('restaurant') || industryLower.includes('food') || industryLower.includes('pizza')) {
+    terms.push(`${industryLower} delivery`);
+    terms.push(`${industryLower} takeout`);
+  } else if (industryLower.includes('hotel') || industryLower.includes('lodging')) {
+    terms.push(`${industryLower} deals`);
+    terms.push(`cheap ${industryLower}`);
+  } else {
+    // Generic local terms
+    terms.push(`local ${industryLower}`);
+    terms.push(`${industryLower} store`);
+  }
+
+  return terms.slice(0, 5);
+}
+
+export function GoogleMapsPanel({ brandName, competitors, locationCode = 2840, languageCode = 'en', industry }: GoogleMapsPanelProps) {
   const [data, setData] = useState<GoogleMapsResponse | null>(null);
   const [savedAnalyses, setSavedAnalyses] = useState<SavedAnalysis[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -114,15 +145,30 @@ export function GoogleMapsPanel({ brandName, competitors, locationCode = 2840, l
   const [isLoadingInsights, setIsLoadingInsights] = useState(false);
   const [insightsError, setInsightsError] = useState<string | null>(null);
 
-  // Custom search terms
-  const [searchTerms, setSearchTerms] = useState<string[]>([]);
+  // Custom search terms - initialize with industry-based defaults
+  const [searchTerms, setSearchTerms] = useState<string[]>(() => {
+    if (industry) {
+      return generateDefaultSearchTerms(industry);
+    }
+    return [];
+  });
   const [newSearchTerm, setNewSearchTerm] = useState('');
   const [showSearchTermInput, setShowSearchTermInput] = useState(false);
+  const [hasInitializedTerms, setHasInitializedTerms] = useState(false);
 
   // Keyword suggestions
   const [keywordSuggestions, setKeywordSuggestions] = useState<{ keyword: string; searchVolume: number }[]>([]);
   const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(false);
-  const [industryKeyword, setIndustryKeyword] = useState('');
+  const [industryKeyword, setIndustryKeyword] = useState(industry || '');
+
+  // Initialize search terms when industry changes (only once)
+  useEffect(() => {
+    if (industry && !hasInitializedTerms && searchTerms.length === 0) {
+      setSearchTerms(generateDefaultSearchTerms(industry));
+      setIndustryKeyword(industry);
+      setHasInitializedTerms(true);
+    }
+  }, [industry, hasInitializedTerms, searchTerms.length]);
 
   // Load saved analyses on mount
   useEffect(() => {
@@ -362,17 +408,19 @@ export function GoogleMapsPanel({ brandName, competitors, locationCode = 2840, l
     );
   };
 
-  // Category search terms setup - for measuring visibility in category searches
-  const CategorySearchSetup = () => (
+  // Category search terms setup JSX - rendered inline to avoid re-mount issues
+  const categorySearchSetupJSX = (
     <div className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 rounded-xl shadow-sm p-6 border border-blue-200 dark:border-blue-800 mb-6">
       <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2 flex items-center gap-2">
         <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
         </svg>
         Category Search Terms
-        <span className="text-xs font-normal px-2 py-0.5 bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400 rounded-full">
-          Recommended
-        </span>
+        {industry && (
+          <span className="text-xs font-normal px-2 py-0.5 bg-green-100 dark:bg-green-900/40 text-green-600 dark:text-green-400 rounded-full">
+            Auto-filled from: {industry}
+          </span>
+        )}
       </h3>
       <p className="text-sm text-gray-600 dark:text-gray-300 mb-2">
         <strong>Question answered:</strong> When someone searches for your service, do you show up?
@@ -381,7 +429,7 @@ export function GoogleMapsPanel({ brandName, competitors, locationCode = 2840, l
       {/* Keyword Suggestions Section */}
       <div className="bg-white dark:bg-gray-800 rounded-lg p-4 mb-4 border border-blue-100 dark:border-gray-700">
         <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-          Get keyword suggestions based on your industry:
+          Get more keyword suggestions based on your industry:
         </p>
         <div className="flex gap-2 mb-3">
           <input
@@ -389,8 +437,13 @@ export function GoogleMapsPanel({ brandName, competitors, locationCode = 2840, l
             value={industryKeyword}
             onChange={(e) => setIndustryKeyword(e.target.value)}
             placeholder="Enter industry keyword (e.g., tires, pizza, dentist)"
-            className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-blue-500"
-            onKeyDown={(e) => e.key === 'Enter' && fetchKeywordSuggestions(industryKeyword)}
+            className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                fetchKeywordSuggestions(industryKeyword);
+              }
+            }}
           />
           <button
             onClick={() => fetchKeywordSuggestions(industryKeyword)}
@@ -483,8 +536,13 @@ export function GoogleMapsPanel({ brandName, competitors, locationCode = 2840, l
             value={newSearchTerm}
             onChange={(e) => setNewSearchTerm(e.target.value)}
             placeholder="Or type custom term..."
-            className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-blue-500"
-            onKeyDown={(e) => e.key === 'Enter' && addSearchTerm()}
+            className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                addSearchTerm();
+              }
+            }}
           />
           <button
             onClick={addSearchTerm}
@@ -507,15 +565,6 @@ export function GoogleMapsPanel({ brandName, competitors, locationCode = 2840, l
         >
           + Add custom term ({5 - searchTerms.length} remaining)
         </button>
-      )}
-
-      {searchTerms.length === 0 && (
-        <p className="mt-3 text-xs text-amber-600 dark:text-amber-400 flex items-center gap-1">
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-          </svg>
-          Without category terms, we can only measure your local footprint (locations + reviews), not actual search visibility.
-        </p>
       )}
     </div>
   );
@@ -569,7 +618,7 @@ export function GoogleMapsPanel({ brandName, competitors, locationCode = 2840, l
         </div>
 
         {/* Category Search Setup */}
-        <CategorySearchSetup />
+        {categorySearchSetupJSX}
 
         {/* Run Analysis Button */}
         <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6">

@@ -104,6 +104,48 @@ interface LocalInsights {
   competitorInsight?: string;
 }
 
+// Distribution Coverage types (for manufacturers)
+interface RetailerBrandInfo {
+  retailerName: string;
+  placeId: string;
+  address?: string;
+  website?: string;
+  rating?: number;
+  reviewCount?: number;
+  rank: number;
+  brandsFound: string[];
+  brandDetectionSource: 'place_details' | 'website' | 'both' | 'none';
+  carriesYourBrand: boolean;
+  carriesCompetitors: string[];
+  placeDescription?: string;
+  websiteSnippet?: string;
+}
+
+interface DistributionCoverageResponse {
+  searchTerm: string;
+  location: string;
+  totalRetailersAnalyzed: number;
+  yourBrand: {
+    name: string;
+    retailersCarrying: number;
+    coveragePercent: number;
+    topRetailers: string[];
+  };
+  competitors: {
+    name: string;
+    retailersCarrying: number;
+    coveragePercent: number;
+  }[];
+  retailers: RetailerBrandInfo[];
+  methodology: {
+    searchTermUsed: string;
+    retailersAnalyzed: number;
+    detectionMethods: string[];
+    formula: string;
+  };
+  timestamp: string;
+}
+
 // Brand type: 'manufacturer' = makes products sold by others, 'retailer' = has physical locations
 type BrandType = 'manufacturer' | 'retailer';
 
@@ -319,6 +361,11 @@ export function GoogleMapsPanel({ brandName, competitors, locationCode = 2840, l
   const [isLoadingInsights, setIsLoadingInsights] = useState(false);
   const [insightsError, setInsightsError] = useState<string | null>(null);
 
+  // Distribution Coverage (for manufacturers)
+  const [distributionData, setDistributionData] = useState<DistributionCoverageResponse | null>(null);
+  const [isLoadingDistribution, setIsLoadingDistribution] = useState(false);
+  const [distributionError, setDistributionError] = useState<string | null>(null);
+
   // Custom search terms - initialize with industry-based defaults
   const [searchTerms, setSearchTerms] = useState<string[]>(() => {
     if (detectedIndustry) {
@@ -481,6 +528,46 @@ export function GoogleMapsPanel({ brandName, competitors, locationCode = 2840, l
       setError(err instanceof Error ? err.message : 'Failed to fetch Google Maps data');
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  // Fetch Distribution Coverage (for manufacturers only)
+  const fetchDistributionCoverage = async () => {
+    if (!brandName || brandType !== 'manufacturer') return;
+
+    setIsLoadingDistribution(true);
+    setDistributionError(null);
+
+    // Determine the search term for finding retailers
+    const genericSearchTerm = detectedIndustry?.includes('tire')
+      ? 'tire shop near me'
+      : `${detectedIndustry} shop near me`;
+
+    try {
+      const response = await fetch('/api/distribution-coverage', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          brandName,
+          competitors: competitors.slice(0, 4),
+          searchTerm: genericSearchTerm,
+          locationCode,
+          languageCode,
+          maxRetailers: 10, // Limit to avoid timeout
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to fetch distribution coverage');
+      }
+
+      const result = await response.json();
+      setDistributionData(result);
+    } catch (err) {
+      setDistributionError(err instanceof Error ? err.message : 'Failed to analyze distribution');
+    } finally {
+      setIsLoadingDistribution(false);
     }
   };
 
@@ -986,6 +1073,310 @@ export function GoogleMapsPanel({ brandName, competitors, locationCode = 2840, l
               </p>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* ============================================ */}
+      {/* SECTION 1.5: DISTRIBUTION COVERAGE (Manufacturers only) */}
+      {/* ============================================ */}
+      {brandType === 'manufacturer' && (
+        <div className="bg-gradient-to-r from-purple-50 to-pink-50 dark:from-purple-900/20 dark:to-pink-900/20 rounded-xl shadow-sm p-6 border border-purple-200 dark:border-purple-800">
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2 flex items-center gap-2">
+            <svg className="w-5 h-5 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
+            </svg>
+            Distribution Coverage
+            <span className="text-xs font-normal px-2 py-0.5 bg-purple-100 dark:bg-purple-900/40 text-purple-600 dark:text-purple-400 rounded-full">
+              Manufacturer Analysis
+            </span>
+          </h3>
+          <p className="text-sm text-gray-600 dark:text-gray-300 mb-4">
+            <strong>Question:</strong> What percentage of local retailers carry {brandName} products vs competitors?
+          </p>
+
+          {/* Not loaded yet - show button to analyze */}
+          {!distributionData && !isLoadingDistribution && !distributionError && (
+            <div className="bg-white dark:bg-gray-800 rounded-lg p-6 text-center">
+              <div className="w-16 h-16 bg-purple-100 dark:bg-purple-900/30 rounded-full flex items-center justify-center mx-auto mb-4">
+                <svg className="w-8 h-8 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                </svg>
+              </div>
+              <h4 className="font-semibold text-gray-900 dark:text-white mb-2">Analyze Retail Distribution</h4>
+              <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+                We'll search for local {detectedIndustry} shops, then analyze their websites and Google Maps profiles to determine which brands they carry.
+              </p>
+              <button
+                onClick={fetchDistributionCoverage}
+                className="px-6 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors font-medium flex items-center gap-2 mx-auto"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                </svg>
+                Analyze Distribution Coverage
+              </button>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-3">
+                This may take 30-60 seconds as we crawl retailer websites
+              </p>
+            </div>
+          )}
+
+          {/* Loading state */}
+          {isLoadingDistribution && (
+            <div className="bg-white dark:bg-gray-800 rounded-lg p-6">
+              <div className="flex items-center justify-center gap-3">
+                <svg className="w-6 h-6 animate-spin text-purple-600" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                </svg>
+                <div>
+                  <p className="text-gray-600 dark:text-gray-300 font-medium">Analyzing retail distribution...</p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">Searching retailers, crawling websites, detecting brands</p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Error state */}
+          {distributionError && (
+            <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4">
+              <div className="flex items-start gap-3">
+                <svg className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <div>
+                  <p className="text-sm font-medium text-red-800 dark:text-red-200">Distribution Analysis Failed</p>
+                  <p className="text-xs text-red-700 dark:text-red-300 mt-1">{distributionError}</p>
+                  <button
+                    onClick={fetchDistributionCoverage}
+                    className="mt-2 text-sm text-red-600 hover:text-red-700 font-medium"
+                  >
+                    Try Again
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Results */}
+          {distributionData && (
+            <div className="space-y-4">
+              {/* Main metrics */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {/* Your brand coverage */}
+                <div className="bg-white dark:bg-gray-800 rounded-lg p-4">
+                  <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">{distributionData.yourBrand.name} Coverage</p>
+                  <p className="text-3xl font-bold text-purple-600 dark:text-purple-400">
+                    {distributionData.yourBrand.coveragePercent}%
+                  </p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                    {distributionData.yourBrand.retailersCarrying} of {distributionData.totalRetailersAnalyzed} retailers
+                  </p>
+                </div>
+
+                {/* Top competitor comparison */}
+                {distributionData.competitors.length > 0 && (
+                  <div className="bg-white dark:bg-gray-800 rounded-lg p-4">
+                    <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">Top Competitor</p>
+                    <p className="text-3xl font-bold text-gray-700 dark:text-gray-300">
+                      {Math.max(...distributionData.competitors.map(c => c.coveragePercent))}%
+                    </p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                      {distributionData.competitors.find(c => c.coveragePercent === Math.max(...distributionData.competitors.map(x => x.coveragePercent)))?.name}
+                    </p>
+                  </div>
+                )}
+
+                {/* Retailers analyzed */}
+                <div className="bg-white dark:bg-gray-800 rounded-lg p-4">
+                  <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">Retailers Analyzed</p>
+                  <p className="text-3xl font-bold text-gray-700 dark:text-gray-300">
+                    {distributionData.totalRetailersAnalyzed}
+                  </p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                    Search: "{distributionData.searchTerm}"
+                  </p>
+                </div>
+              </div>
+
+              {/* Coverage comparison bar chart */}
+              <div className="bg-white dark:bg-gray-800 rounded-lg p-4">
+                <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">Brand Coverage Comparison</p>
+                <div className="space-y-3">
+                  {/* Your brand */}
+                  <div className="flex items-center gap-3">
+                    <div className="w-24 text-sm font-medium text-purple-600 dark:text-purple-400 truncate">
+                      {distributionData.yourBrand.name}
+                    </div>
+                    <div className="flex-1 bg-gray-200 dark:bg-gray-700 rounded-full h-6 relative overflow-hidden">
+                      <div
+                        className="h-full bg-purple-500 rounded-full transition-all"
+                        style={{ width: `${distributionData.yourBrand.coveragePercent}%` }}
+                      />
+                      <span className="absolute inset-0 flex items-center justify-center text-xs font-bold text-white drop-shadow">
+                        {distributionData.yourBrand.coveragePercent}%
+                      </span>
+                    </div>
+                    <div className="w-12 text-right text-xs text-gray-500 dark:text-gray-400">
+                      {distributionData.yourBrand.retailersCarrying}/{distributionData.totalRetailersAnalyzed}
+                    </div>
+                  </div>
+                  {/* Competitors */}
+                  {distributionData.competitors.map((comp) => (
+                    <div key={comp.name} className="flex items-center gap-3">
+                      <div className="w-24 text-sm text-gray-600 dark:text-gray-400 truncate">
+                        {comp.name}
+                      </div>
+                      <div className="flex-1 bg-gray-200 dark:bg-gray-700 rounded-full h-6 relative overflow-hidden">
+                        <div
+                          className="h-full bg-gray-400 dark:bg-gray-500 rounded-full transition-all"
+                          style={{ width: `${comp.coveragePercent}%` }}
+                        />
+                        <span className="absolute inset-0 flex items-center justify-center text-xs font-bold text-white drop-shadow">
+                          {comp.coveragePercent}%
+                        </span>
+                      </div>
+                      <div className="w-12 text-right text-xs text-gray-500 dark:text-gray-400">
+                        {comp.retailersCarrying}/{distributionData.totalRetailersAnalyzed}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Top retailers carrying your brand */}
+              {distributionData.yourBrand.topRetailers.length > 0 && (
+                <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4">
+                  <p className="text-sm font-medium text-green-700 dark:text-green-300 mb-2 flex items-center gap-2">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                    Top Retailers Carrying {distributionData.yourBrand.name}
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {distributionData.yourBrand.topRetailers.map((retailer) => (
+                      <span
+                        key={retailer}
+                        className="px-3 py-1 bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300 text-sm rounded-full"
+                      >
+                        {retailer}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Detailed retailer analysis */}
+              <details className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
+                <summary className="p-4 cursor-pointer list-none flex items-center justify-between">
+                  <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                    Detailed Retailer Analysis ({distributionData.retailers.length} retailers)
+                  </span>
+                  <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                </summary>
+                <div className="px-4 pb-4 space-y-3">
+                  {distributionData.retailers.map((retailer) => (
+                    <div
+                      key={retailer.placeId}
+                      className={`p-3 rounded-lg border ${
+                        retailer.carriesYourBrand
+                          ? 'bg-green-50 dark:bg-green-900/10 border-green-200 dark:border-green-800'
+                          : 'border-gray-200 dark:border-gray-700'
+                      }`}
+                    >
+                      <div className="flex items-start justify-between">
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="font-medium text-gray-900 dark:text-white text-sm">
+                              {retailer.retailerName}
+                            </span>
+                            <span className="text-xs px-2 py-0.5 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 rounded">
+                              #{retailer.rank}
+                            </span>
+                            {retailer.carriesYourBrand && (
+                              <span className="text-xs px-2 py-0.5 bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300 rounded">
+                                Carries {brandName}
+                              </span>
+                            )}
+                          </div>
+                          {retailer.address && (
+                            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{retailer.address}</p>
+                          )}
+                        </div>
+                        <div className="text-right">
+                          {retailer.rating && (
+                            <p className="text-xs text-gray-600 dark:text-gray-400">
+                              {retailer.rating.toFixed(1)}★ ({retailer.reviewCount})
+                            </p>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Brands found */}
+                      {retailer.brandsFound.length > 0 ? (
+                        <div className="mt-2">
+                          <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">
+                            Brands detected ({retailer.brandDetectionSource}):
+                          </p>
+                          <div className="flex flex-wrap gap-1">
+                            {retailer.brandsFound.map((brand) => (
+                              <span
+                                key={brand}
+                                className={`text-xs px-2 py-0.5 rounded ${
+                                  brand.toLowerCase() === brandName.toLowerCase()
+                                    ? 'bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300 font-medium'
+                                    : retailer.carriesCompetitors.includes(brand)
+                                      ? 'bg-orange-100 dark:bg-orange-900/40 text-orange-700 dark:text-orange-300'
+                                      : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400'
+                                }`}
+                              >
+                                {brand}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      ) : (
+                        <p className="text-xs text-gray-400 dark:text-gray-500 mt-2 italic">
+                          No brand information detected
+                        </p>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </details>
+
+              {/* Methodology */}
+              <details className="text-xs">
+                <summary className="text-purple-600 dark:text-purple-400 cursor-pointer hover:underline">
+                  How is this calculated?
+                </summary>
+                <div className="mt-2 bg-white dark:bg-gray-800 rounded p-3 space-y-2">
+                  <p className="font-mono text-gray-700 dark:text-gray-300">
+                    <strong>Formula:</strong> {distributionData.methodology.formula}
+                  </p>
+                  <p className="text-gray-600 dark:text-gray-400">
+                    <strong>Detection Methods:</strong> {distributionData.methodology.detectionMethods.join(' + ')}
+                  </p>
+                  <p className="text-gray-500 dark:text-gray-400">
+                    <strong>Search Used:</strong> "{distributionData.methodology.searchTermUsed}"
+                  </p>
+                </div>
+              </details>
+
+              {/* Refresh button */}
+              <button
+                onClick={fetchDistributionCoverage}
+                className="text-sm text-purple-600 hover:text-purple-700 font-medium flex items-center gap-1"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+                Re-analyze Distribution
+              </button>
+            </div>
+          )}
         </div>
       )}
 

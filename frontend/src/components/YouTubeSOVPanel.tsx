@@ -1161,51 +1161,90 @@ export function YouTubeSOVPanel({ brandName, competitors, locationCode = 2840, l
         const displaySOVByCount = hasYouTubeAPIStats ? adjustedSOVByCount : data.sov.byCount;
         const displaySOVByViews = hasYouTubeAPIStats ? adjustedSOVByViews : data.sov.byViews;
 
+        // Gap analysis: difference between content share and attention share
+        const contentAttentionGap = displaySOVByViews - displaySOVByCount;
+        const hasSignificantGap = Math.abs(contentAttentionGap) >= 5;
+
         return (
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6 border-l-4 border-red-500">
-          <div className="flex items-center gap-3 mb-2">
-            <div className="w-10 h-10 bg-red-100 dark:bg-red-900/30 rounded-lg flex items-center justify-center">
-              <svg className="w-5 h-5 text-red-600" fill="currentColor" viewBox="0 0 24 24">
-                <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
-              </svg>
+      <div className="space-y-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6 border-l-4 border-red-500">
+            <div className="flex items-center gap-3 mb-2">
+              <div className="w-10 h-10 bg-red-100 dark:bg-red-900/30 rounded-lg flex items-center justify-center">
+                <svg className="w-5 h-5 text-red-600" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
+                </svg>
+              </div>
+              <div>
+                <p className="text-sm text-gray-500 dark:text-gray-400">Share of Content</p>
+                <p className="text-2xl font-bold text-gray-900 dark:text-white">{displaySOVByCount}%</p>
+              </div>
             </div>
-            <div>
-              <p className="text-sm text-gray-500 dark:text-gray-400">Share of Search (by video count)</p>
-              <p className="text-2xl font-bold text-gray-900 dark:text-white">{displaySOVByCount}%</p>
-            </div>
-          </div>
-          <p className="text-xs text-gray-500 dark:text-gray-400">
-            {yourBrandVideoCount.toLocaleString()} brand videos {hasYouTubeAPIStats ? '(YouTube API)' : 'in search results'}
-          </p>
-          {hasYouTubeAPIStats && (
-            <p className="text-xs text-emerald-600 dark:text-emerald-400 mt-1">
-              vs {competitorVideos.toLocaleString()} competitor videos
+            <p className="text-xs text-gray-500 dark:text-gray-400">
+              {yourBrandVideoCount.toLocaleString()} videos in your library
             </p>
-          )}
+            <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
+              Your share of total YouTube content vs competitors
+            </p>
+          </div>
+
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6 border-l-4 border-purple-500">
+            <div className="flex items-center gap-3 mb-2">
+              <div className="w-10 h-10 bg-purple-100 dark:bg-purple-900/30 rounded-lg flex items-center justify-center">
+                <svg className="w-5 h-5 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                </svg>
+              </div>
+              <div>
+                <p className="text-sm text-gray-500 dark:text-gray-400">Share of Attention</p>
+                <p className="text-2xl font-bold text-gray-900 dark:text-white">{displaySOVByViews}%</p>
+              </div>
+            </div>
+            <p className="text-xs text-gray-500 dark:text-gray-400">
+              {formatViews(yourBrandViews)} total views
+            </p>
+            <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
+              Your share of viewer engagement (30+ sec watches)
+            </p>
+          </div>
         </div>
 
-        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6 border-l-4 border-purple-500">
-          <div className="flex items-center gap-3 mb-2">
-            <div className="w-10 h-10 bg-purple-100 dark:bg-purple-900/30 rounded-lg flex items-center justify-center">
-              <svg className="w-5 h-5 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-              </svg>
-            </div>
-            <div>
-              <p className="text-sm text-gray-500 dark:text-gray-400">Share of Voice (by views)</p>
-              <p className="text-2xl font-bold text-gray-900 dark:text-white">{displaySOVByViews}%</p>
+        {/* Gap Analysis Insight */}
+        {hasSignificantGap && (
+          <div className={`rounded-lg p-4 ${contentAttentionGap > 0 ? 'bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800' : 'bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800'}`}>
+            <div className="flex items-start gap-3">
+              <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${contentAttentionGap > 0 ? 'bg-emerald-100 dark:bg-emerald-800' : 'bg-amber-100 dark:bg-amber-800'}`}>
+                {contentAttentionGap > 0 ? (
+                  <svg className="w-4 h-4 text-emerald-600 dark:text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+                  </svg>
+                ) : (
+                  <svg className="w-4 h-4 text-amber-600 dark:text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 17h8m0 0V9m0 8l-8-8-4 4-6-6" />
+                  </svg>
+                )}
+              </div>
+              <div>
+                <p className={`font-semibold text-sm ${contentAttentionGap > 0 ? 'text-emerald-800 dark:text-emerald-200' : 'text-amber-800 dark:text-amber-200'}`}>
+                  {contentAttentionGap > 0 ? 'High-Performing Content' : 'Content Opportunity Gap'}
+                </p>
+                <p className={`text-xs mt-1 ${contentAttentionGap > 0 ? 'text-emerald-700 dark:text-emerald-300' : 'text-amber-700 dark:text-amber-300'}`}>
+                  {contentAttentionGap > 0
+                    ? `Your content is outperforming: ${displaySOVByCount}% of videos generate ${displaySOVByViews}% of attention (+${Math.abs(contentAttentionGap).toFixed(1)}pp). Your videos are highly engaging - consider producing more content.`
+                    : `Content underperforming: ${displaySOVByCount}% of videos only capture ${displaySOVByViews}% of attention (-${Math.abs(contentAttentionGap).toFixed(1)}pp). Focus on improving video quality, thumbnails, titles, or topics.`
+                  }
+                </p>
+              </div>
             </div>
           </div>
-          <p className="text-xs text-gray-500 dark:text-gray-400">
-            {formatViews(yourBrandViews)} total views {hasYouTubeAPIStats ? '(YouTube API)' : 'on brand videos'}
+        )}
+
+        {/* What is a YouTube View - Methodology Note */}
+        <div className="bg-gray-50 dark:bg-gray-700/30 rounded-lg p-3 border border-gray-200 dark:border-gray-600">
+          <p className="text-xs text-gray-600 dark:text-gray-400">
+            <strong>How we measure:</strong> "Share of Content" = your video library size vs competitors. "Share of Attention" = your share of YouTube views (counted when viewers watch 30+ seconds). A gap between these metrics reveals if your content strategy needs more volume or better engagement.
           </p>
-          {hasYouTubeAPIStats && (
-            <p className="text-xs text-emerald-600 dark:text-emerald-400 mt-1">
-              vs {formatViews(competitorViews)} competitor views
-            </p>
-          )}
         </div>
       </div>
         );
@@ -1491,6 +1530,76 @@ export function YouTubeSOVPanel({ brandName, competitors, locationCode = 2840, l
               );
             })}
           </div>
+
+          {/* Top Performing Videos Section */}
+          {data.allVideos && data.allVideos.length > 0 && (
+            <div className="mt-6 border-t border-gray-200 dark:border-gray-700 pt-4">
+              <h4 className="font-semibold text-gray-900 dark:text-white text-sm mb-3 flex items-center gap-2">
+                <svg className="w-4 h-4 text-amber-500" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
+                </svg>
+                Top Performing Videos
+                <span className="text-xs font-normal text-gray-500">(by views)</span>
+              </h4>
+              <div className="space-y-3">
+                {data.allVideos
+                  .sort((a, b) => b.viewsCount - a.viewsCount)
+                  .slice(0, 3)
+                  .map((video, idx) => {
+                    // Determine video context from title
+                    const titleLower = video.title.toLowerCase();
+                    let videoType = 'Brand Content';
+                    if (titleLower.includes('review')) videoType = 'Review';
+                    else if (titleLower.includes('comparison') || titleLower.includes('vs')) videoType = 'Comparison';
+                    else if (titleLower.includes('tutorial') || titleLower.includes('how to')) videoType = 'Tutorial';
+                    else if (titleLower.includes('unboxing')) videoType = 'Unboxing';
+                    else if (titleLower.includes('test') || titleLower.includes('testing')) videoType = 'Test/Analysis';
+                    else if (titleLower.includes('ad') || titleLower.includes('commercial') || titleLower.includes('spot')) videoType = 'Advertisement';
+                    else if (titleLower.includes('launch') || titleLower.includes('reveal') || titleLower.includes('new')) videoType = 'Product Launch';
+
+                    const isOwnedMedia = video.isBrandOwned && getMediaType(video) === 'owned';
+
+                    return (
+                      <a
+                        key={video.videoId}
+                        href={video.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-start gap-3 p-3 rounded-lg border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
+                      >
+                        <div className="flex items-center justify-center w-8 h-8 rounded-full bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 font-bold text-sm flex-shrink-0">
+                          #{idx + 1}
+                        </div>
+                        {video.thumbnail && (
+                          <img
+                            src={video.thumbnail}
+                            alt={video.title}
+                            className="w-24 h-14 object-cover rounded flex-shrink-0"
+                          />
+                        )}
+                        <div className="flex-1 min-w-0">
+                          <p className="font-medium text-gray-900 dark:text-white text-sm line-clamp-2">{video.title}</p>
+                          <div className="flex items-center gap-2 mt-1 flex-wrap">
+                            <span className="text-xs text-gray-500 dark:text-gray-400">{video.channelName}</span>
+                            <span className="text-xs text-gray-400">•</span>
+                            <span className="text-xs font-semibold text-purple-600 dark:text-purple-400">{formatViews(video.viewsCount)} views</span>
+                            <span className={`text-xs px-1.5 py-0.5 rounded ${isOwnedMedia ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300' : 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300'}`}>
+                              {isOwnedMedia ? 'Owned' : 'Earned'}
+                            </span>
+                            <span className="text-xs px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300">
+                              {videoType}
+                            </span>
+                          </div>
+                        </div>
+                      </a>
+                    );
+                  })}
+              </div>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-3 italic">
+                Insight: Your top videos show what content resonates most. {data.allVideos[0]?.isBrandOwned ? 'Your owned content leads - keep this strategy.' : 'Earned media leads - consider creating similar official content.'}
+              </p>
+            </div>
+          )}
         </div>
         );
       })()}
@@ -1679,10 +1788,29 @@ export function YouTubeSOVPanel({ brandName, competitors, locationCode = 2840, l
               </p>
             )}
 
-            {/* Earned Media Sources Breakdown */}
+            {/* Earned Media Sources Breakdown with Video Context */}
             {earnedVideos.length > 0 && (() => {
               const sources = computeEarnedMediaSources(earnedVideos);
               if (sources.length === 0) return null;
+
+              // Get the best video from each source for context
+              const getTopVideoForSource = (channelName: string) => {
+                return earnedVideos
+                  .filter(v => v.channelName === channelName)
+                  .sort((a, b) => b.viewsCount - a.viewsCount)[0];
+              };
+
+              // Categorize video by title
+              const getVideoCategory = (title: string) => {
+                const t = title.toLowerCase();
+                if (t.includes('review')) return { label: 'Review', color: 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300' };
+                if (t.includes('comparison') || t.includes(' vs ')) return { label: 'Comparison', color: 'bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300' };
+                if (t.includes('tutorial') || t.includes('how to')) return { label: 'Tutorial', color: 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300' };
+                if (t.includes('unboxing')) return { label: 'Unboxing', color: 'bg-pink-100 dark:bg-pink-900/30 text-pink-700 dark:text-pink-300' };
+                if (t.includes('test')) return { label: 'Test', color: 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300' };
+                if (t.includes('top') || t.includes('best')) return { label: 'Best-of List', color: 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300' };
+                return { label: 'Mention', color: 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300' };
+              };
 
               return (
                 <div className="mt-4 border-t border-gray-200 dark:border-gray-700 pt-4">
@@ -1693,35 +1821,69 @@ export function YouTubeSOVPanel({ brandName, competitors, locationCode = 2840, l
                     Who's Talking About {data.yourBrand.name}?
                     <span className="text-xs font-normal text-gray-500">({sources.length} channels)</span>
                   </h4>
-                  <div className="space-y-2">
-                    {sources.slice(0, 5).map((source, idx) => (
-                      <div
-                        key={source.channelName}
-                        className="flex items-center justify-between p-2 bg-purple-50 dark:bg-purple-900/20 rounded-lg"
-                      >
-                        <div className="flex items-center gap-2">
-                          <span className="w-6 h-6 flex items-center justify-center bg-purple-200 dark:bg-purple-800 text-purple-700 dark:text-purple-300 rounded-full text-xs font-medium">
-                            {idx + 1}
-                          </span>
-                          <span className="text-sm text-gray-800 dark:text-gray-200 font-medium truncate max-w-[200px]">
-                            {source.channelName}
-                          </span>
+                  <div className="space-y-3">
+                    {sources.slice(0, 5).map((source, idx) => {
+                      const topVideo = getTopVideoForSource(source.channelName);
+                      const category = topVideo ? getVideoCategory(topVideo.title) : null;
+
+                      return (
+                        <div
+                          key={source.channelName}
+                          className="p-3 bg-purple-50 dark:bg-purple-900/20 rounded-lg"
+                        >
+                          <div className="flex items-center justify-between mb-2">
+                            <div className="flex items-center gap-2">
+                              <span className="w-6 h-6 flex items-center justify-center bg-purple-200 dark:bg-purple-800 text-purple-700 dark:text-purple-300 rounded-full text-xs font-medium">
+                                {idx + 1}
+                              </span>
+                              <span className="text-sm text-gray-800 dark:text-gray-200 font-medium">
+                                {source.channelName}
+                              </span>
+                            </div>
+                            <div className="text-right text-xs text-gray-600 dark:text-gray-400">
+                              <span className="font-medium">{source.videoCount} video{source.videoCount > 1 ? 's' : ''}</span>
+                              <span className="mx-1">•</span>
+                              <span>{formatViews(source.totalViews)} views</span>
+                            </div>
+                          </div>
+                          {topVideo && (
+                            <a
+                              href={topVideo.url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="flex items-start gap-2 mt-2 p-2 bg-white dark:bg-gray-800 rounded border border-purple-200 dark:border-purple-700 hover:border-purple-400 transition-colors"
+                            >
+                              {topVideo.thumbnail && (
+                                <img
+                                  src={topVideo.thumbnail}
+                                  alt={topVideo.title}
+                                  className="w-16 h-10 object-cover rounded flex-shrink-0"
+                                />
+                              )}
+                              <div className="flex-1 min-w-0">
+                                <p className="text-xs text-gray-800 dark:text-gray-200 line-clamp-1 font-medium">{topVideo.title}</p>
+                                <div className="flex items-center gap-2 mt-1">
+                                  <span className="text-xs text-gray-500">{formatViews(topVideo.viewsCount)} views</span>
+                                  {category && (
+                                    <span className={`text-xs px-1.5 py-0.5 rounded ${category.color}`}>
+                                      {category.label}
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            </a>
+                          )}
                         </div>
-                        <div className="text-right text-xs text-gray-600 dark:text-gray-400">
-                          <span className="font-medium">{source.videoCount} video{source.videoCount > 1 ? 's' : ''}</span>
-                          <span className="mx-1">•</span>
-                          <span>{formatViews(source.totalViews)} views</span>
-                        </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                     {sources.length > 5 && (
                       <p className="text-xs text-gray-500 dark:text-gray-400 text-center pt-1">
                         + {sources.length - 5} more channels
                       </p>
                     )}
                   </div>
-                  <p className="text-xs text-purple-600 dark:text-purple-400 mt-2 italic">
-                    Earned media = videos by other creators mentioning your brand (reviews, comparisons, tutorials, etc.)
+                  <p className="text-xs text-purple-600 dark:text-purple-400 mt-3 italic">
+                    Earned media = videos by other creators mentioning your brand. Categories help identify the context: reviews, comparisons, tutorials, etc.
                   </p>
                 </div>
               );

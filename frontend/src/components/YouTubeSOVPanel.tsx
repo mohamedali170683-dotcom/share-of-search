@@ -73,6 +73,8 @@ const STORAGE_KEY = 'youtube-sov-analyses';
 
 const CHANNEL_STORAGE_KEY = 'youtube-channel-info';
 
+const DISMISSED_VIDEOS_KEY = 'youtube-dismissed-videos';
+
 interface OwnedChannel {
   id: string;
   name: string;
@@ -138,6 +140,9 @@ export function YouTubeSOVPanel({ brandName, competitors, locationCode = 2840, l
   const [showCompetitorChannelInput, setShowCompetitorChannelInput] = useState<string | null>(null);
   const [competitorChannelInput, setCompetitorChannelInput] = useState('');
 
+  // Dismissed irrelevant videos (stored in localStorage)
+  const [dismissedVideoIds, setDismissedVideoIds] = useState<string[]>([]);
+
   // Legacy compatibility - single channel ID for matching
   const ownedChannelId = ownedChannels.length > 0 ? ownedChannels[0].id : null;
 
@@ -163,6 +168,64 @@ export function YouTubeSOVPanel({ brandName, competitors, locationCode = 2840, l
       }
     }
   }, [brandName]);
+
+  // Load dismissed videos from localStorage
+  useEffect(() => {
+    const dismissed = localStorage.getItem(DISMISSED_VIDEOS_KEY);
+    if (dismissed) {
+      try {
+        const dismissedByBrand = JSON.parse(dismissed);
+        setDismissedVideoIds(dismissedByBrand[brandName.toLowerCase()] || []);
+      } catch {
+        console.error('Failed to load dismissed videos');
+      }
+    }
+  }, [brandName]);
+
+  // Dismiss a video as irrelevant
+  const dismissVideo = (videoId: string) => {
+    const existing = localStorage.getItem(DISMISSED_VIDEOS_KEY);
+    const dismissedByBrand = existing ? JSON.parse(existing) : {};
+    const brandDismissed = dismissedByBrand[brandName.toLowerCase()] || [];
+    if (!brandDismissed.includes(videoId)) {
+      brandDismissed.push(videoId);
+      dismissedByBrand[brandName.toLowerCase()] = brandDismissed;
+      localStorage.setItem(DISMISSED_VIDEOS_KEY, JSON.stringify(dismissedByBrand));
+      setDismissedVideoIds(brandDismissed);
+    }
+  };
+
+
+  // Check if a video is relevant to the brand context (basic relevance filter)
+  const isVideoRelevantToBrand = (video: YouTubeVideo, brand: string): boolean => {
+    const titleLower = video.title.toLowerCase();
+    const brandLower = brand.toLowerCase();
+
+    // Common irrelevant context patterns (e.g., "Continental breakfast" for Continental tires)
+    const irrelevantPatterns: Record<string, string[]> = {
+      'continental': ['breakfast', 'hotel', 'cuisine', 'food', 'restaurant', 'flight', 'airline', 'drift', 'divide'],
+      'bridgestone': ['golf', 'country club'],
+      'michelin': ['star', 'restaurant', 'chef', 'dining', 'guide'],
+      'goodyear': ['blimp'],
+      'pirelli': ['calendar'],
+    };
+
+    // Check if any irrelevant pattern matches
+    const brandPatterns = irrelevantPatterns[brandLower] || [];
+    for (const pattern of brandPatterns) {
+      // If title contains the irrelevant pattern but NOT in a tire/auto context
+      if (titleLower.includes(pattern)) {
+        // Check if there's also tire/auto context
+        const autoContextKeywords = ['tire', 'tyre', 'wheel', 'car', 'vehicle', 'auto', 'driving', 'race', 'racing', 'motorsport', 'f1', 'formula'];
+        const hasAutoContext = autoContextKeywords.some(k => titleLower.includes(k));
+        if (!hasAutoContext) {
+          return false; // Irrelevant - has the pattern but no auto context
+        }
+      }
+    }
+
+    return true; // Relevant by default
+  };
 
   // Save channel info (new format with multiple channels)
   const saveChannelConfig = (channels: OwnedChannel[], compChannels: Record<string, OwnedChannel[]>) => {
@@ -1531,75 +1594,137 @@ export function YouTubeSOVPanel({ brandName, competitors, locationCode = 2840, l
             })}
           </div>
 
-          {/* Top Performing Videos Section */}
-          {data.allVideos && data.allVideos.length > 0 && (
-            <div className="mt-6 border-t border-gray-200 dark:border-gray-700 pt-4">
-              <h4 className="font-semibold text-gray-900 dark:text-white text-sm mb-3 flex items-center gap-2">
-                <svg className="w-4 h-4 text-amber-500" fill="currentColor" viewBox="0 0 24 24">
-                  <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
-                </svg>
-                Top Performing Videos
-                <span className="text-xs font-normal text-gray-500">(by views)</span>
-              </h4>
-              <div className="space-y-3">
-                {data.allVideos
-                  .sort((a, b) => b.viewsCount - a.viewsCount)
-                  .slice(0, 3)
-                  .map((video, idx) => {
-                    // Determine video context from title
-                    const titleLower = video.title.toLowerCase();
-                    let videoType = 'Brand Content';
-                    if (titleLower.includes('review')) videoType = 'Review';
-                    else if (titleLower.includes('comparison') || titleLower.includes('vs')) videoType = 'Comparison';
-                    else if (titleLower.includes('tutorial') || titleLower.includes('how to')) videoType = 'Tutorial';
-                    else if (titleLower.includes('unboxing')) videoType = 'Unboxing';
-                    else if (titleLower.includes('test') || titleLower.includes('testing')) videoType = 'Test/Analysis';
-                    else if (titleLower.includes('ad') || titleLower.includes('commercial') || titleLower.includes('spot')) videoType = 'Advertisement';
-                    else if (titleLower.includes('launch') || titleLower.includes('reveal') || titleLower.includes('new')) videoType = 'Product Launch';
+          {/* Top Performing Videos Section - Split by Brand vs Competitors */}
+          {data.allVideos && data.allVideos.length > 0 && (() => {
+            // Helper to get video type
+            const getVideoType = (title: string) => {
+              const titleLower = title.toLowerCase();
+              if (titleLower.includes('review')) return 'Review';
+              if (titleLower.includes('comparison') || titleLower.includes('vs')) return 'Comparison';
+              if (titleLower.includes('tutorial') || titleLower.includes('how to')) return 'Tutorial';
+              if (titleLower.includes('unboxing')) return 'Unboxing';
+              if (titleLower.includes('test') || titleLower.includes('testing')) return 'Test/Analysis';
+              if (titleLower.includes('ad') || titleLower.includes('commercial') || titleLower.includes('spot')) return 'Advertisement';
+              if (titleLower.includes('launch') || titleLower.includes('reveal') || titleLower.includes('new')) return 'Product Launch';
+              return 'Brand Content';
+            };
 
-                    const isOwnedMedia = video.isBrandOwned && getMediaType(video) === 'owned';
+            // Split videos by brand vs competitors
+            const brandVideos = data.allVideos.filter(v => v.isBrandOwned);
+            const competitorVideos = data.allVideos.filter(v => !v.isBrandOwned);
 
-                    return (
-                      <a
-                        key={video.videoId}
-                        href={video.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="flex items-start gap-3 p-3 rounded-lg border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
-                      >
-                        <div className="flex items-center justify-center w-8 h-8 rounded-full bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 font-bold text-sm flex-shrink-0">
-                          #{idx + 1}
-                        </div>
-                        {video.thumbnail && (
-                          <img
-                            src={video.thumbnail}
-                            alt={video.title}
-                            className="w-24 h-14 object-cover rounded flex-shrink-0"
-                          />
-                        )}
-                        <div className="flex-1 min-w-0">
-                          <p className="font-medium text-gray-900 dark:text-white text-sm line-clamp-2">{video.title}</p>
-                          <div className="flex items-center gap-2 mt-1 flex-wrap">
-                            <span className="text-xs text-gray-500 dark:text-gray-400">{video.channelName}</span>
-                            <span className="text-xs text-gray-400">•</span>
-                            <span className="text-xs font-semibold text-purple-600 dark:text-purple-400">{formatViews(video.viewsCount)} views</span>
-                            <span className={`text-xs px-1.5 py-0.5 rounded ${isOwnedMedia ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300' : 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300'}`}>
-                              {isOwnedMedia ? 'Owned' : 'Earned'}
-                            </span>
-                            <span className="text-xs px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300">
-                              {videoType}
-                            </span>
-                          </div>
-                        </div>
-                      </a>
-                    );
-                  })}
+            // Get top 3 for each
+            const topBrandVideos = brandVideos.sort((a, b) => b.viewsCount - a.viewsCount).slice(0, 3);
+            const topCompetitorVideos = competitorVideos.sort((a, b) => b.viewsCount - a.viewsCount).slice(0, 3);
+
+            const renderVideoCard = (video: YouTubeVideo, idx: number, isBrand: boolean) => {
+              const isOwnedMedia = isBrand && getMediaType(video) === 'owned';
+              const videoType = getVideoType(video.title);
+
+              return (
+                <a
+                  key={video.videoId}
+                  href={video.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className={`flex items-start gap-3 p-3 rounded-lg border hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors ${
+                    isBrand
+                      ? 'border-blue-200 dark:border-blue-800'
+                      : 'border-orange-200 dark:border-orange-800'
+                  }`}
+                >
+                  <div className={`flex items-center justify-center w-8 h-8 rounded-full font-bold text-sm flex-shrink-0 ${
+                    isBrand
+                      ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
+                      : 'bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300'
+                  }`}>
+                    #{idx + 1}
+                  </div>
+                  {video.thumbnail && (
+                    <img
+                      src={video.thumbnail}
+                      alt={video.title}
+                      className="w-24 h-14 object-cover rounded flex-shrink-0"
+                    />
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium text-gray-900 dark:text-white text-sm line-clamp-2">{video.title}</p>
+                    <div className="flex items-center gap-2 mt-1 flex-wrap">
+                      <span className="text-xs text-gray-500 dark:text-gray-400">{video.channelName}</span>
+                      <span className="text-xs text-gray-400">•</span>
+                      <span className={`text-xs font-semibold ${isBrand ? 'text-blue-600 dark:text-blue-400' : 'text-orange-600 dark:text-orange-400'}`}>
+                        {formatViews(video.viewsCount)} views
+                      </span>
+                      {isBrand && (
+                        <span className={`text-xs px-1.5 py-0.5 rounded ${isOwnedMedia ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300' : 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300'}`}>
+                          {isOwnedMedia ? 'Owned' : 'Earned'}
+                        </span>
+                      )}
+                      <span className="text-xs px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300">
+                        {videoType}
+                      </span>
+                    </div>
+                  </div>
+                </a>
+              );
+            };
+
+            return (
+              <div className="mt-6 border-t border-gray-200 dark:border-gray-700 pt-4">
+                <h4 className="font-semibold text-gray-900 dark:text-white text-sm mb-4 flex items-center gap-2">
+                  <svg className="w-4 h-4 text-amber-500" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
+                  </svg>
+                  Top Performing Videos
+                  <span className="text-xs font-normal text-gray-500">(by views)</span>
+                </h4>
+
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  {/* Brand Videos */}
+                  <div>
+                    <h5 className="text-sm font-medium text-blue-700 dark:text-blue-300 mb-3 flex items-center gap-2">
+                      <span className="w-2 h-2 bg-blue-500 rounded-full"></span>
+                      {data.yourBrand.name} Videos
+                    </h5>
+                    {topBrandVideos.length > 0 ? (
+                      <div className="space-y-2">
+                        {topBrandVideos.map((video, idx) => renderVideoCard(video, idx, true))}
+                      </div>
+                    ) : (
+                      <p className="text-xs text-gray-500 dark:text-gray-400 italic py-4 text-center">
+                        No videos mentioning {data.yourBrand.name} in top results
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Competitor Videos */}
+                  <div>
+                    <h5 className="text-sm font-medium text-orange-700 dark:text-orange-300 mb-3 flex items-center gap-2">
+                      <span className="w-2 h-2 bg-orange-500 rounded-full"></span>
+                      Competitor Videos
+                    </h5>
+                    {topCompetitorVideos.length > 0 ? (
+                      <div className="space-y-2">
+                        {topCompetitorVideos.map((video, idx) => renderVideoCard(video, idx, false))}
+                      </div>
+                    ) : (
+                      <p className="text-xs text-gray-500 dark:text-gray-400 italic py-4 text-center">
+                        No competitor videos in top results
+                      </p>
+                    )}
+                  </div>
+                </div>
+
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-4 italic">
+                  Compare your top-performing content against competitors. {topBrandVideos.length > 0 && topCompetitorVideos.length > 0
+                    ? (topBrandVideos[0].viewsCount > topCompetitorVideos[0].viewsCount
+                      ? 'Your top video outperforms competitors - analyze what makes it successful.'
+                      : 'Competitors lead in views - study their content strategy for insights.')
+                    : 'Add more competitors to see comparison insights.'}
+                </p>
               </div>
-              <p className="text-xs text-gray-500 dark:text-gray-400 mt-3 italic">
-                Insight: Your top videos show what content resonates most. {data.allVideos[0]?.isBrandOwned ? 'Your owned content leads - keep this strategy.' : 'Earned media leads - consider creating similar official content.'}
-              </p>
-            </div>
-          )}
+            );
+          })()}
         </div>
         );
       })()}
@@ -1790,12 +1915,52 @@ export function YouTubeSOVPanel({ brandName, competitors, locationCode = 2840, l
 
             {/* Earned Media Sources Breakdown with Video Context */}
             {earnedVideos.length > 0 && (() => {
-              const sources = computeEarnedMediaSources(earnedVideos);
-              if (sources.length === 0) return null;
+              // Filter out dismissed and irrelevant videos
+              const filteredEarnedVideos = earnedVideos.filter(v =>
+                !dismissedVideoIds.includes(v.videoId) &&
+                isVideoRelevantToBrand(v, data.yourBrand.name)
+              );
+
+              // Count filtered out videos
+              const irrelevantCount = earnedVideos.filter(v =>
+                !dismissedVideoIds.includes(v.videoId) &&
+                !isVideoRelevantToBrand(v, data.yourBrand.name)
+              ).length;
+              const dismissedCount = earnedVideos.filter(v => dismissedVideoIds.includes(v.videoId)).length;
+
+              const sources = computeEarnedMediaSources(filteredEarnedVideos);
+              if (sources.length === 0 && filteredEarnedVideos.length === 0) {
+                // Show message if all videos were filtered out
+                if (irrelevantCount > 0 || dismissedCount > 0) {
+                  return (
+                    <div className="mt-4 border-t border-gray-200 dark:border-gray-700 pt-4">
+                      <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-4">
+                        All earned media videos were filtered out ({irrelevantCount} irrelevant, {dismissedCount} dismissed).
+                        {dismissedCount > 0 && (
+                          <button
+                            onClick={() => {
+                              // Clear all dismissed videos for this brand
+                              const existing = localStorage.getItem(DISMISSED_VIDEOS_KEY);
+                              const dismissedByBrand = existing ? JSON.parse(existing) : {};
+                              dismissedByBrand[brandName.toLowerCase()] = [];
+                              localStorage.setItem(DISMISSED_VIDEOS_KEY, JSON.stringify(dismissedByBrand));
+                              setDismissedVideoIds([]);
+                            }}
+                            className="ml-2 text-purple-600 hover:text-purple-700 underline"
+                          >
+                            Restore dismissed
+                          </button>
+                        )}
+                      </p>
+                    </div>
+                  );
+                }
+                return null;
+              }
 
               // Get the best video from each source for context
               const getTopVideoForSource = (channelName: string) => {
-                return earnedVideos
+                return filteredEarnedVideos
                   .filter(v => v.channelName === channelName)
                   .sort((a, b) => b.viewsCount - a.viewsCount)[0];
               };
@@ -1814,13 +1979,38 @@ export function YouTubeSOVPanel({ brandName, competitors, locationCode = 2840, l
 
               return (
                 <div className="mt-4 border-t border-gray-200 dark:border-gray-700 pt-4">
-                  <h4 className="font-semibold text-purple-800 dark:text-purple-200 text-sm mb-3 flex items-center gap-2">
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-                    </svg>
-                    Who's Talking About {data.yourBrand.name}?
-                    <span className="text-xs font-normal text-gray-500">({sources.length} channels)</span>
-                  </h4>
+                  <div className="flex items-center justify-between mb-3">
+                    <h4 className="font-semibold text-purple-800 dark:text-purple-200 text-sm flex items-center gap-2">
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                      </svg>
+                      Who's Talking About {data.yourBrand.name}?
+                      <span className="text-xs font-normal text-gray-500">({sources.length} channels)</span>
+                    </h4>
+                    {(irrelevantCount > 0 || dismissedCount > 0) && (
+                      <span className="text-xs text-gray-500 dark:text-gray-400">
+                        {irrelevantCount > 0 && `${irrelevantCount} filtered`}
+                        {irrelevantCount > 0 && dismissedCount > 0 && ', '}
+                        {dismissedCount > 0 && (
+                          <>
+                            {dismissedCount} dismissed
+                            <button
+                              onClick={() => {
+                                const existing = localStorage.getItem(DISMISSED_VIDEOS_KEY);
+                                const dismissedByBrand = existing ? JSON.parse(existing) : {};
+                                dismissedByBrand[brandName.toLowerCase()] = [];
+                                localStorage.setItem(DISMISSED_VIDEOS_KEY, JSON.stringify(dismissedByBrand));
+                                setDismissedVideoIds([]);
+                              }}
+                              className="ml-1 text-purple-600 hover:text-purple-700 underline"
+                            >
+                              (restore)
+                            </button>
+                          </>
+                        )}
+                      </span>
+                    )}
+                  </div>
                   <div className="space-y-3">
                     {sources.slice(0, 5).map((source, idx) => {
                       const topVideo = getTopVideoForSource(source.channelName);
@@ -1847,31 +2037,45 @@ export function YouTubeSOVPanel({ brandName, competitors, locationCode = 2840, l
                             </div>
                           </div>
                           {topVideo && (
-                            <a
-                              href={topVideo.url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="flex items-start gap-2 mt-2 p-2 bg-white dark:bg-gray-800 rounded border border-purple-200 dark:border-purple-700 hover:border-purple-400 transition-colors"
-                            >
-                              {topVideo.thumbnail && (
-                                <img
-                                  src={topVideo.thumbnail}
-                                  alt={topVideo.title}
-                                  className="w-16 h-10 object-cover rounded flex-shrink-0"
-                                />
-                              )}
-                              <div className="flex-1 min-w-0">
-                                <p className="text-xs text-gray-800 dark:text-gray-200 line-clamp-1 font-medium">{topVideo.title}</p>
-                                <div className="flex items-center gap-2 mt-1">
-                                  <span className="text-xs text-gray-500">{formatViews(topVideo.viewsCount)} views</span>
-                                  {category && (
-                                    <span className={`text-xs px-1.5 py-0.5 rounded ${category.color}`}>
-                                      {category.label}
-                                    </span>
-                                  )}
+                            <div className="flex items-start gap-2 mt-2 p-2 bg-white dark:bg-gray-800 rounded border border-purple-200 dark:border-purple-700">
+                              <a
+                                href={topVideo.url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="flex items-start gap-2 flex-1 hover:opacity-80 transition-opacity"
+                              >
+                                {topVideo.thumbnail && (
+                                  <img
+                                    src={topVideo.thumbnail}
+                                    alt={topVideo.title}
+                                    className="w-16 h-10 object-cover rounded flex-shrink-0"
+                                  />
+                                )}
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-xs text-gray-800 dark:text-gray-200 line-clamp-1 font-medium">{topVideo.title}</p>
+                                  <div className="flex items-center gap-2 mt-1">
+                                    <span className="text-xs text-gray-500">{formatViews(topVideo.viewsCount)} views</span>
+                                    {category && (
+                                      <span className={`text-xs px-1.5 py-0.5 rounded ${category.color}`}>
+                                        {category.label}
+                                      </span>
+                                    )}
+                                  </div>
                                 </div>
-                              </div>
-                            </a>
+                              </a>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  dismissVideo(topVideo.videoId);
+                                }}
+                                className="flex-shrink-0 p-1 text-gray-400 hover:text-red-500 transition-colors"
+                                title="Dismiss as irrelevant"
+                              >
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                              </button>
+                            </div>
                           )}
                         </div>
                       );
@@ -1883,76 +2087,114 @@ export function YouTubeSOVPanel({ brandName, competitors, locationCode = 2840, l
                     )}
                   </div>
                   <p className="text-xs text-purple-600 dark:text-purple-400 mt-3 italic">
-                    Earned media = videos by other creators mentioning your brand. Categories help identify the context: reviews, comparisons, tutorials, etc.
+                    Earned media = videos by other creators mentioning your brand. Click ✕ to dismiss irrelevant videos.
                   </p>
                 </div>
               );
             })()}
 
             {/* Drill-down video list */}
-            {selectedMediaType && (
-              <div className="mt-6 border-t border-gray-200 dark:border-gray-700 pt-4">
-                <div className="flex items-center justify-between mb-3">
-                  <h4 className={`font-semibold ${selectedMediaType === 'owned' ? 'text-emerald-700 dark:text-emerald-300' : 'text-purple-700 dark:text-purple-300'}`}>
-                    {selectedMediaType === 'owned' ? 'Owned' : 'Earned'} Media Videos ({selectedMediaType === 'owned' ? ownedVideoCount.toLocaleString() : earnedVideos.length})
-                    {selectedMediaType === 'owned' && hasYouTubeAPIStats && ownedVideos.length < ownedVideoCount && (
-                      <span className="text-xs font-normal text-gray-500 ml-2">
-                        (showing {ownedVideos.length} from search)
-                      </span>
-                    )}
-                  </h4>
-                  <button
-                    onClick={() => setSelectedMediaType(null)}
-                    className="text-sm text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
-                  >
-                    Close ✕
-                  </button>
-                </div>
-                <div className="space-y-2 max-h-[400px] overflow-y-auto">
-                  {(selectedMediaType === 'owned' ? ownedVideos : earnedVideos).map((video, idx) => (
-                    <a
-                      key={video.videoId}
-                      href={video.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className={`flex items-center gap-3 p-3 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors border ${
-                        selectedMediaType === 'owned'
-                          ? 'border-emerald-200 dark:border-emerald-800'
-                          : 'border-purple-200 dark:border-purple-800'
-                      }`}
-                    >
-                      {video.thumbnail && (
-                        <img
-                          src={video.thumbnail}
-                          alt={video.title}
-                          className="w-20 h-12 object-cover rounded flex-shrink-0"
-                        />
+            {selectedMediaType && (() => {
+              // Filter earned videos to exclude dismissed and irrelevant
+              const displayEarnedVideos = earnedVideos.filter(v =>
+                !dismissedVideoIds.includes(v.videoId) &&
+                isVideoRelevantToBrand(v, data.yourBrand.name)
+              );
+              const videosToShow = selectedMediaType === 'owned' ? ownedVideos : displayEarnedVideos;
+
+              return (
+                <div className="mt-6 border-t border-gray-200 dark:border-gray-700 pt-4">
+                  <div className="flex items-center justify-between mb-3">
+                    <h4 className={`font-semibold ${selectedMediaType === 'owned' ? 'text-emerald-700 dark:text-emerald-300' : 'text-purple-700 dark:text-purple-300'}`}>
+                      {selectedMediaType === 'owned' ? 'Owned' : 'Earned'} Media Videos ({selectedMediaType === 'owned' ? ownedVideoCount.toLocaleString() : displayEarnedVideos.length})
+                      {selectedMediaType === 'owned' && hasYouTubeAPIStats && ownedVideos.length < ownedVideoCount && (
+                        <span className="text-xs font-normal text-gray-500 ml-2">
+                          (showing {ownedVideos.length} from search)
+                        </span>
                       )}
-                      <div className="flex-1 min-w-0">
-                        <p className="font-medium text-gray-900 dark:text-white text-sm truncate">{video.title}</p>
-                        <p className="text-xs text-gray-500 dark:text-gray-400">
-                          {video.channelName} • {formatViews(video.viewsCount)} views
-                          {video.publishedDate && ` • ${formatDate(video.publishedDate)}`}
-                        </p>
+                    </h4>
+                    <button
+                      onClick={() => setSelectedMediaType(null)}
+                      className="text-sm text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
+                    >
+                      Close ✕
+                    </button>
+                  </div>
+                  <div className="space-y-2 max-h-[400px] overflow-y-auto">
+                    {videosToShow.map((video, idx) => (
+                      <div
+                        key={video.videoId}
+                        className={`flex items-center gap-3 p-3 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors border ${
+                          selectedMediaType === 'owned'
+                            ? 'border-emerald-200 dark:border-emerald-800'
+                            : 'border-purple-200 dark:border-purple-800'
+                        }`}
+                      >
+                        <a
+                          href={video.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center gap-3 flex-1 min-w-0"
+                        >
+                          {video.thumbnail && (
+                            <img
+                              src={video.thumbnail}
+                              alt={video.title}
+                              className="w-20 h-12 object-cover rounded flex-shrink-0"
+                            />
+                          )}
+                          <div className="flex-1 min-w-0">
+                            <p className="font-medium text-gray-900 dark:text-white text-sm truncate">{video.title}</p>
+                            <p className="text-xs text-gray-500 dark:text-gray-400">
+                              {video.channelName} • {formatViews(video.viewsCount)} views
+                              {video.publishedDate && ` • ${formatDate(video.publishedDate)}`}
+                            </p>
+                          </div>
+                        </a>
+                        <span className={`text-xs px-2 py-1 rounded-full ${
+                          selectedMediaType === 'owned'
+                            ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300'
+                            : 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300'
+                        }`}>
+                          {selectedMediaType === 'owned' && channelVideos.length > 0 ? `#${idx + 1}` : `#${video.rank || idx + 1}`}
+                        </span>
+                        {selectedMediaType === 'earned' && (
+                          <button
+                            onClick={() => dismissVideo(video.videoId)}
+                            className="flex-shrink-0 p-1 text-gray-400 hover:text-red-500 transition-colors"
+                            title="Dismiss as irrelevant"
+                          >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                          </button>
+                        )}
                       </div>
-                      <span className={`text-xs px-2 py-1 rounded-full ${
-                        selectedMediaType === 'owned'
-                          ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300'
-                          : 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300'
-                      }`}>
-                        {selectedMediaType === 'owned' && channelVideos.length > 0 ? `#${idx + 1}` : `#${video.rank || idx + 1}`}
-                      </span>
-                    </a>
-                  ))}
-                  {(selectedMediaType === 'owned' ? ownedVideos : earnedVideos).length === 0 && (
-                    <p className="text-center text-gray-500 dark:text-gray-400 py-4">
-                      No {selectedMediaType} media videos found.
-                      {selectedMediaType === 'owned' && !hasYouTubeAPIStats && ' Add your YouTube channel to see owned media.'}
-                    </p>
-                  )}
+                    ))}
+                    {videosToShow.length === 0 && (
+                      <p className="text-center text-gray-500 dark:text-gray-400 py-4">
+                        No {selectedMediaType} media videos found.
+                        {selectedMediaType === 'owned' && !hasYouTubeAPIStats && ' Add your YouTube channel to see owned media.'}
+                        {selectedMediaType === 'earned' && dismissedVideoIds.length > 0 && (
+                          <button
+                            onClick={() => {
+                              const existing = localStorage.getItem(DISMISSED_VIDEOS_KEY);
+                              const dismissedByBrand = existing ? JSON.parse(existing) : {};
+                              dismissedByBrand[brandName.toLowerCase()] = [];
+                              localStorage.setItem(DISMISSED_VIDEOS_KEY, JSON.stringify(dismissedByBrand));
+                              setDismissedVideoIds([]);
+                            }}
+                            className="ml-2 text-purple-600 hover:text-purple-700 underline"
+                          >
+                            Restore dismissed videos
+                          </button>
+                        )}
+                      </p>
+                    )}
+                  </div>
                 </div>
-              </div>
-            )}
+              );
+            })()}
           </div>
         );
       })()}

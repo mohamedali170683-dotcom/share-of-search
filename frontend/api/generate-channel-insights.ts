@@ -156,33 +156,35 @@ ${earnedSourcesList ? `\nTop Earned Media Sources:\n${earnedSourcesList}` : ''}`
 
       prompt = `You are a YouTube marketing analyst. Analyze ${brandName}'s YouTube presence with ACCURACY.
 
-IMPORTANT DEFINITIONS:
-- OWNED MEDIA = Videos from ${brandName}'s official YouTube channel (they control this)
-- EARNED MEDIA = Videos by OTHER channels/creators mentioning ${brandName} (reviews, comparisons, influencers)
-- Competitor's OWNED = Videos from competitor's official channels
+CRITICAL DEFINITIONS (understand these before analyzing):
+- OWNED MEDIA = Videos published on ${brandName}'s official YouTube channel(s). This is content THEY create and upload.
+- EARNED MEDIA = Videos by THIRD-PARTY channels/creators that mention ${brandName} (reviews, comparisons, influencers). ${brandName} does NOT control this content.
+- These are SEPARATE sources: A brand's official channel will NEVER have "earned media" - that's a contradiction.
+- Competitor OWNED = Videos on competitor's official channels
 
 ${brandName.toUpperCase()}'s YOUTUBE DATA:
 ${ownedEarnedContext || `- Total videos mentioning ${brandName}: ${youtubeData.yourBrand.totalVideosInTop20}`}
 
-COMPETITOR OFFICIAL CHANNELS (Owned Media):
+COMPETITOR OFFICIAL CHANNELS (Their Owned Media):
 ${competitorChannelList || 'No competitor channel data available - using search mentions only'}
 
 SEARCH MENTIONS (from YouTube search results):
 ${youtubeData.competitors.map(c => `- ${c.name}: ${c.totalVideosInTop20} videos mentioning them`).join('\n')}
 
 ANALYSIS RULES:
-1. Compare OWNED vs OWNED (${brandName}'s channel vs competitor channels)
-2. Earned media shows brand awareness from third parties
-3. Use EXACT numbers from the data
-4. Be specific about what type of media you're comparing
+1. OWNED vs OWNED comparison: Compare ${brandName}'s channel video count vs competitor channels
+2. EARNED media analysis: Evaluate third-party creator coverage (reviews, mentions)
+3. NEVER confuse owned and earned - they are completely different sources
+4. Use EXACT numbers from the data
+5. If ${brandName} has no official channel configured, focus on earned media analysis
 
 Return ONLY valid JSON:
 {
-  "summary": "[1 sentence: ${brandName}'s owned channel position vs competitors with specific numbers]",
-  "keyGap": "[1 sentence: the gap in OWNED channel content vs top competitor's channel]",
-  "topAction": "[1 sentence: specific action to improve owned or earned media]",
-  "competitorThreat": "[1 sentence: which competitor has strongest owned channel and why]",
-  "earnedMediaInsight": "[1 sentence: what the earned media reveals about brand perception - who's talking about ${brandName}]"
+  "summary": "[1 sentence: ${brandName}'s YouTube presence overview - owned channel strength AND/OR earned media coverage]",
+  "keyGap": "[1 sentence: the main gap - either in owned channel content volume vs competitors, OR in earned media coverage. Be specific about WHICH type.]",
+  "topAction": "[1 sentence: specific action - either grow their channel (owned) OR generate more creator reviews (earned)]",
+  "competitorThreat": "[1 sentence: which competitor has strongest presence (specify if owned channel or earned coverage)]",
+  "earnedMediaInsight": "[1 sentence: what third-party creators are saying about ${brandName} - review sentiment, coverage volume, notable channels]"
 }`;
 
     } else if (type === 'paid-ads' && paidAdsData) {

@@ -196,35 +196,87 @@ export function YouTubeSOVPanel({ brandName, competitors, locationCode = 2840, l
   };
 
 
-  // Check if a video is relevant to the brand context (basic relevance filter)
+  // Check if a video is relevant to the brand context (comprehensive relevance filter)
   const isVideoRelevantToBrand = (video: YouTubeVideo, brand: string): boolean => {
     const titleLower = video.title.toLowerCase();
+    const channelLower = (video.channelName || '').toLowerCase();
     const brandLower = brand.toLowerCase();
 
-    // Common irrelevant context patterns (e.g., "Continental breakfast" for Continental tires)
+    // Tire/auto context keywords - video MUST have at least one of these to be relevant
+    const autoContextKeywords = [
+      'tire', 'tyre', 'tires', 'tyres', 'wheel', 'wheels', 'rim', 'rims',
+      'car', 'cars', 'vehicle', 'vehicles', 'auto', 'automotive', 'automobile',
+      'driving', 'drive', 'driver', 'road', 'highway',
+      'race', 'racing', 'motorsport', 'f1', 'formula', 'nascar', 'rally', 'drift',
+      'suv', 'truck', 'sedan', 'coupe', 'hatchback', 'crossover',
+      'brake', 'brakes', 'suspension', 'handling', 'grip', 'traction',
+      'winter', 'summer', 'all-season', 'performance', 'sport',
+      'review', 'test', 'comparison', 'vs', 'versus',
+      'install', 'installation', 'change', 'swap', 'upgrade',
+      'mpg', 'fuel', 'mileage', 'economy',
+      'noise', 'comfort', 'wet', 'dry', 'snow', 'ice',
+      // German auto terms
+      'reifen', 'fahrzeug', 'wagen', 'auto', 'pkw', 'lkw',
+    ];
+
+    // Known irrelevant patterns for specific brands
     const irrelevantPatterns: Record<string, string[]> = {
-      'continental': ['breakfast', 'hotel', 'cuisine', 'food', 'restaurant', 'flight', 'airline', 'drift', 'divide'],
-      'bridgestone': ['golf', 'country club'],
-      'michelin': ['star', 'restaurant', 'chef', 'dining', 'guide'],
-      'goodyear': ['blimp'],
-      'pirelli': ['calendar'],
+      'continental': [
+        'breakfast', 'hotel', 'cuisine', 'food', 'restaurant', 'dining', 'meal', 'brunch',
+        'flight', 'airline', 'airways', 'aviation', 'airport', 'plane',
+        'drift', 'divide', 'congress', 'army', 'soldier', 'war', 'battle',
+        'key & peele', 'key and peele', 'comedy', 'sketch', 'skit', 'funny',
+        'music video', 'official video', 'official music', 'rap', 'hip hop', 'song', 'album', 'feat.',
+        'movie', 'film', 'trailer', 'netflix', 'hbo', 'amazon prime', 'disney',
+        'peacock', 'john wick', 'lincoln',
+      ],
+      'bridgestone': [
+        'golf', 'country club', 'pga', 'tournament', 'invitational',
+      ],
+      'michelin': [
+        'star', 'restaurant', 'chef', 'dining', 'guide', 'culinary', 'cuisine', 'food', 'meal',
+        'bib gourmand', 'fine dining', 'gourmet',
+      ],
+      'goodyear': [
+        'blimp', 'airship', 'zeppelin',
+      ],
+      'pirelli': [
+        'calendar', 'photography', 'model', 'photoshoot',
+      ],
     };
 
-    // Check if any irrelevant pattern matches
+    // Known irrelevant channel names
+    const irrelevantChannels = [
+      'peacock', 'comedy central', 'key & peele', 'netflix', 'hbo', 'amazon',
+      'music', 'vevo', 'official', 'records', 'entertainment',
+    ];
+
+    // Check if channel name suggests irrelevant content
+    const isIrrelevantChannel = irrelevantChannels.some(c => channelLower.includes(c));
+
+    // Check for brand-specific irrelevant patterns
     const brandPatterns = irrelevantPatterns[brandLower] || [];
-    for (const pattern of brandPatterns) {
-      // If title contains the irrelevant pattern but NOT in a tire/auto context
-      if (titleLower.includes(pattern)) {
-        // Check if there's also tire/auto context
-        const autoContextKeywords = ['tire', 'tyre', 'wheel', 'car', 'vehicle', 'auto', 'driving', 'race', 'racing', 'motorsport', 'f1', 'formula'];
-        const hasAutoContext = autoContextKeywords.some(k => titleLower.includes(k));
-        if (!hasAutoContext) {
-          return false; // Irrelevant - has the pattern but no auto context
-        }
-      }
+    const hasIrrelevantPattern = brandPatterns.some(pattern => titleLower.includes(pattern));
+
+    // Check if title has auto context
+    const hasAutoContext = autoContextKeywords.some(k => titleLower.includes(k));
+
+    // For earned media (not from the brand's official channel), require auto context
+    // If it has an irrelevant pattern OR is from an irrelevant channel, definitely filter it out
+    if (hasIrrelevantPattern || isIrrelevantChannel) {
+      // Only keep if it explicitly has auto context despite the irrelevant pattern
+      return hasAutoContext;
     }
 
-    return true; // Relevant by default
+    // For videos without obvious irrelevant patterns, still prefer those with auto context
+    // But don't filter out videos that might be legitimate brand mentions
+    // Check if the title actually mentions the brand name meaningfully
+    if (!titleLower.includes(brandLower)) {
+      // Brand not even in title - likely irrelevant
+      return hasAutoContext;
+    }
+
+    return true;
   };
 
   // Save channel info (new format with multiple channels)
@@ -1594,7 +1646,7 @@ export function YouTubeSOVPanel({ brandName, competitors, locationCode = 2840, l
             })}
           </div>
 
-          {/* Top Performing Videos Section - Split by Brand vs Competitors */}
+          {/* Top Performing Videos Section - Split by Owned vs Earned */}
           {data.allVideos && data.allVideos.length > 0 && (() => {
             // Helper to get video type
             const getVideoType = (title: string) => {
@@ -1606,20 +1658,31 @@ export function YouTubeSOVPanel({ brandName, competitors, locationCode = 2840, l
               if (titleLower.includes('test') || titleLower.includes('testing')) return 'Test/Analysis';
               if (titleLower.includes('ad') || titleLower.includes('commercial') || titleLower.includes('spot')) return 'Advertisement';
               if (titleLower.includes('launch') || titleLower.includes('reveal') || titleLower.includes('new')) return 'Product Launch';
-              return 'Brand Content';
+              return 'Content';
             };
 
-            // Split videos by brand vs competitors
-            const brandVideos = data.allVideos.filter(v => v.isBrandOwned);
-            const competitorVideos = data.allVideos.filter(v => !v.isBrandOwned);
+            // Split ALL videos into owned vs earned (across brand AND competitors)
+            const allOwnedVideos = data.allVideos.filter(v => getMediaType(v) === 'owned');
+            const allEarnedVideos = data.allVideos
+              .filter(v => getMediaType(v) === 'earned')
+              .filter(v => !dismissedVideoIds.includes(v.videoId))
+              .filter(v => isVideoRelevantToBrand(v, data.yourBrand.name));
 
-            // Get top 3 for each
-            const topBrandVideos = brandVideos.sort((a, b) => b.viewsCount - a.viewsCount).slice(0, 3);
-            const topCompetitorVideos = competitorVideos.sort((a, b) => b.viewsCount - a.viewsCount).slice(0, 3);
+            // Further split by brand vs competitor
+            const brandOwnedVideos = allOwnedVideos.filter(v => v.isBrandOwned);
+            const competitorOwnedVideos = allOwnedVideos.filter(v => !v.isBrandOwned);
+            const brandEarnedVideos = allEarnedVideos.filter(v => v.isBrandOwned);
+            const competitorEarnedVideos = allEarnedVideos.filter(v => !v.isBrandOwned);
 
-            const renderVideoCard = (video: YouTubeVideo, idx: number, isBrand: boolean) => {
-              const isOwnedMedia = isBrand && getMediaType(video) === 'owned';
+            // Get top 3 for each category
+            const topBrandOwned = brandOwnedVideos.sort((a, b) => b.viewsCount - a.viewsCount).slice(0, 3);
+            const topCompetitorOwned = competitorOwnedVideos.sort((a, b) => b.viewsCount - a.viewsCount).slice(0, 3);
+            const topBrandEarned = brandEarnedVideos.sort((a, b) => b.viewsCount - a.viewsCount).slice(0, 3);
+            const topCompetitorEarned = competitorEarnedVideos.sort((a, b) => b.viewsCount - a.viewsCount).slice(0, 3);
+
+            const renderVideoCard = (video: YouTubeVideo, idx: number, colorClass: string, bgClass: string) => {
               const videoType = getVideoType(video.title);
+              const isBrandVideo = video.isBrandOwned;
 
               return (
                 <a
@@ -1627,40 +1690,32 @@ export function YouTubeSOVPanel({ brandName, competitors, locationCode = 2840, l
                   href={video.url}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className={`flex items-start gap-3 p-3 rounded-lg border hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors ${
-                    isBrand
-                      ? 'border-blue-200 dark:border-blue-800'
-                      : 'border-orange-200 dark:border-orange-800'
-                  }`}
+                  className={`flex items-start gap-3 p-3 rounded-lg border hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors ${colorClass}`}
                 >
-                  <div className={`flex items-center justify-center w-8 h-8 rounded-full font-bold text-sm flex-shrink-0 ${
-                    isBrand
-                      ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
-                      : 'bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300'
-                  }`}>
+                  <div className={`flex items-center justify-center w-7 h-7 rounded-full font-bold text-xs flex-shrink-0 ${bgClass}`}>
                     #{idx + 1}
                   </div>
                   {video.thumbnail && (
                     <img
                       src={video.thumbnail}
                       alt={video.title}
-                      className="w-24 h-14 object-cover rounded flex-shrink-0"
+                      className="w-20 h-12 object-cover rounded flex-shrink-0"
                     />
                   )}
                   <div className="flex-1 min-w-0">
-                    <p className="font-medium text-gray-900 dark:text-white text-sm line-clamp-2">{video.title}</p>
-                    <div className="flex items-center gap-2 mt-1 flex-wrap">
-                      <span className="text-xs text-gray-500 dark:text-gray-400">{video.channelName}</span>
+                    <p className="font-medium text-gray-900 dark:text-white text-xs line-clamp-2">{video.title}</p>
+                    <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                      <span className="text-xs text-gray-500 dark:text-gray-400 truncate max-w-[100px]">{video.channelName}</span>
                       <span className="text-xs text-gray-400">•</span>
-                      <span className={`text-xs font-semibold ${isBrand ? 'text-blue-600 dark:text-blue-400' : 'text-orange-600 dark:text-orange-400'}`}>
-                        {formatViews(video.viewsCount)} views
+                      <span className="text-xs font-semibold text-gray-700 dark:text-gray-300">
+                        {formatViews(video.viewsCount)}
                       </span>
-                      {isBrand && (
-                        <span className={`text-xs px-1.5 py-0.5 rounded ${isOwnedMedia ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300' : 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300'}`}>
-                          {isOwnedMedia ? 'Owned' : 'Earned'}
+                      {isBrandVideo && (
+                        <span className="text-xs px-1 py-0.5 rounded bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300">
+                          {data.yourBrand.name}
                         </span>
                       )}
-                      <span className="text-xs px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300">
+                      <span className="text-xs px-1 py-0.5 rounded bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300">
                         {videoType}
                       </span>
                     </div>
@@ -1680,47 +1735,110 @@ export function YouTubeSOVPanel({ brandName, competitors, locationCode = 2840, l
                 </h4>
 
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                  {/* Brand Videos */}
-                  <div>
-                    <h5 className="text-sm font-medium text-blue-700 dark:text-blue-300 mb-3 flex items-center gap-2">
-                      <span className="w-2 h-2 bg-blue-500 rounded-full"></span>
-                      {data.yourBrand.name} Videos
-                    </h5>
-                    {topBrandVideos.length > 0 ? (
-                      <div className="space-y-2">
-                        {topBrandVideos.map((video, idx) => renderVideoCard(video, idx, true))}
-                      </div>
-                    ) : (
-                      <p className="text-xs text-gray-500 dark:text-gray-400 italic py-4 text-center">
-                        No videos mentioning {data.yourBrand.name} in top results
-                      </p>
-                    )}
+                  {/* OWNED MEDIA - Official Channel Content */}
+                  <div className="space-y-4">
+                    <div className="flex items-center gap-2 pb-2 border-b border-emerald-200 dark:border-emerald-800">
+                      <span className="w-3 h-3 bg-emerald-500 rounded-full"></span>
+                      <h5 className="text-sm font-semibold text-emerald-700 dark:text-emerald-300">
+                        Owned Media
+                      </h5>
+                      <span className="text-xs text-gray-500">(Official channels)</span>
+                    </div>
+
+                    {/* Brand Owned */}
+                    <div>
+                      <h6 className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-2 flex items-center gap-1">
+                        <span className="w-1.5 h-1.5 bg-blue-500 rounded-full"></span>
+                        {data.yourBrand.name}
+                      </h6>
+                      {topBrandOwned.length > 0 ? (
+                        <div className="space-y-2">
+                          {topBrandOwned.map((video, idx) => renderVideoCard(
+                            video, idx,
+                            'border-emerald-200 dark:border-emerald-800',
+                            'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300'
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-xs text-gray-400 italic py-2">No owned videos found. Add your YouTube channel above.</p>
+                      )}
+                    </div>
+
+                    {/* Competitor Owned */}
+                    <div>
+                      <h6 className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-2 flex items-center gap-1">
+                        <span className="w-1.5 h-1.5 bg-orange-500 rounded-full"></span>
+                        Competitors
+                      </h6>
+                      {topCompetitorOwned.length > 0 ? (
+                        <div className="space-y-2">
+                          {topCompetitorOwned.map((video, idx) => renderVideoCard(
+                            video, idx,
+                            'border-emerald-200 dark:border-emerald-800',
+                            'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300'
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-xs text-gray-400 italic py-2">No competitor channel videos found.</p>
+                      )}
+                    </div>
                   </div>
 
-                  {/* Competitor Videos */}
-                  <div>
-                    <h5 className="text-sm font-medium text-orange-700 dark:text-orange-300 mb-3 flex items-center gap-2">
-                      <span className="w-2 h-2 bg-orange-500 rounded-full"></span>
-                      Competitor Videos
-                    </h5>
-                    {topCompetitorVideos.length > 0 ? (
-                      <div className="space-y-2">
-                        {topCompetitorVideos.map((video, idx) => renderVideoCard(video, idx, false))}
-                      </div>
-                    ) : (
-                      <p className="text-xs text-gray-500 dark:text-gray-400 italic py-4 text-center">
-                        No competitor videos in top results
-                      </p>
-                    )}
+                  {/* EARNED MEDIA - Third-party Content */}
+                  <div className="space-y-4">
+                    <div className="flex items-center gap-2 pb-2 border-b border-purple-200 dark:border-purple-800">
+                      <span className="w-3 h-3 bg-purple-500 rounded-full"></span>
+                      <h5 className="text-sm font-semibold text-purple-700 dark:text-purple-300">
+                        Earned Media
+                      </h5>
+                      <span className="text-xs text-gray-500">(Reviews & mentions)</span>
+                    </div>
+
+                    {/* Brand Earned */}
+                    <div>
+                      <h6 className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-2 flex items-center gap-1">
+                        <span className="w-1.5 h-1.5 bg-blue-500 rounded-full"></span>
+                        About {data.yourBrand.name}
+                      </h6>
+                      {topBrandEarned.length > 0 ? (
+                        <div className="space-y-2">
+                          {topBrandEarned.map((video, idx) => renderVideoCard(
+                            video, idx,
+                            'border-purple-200 dark:border-purple-800',
+                            'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300'
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-xs text-gray-400 italic py-2">No earned media found for {data.yourBrand.name}.</p>
+                      )}
+                    </div>
+
+                    {/* Competitor Earned */}
+                    <div>
+                      <h6 className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-2 flex items-center gap-1">
+                        <span className="w-1.5 h-1.5 bg-orange-500 rounded-full"></span>
+                        About Competitors
+                      </h6>
+                      {topCompetitorEarned.length > 0 ? (
+                        <div className="space-y-2">
+                          {topCompetitorEarned.map((video, idx) => renderVideoCard(
+                            video, idx,
+                            'border-purple-200 dark:border-purple-800',
+                            'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300'
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-xs text-gray-400 italic py-2">No competitor earned media found.</p>
+                      )}
+                    </div>
                   </div>
                 </div>
 
                 <p className="text-xs text-gray-500 dark:text-gray-400 mt-4 italic">
-                  Compare your top-performing content against competitors. {topBrandVideos.length > 0 && topCompetitorVideos.length > 0
-                    ? (topBrandVideos[0].viewsCount > topCompetitorVideos[0].viewsCount
-                      ? 'Your top video outperforms competitors - analyze what makes it successful.'
-                      : 'Competitors lead in views - study their content strategy for insights.')
-                    : 'Add more competitors to see comparison insights.'}
+                  <strong>Owned</strong> = content from official brand channels. <strong>Earned</strong> = reviews and mentions by third-party creators.
+                  {topBrandOwned.length === 0 && topBrandEarned.length > 0 && (
+                    <span className="text-amber-600 dark:text-amber-400"> Your brand has earned coverage but no official channel - consider creating owned content.</span>
+                  )}
                 </p>
               </div>
             );

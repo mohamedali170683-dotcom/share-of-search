@@ -341,6 +341,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // PART 2: Category Searches (for Category Visibility)
     // ============================================
     let categoryVisibility: GoogleMapsResponse['categoryVisibility'] = undefined;
+    let categoryListings: BusinessListing[] = []; // Store for reuse in PART 3
 
     if (validSearchTerms.length > 0) {
       console.log(`Fetching category searches: ${validSearchTerms.join(', ')}`);
@@ -351,6 +352,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           return { term, listings: result.listings };
         })
       );
+
+      // Collect all category listings for later use (avoid duplicate API calls)
+      for (const { listings } of categoryResults) {
+        categoryListings.push(...listings);
+      }
 
       const categorySearchResults: CategorySearchResult[] = categoryResults.map(({ term, listings }) => {
         // Check if your brand appears in this category search
@@ -397,17 +403,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // ============================================
     // PART 3: Combine All Listings for Display
     // ============================================
-    const allListings = [...brandListings];
-
-    // Add category search listings too (for the listings view)
-    if (validSearchTerms.length > 0) {
-      const categoryListingsResults = await Promise.all(
-        validSearchTerms.map(term => fetchGoogleMaps(term, locationCode, languageCode, auth))
-      );
-      for (const result of categoryListingsResults) {
-        allListings.push(...result.listings);
-      }
-    }
+    // Reuse category listings from PART 2 (no duplicate API calls)
+    const allListings = [...brandListings, ...categoryListings];
 
     // Deduplicate all listings by place ID
     const uniqueAllListings = Array.from(

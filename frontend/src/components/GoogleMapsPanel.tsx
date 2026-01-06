@@ -1,22 +1,4 @@
 import { useState, useEffect } from 'react';
-import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-  Cell,
-  PieChart,
-  Pie,
-  RadarChart,
-  PolarGrid,
-  PolarAngleAxis,
-  PolarRadiusAxis,
-  Radar,
-  Legend,
-} from 'recharts';
 
 interface BusinessListing {
   placeId: string;
@@ -919,7 +901,6 @@ export function GoogleMapsPanel({ brandName, competitors, locationCode = 2840, l
   if (!data) return null;
 
   const allBrands = data.yourBrand ? [data.yourBrand, ...data.competitors] : data.competitors;
-  const maxReviews = Math.max(...allBrands.map(b => b.totalReviews), 1);
 
   return (
     <div className="space-y-6">
@@ -933,215 +914,117 @@ export function GoogleMapsPanel({ brandName, competitors, locationCode = 2840, l
       {/* SECTION 1: CATEGORY/DEALER VISIBILITY */}
       {/* ============================================ */}
       {data.categoryVisibility && data.categoryVisibility.searchTerms.length > 0 && (
-        <div className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 rounded-xl shadow-sm p-6 border border-blue-200 dark:border-blue-800">
-          <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2 flex items-center gap-2">
-            <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-            </svg>
-            {brandType === 'manufacturer' ? 'Dealer/Distributor Visibility' : 'Category Visibility'}
-          </h3>
-          <p className="text-sm text-gray-600 dark:text-gray-300 mb-4">
-            {brandType === 'manufacturer' ? (
-              <><strong>Question:</strong> When customers search for where to buy {brandName}, do dealers appear?</>
-            ) : (
-              <><strong>Question:</strong> When customers search for your service, do you show up?</>
-            )}
-          </p>
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
+          {/* Header */}
+          <div className="bg-blue-50 dark:bg-blue-900/30 px-6 py-4 border-b border-blue-100 dark:border-blue-800">
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+              🔍 {brandType === 'manufacturer' ? 'Dealer/Distributor Visibility' : 'Category Visibility'}
+            </h3>
+            <p className="text-sm text-gray-600 dark:text-gray-300 mt-1">
+              {brandType === 'manufacturer'
+                ? `When customers search for where to buy ${brandName}, do dealers appear?`
+                : 'When customers search for your service, do you show up?'}
+            </p>
+          </div>
 
-          {/* Visual Dashboard Grid */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
-            {/* LEFT: Appearance Rate Gauge */}
-            <div className="bg-white dark:bg-gray-800 rounded-xl p-4">
-              <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3 text-center">Visibility Score</p>
-              <div className="flex justify-center">
-                <ResponsiveContainer width={200} height={180}>
-                  <PieChart>
-                    <Pie
-                      data={[
-                        { name: 'Visible', value: data.categoryVisibility.brandAppearanceRate },
-                        { name: 'Not Visible', value: 100 - data.categoryVisibility.brandAppearanceRate },
-                      ]}
-                      cx="50%"
-                      cy="50%"
-                      startAngle={180}
-                      endAngle={0}
-                      innerRadius={60}
-                      outerRadius={80}
-                      paddingAngle={0}
-                      dataKey="value"
-                    >
-                      <Cell fill={data.categoryVisibility.brandAppearanceRate >= 50 ? '#22c55e' : data.categoryVisibility.brandAppearanceRate >= 25 ? '#eab308' : '#ef4444'} />
-                      <Cell fill="#e5e7eb" />
-                    </Pie>
-                  </PieChart>
-                </ResponsiveContainer>
-              </div>
-              <div className="text-center -mt-16">
-                <p className={`text-4xl font-bold ${
-                  data.categoryVisibility.brandAppearanceRate >= 50 ? 'text-green-600' :
-                  data.categoryVisibility.brandAppearanceRate >= 25 ? 'text-yellow-600' : 'text-red-600'
-                }`}>
-                  {data.categoryVisibility.brandAppearanceRate}%
-                </p>
-                <p className="text-xs text-gray-500 dark:text-gray-400">of searches show your brand</p>
-              </div>
-              {data.categoryVisibility.avgRankWhenAppearing && (
-                <div className="mt-4 text-center p-2 bg-gray-50 dark:bg-gray-700 rounded-lg">
-                  <p className="text-sm text-gray-500 dark:text-gray-400">Avg Rank</p>
-                  <p className="text-2xl font-bold text-gray-900 dark:text-white">#{data.categoryVisibility.avgRankWhenAppearing}</p>
-                </div>
-              )}
+          {/* Summary Stats */}
+          <div className="grid grid-cols-2 divide-x divide-gray-200 dark:divide-gray-700 border-b border-gray-200 dark:border-gray-700">
+            <div className="p-4 text-center">
+              <p className={`text-3xl font-bold ${
+                data.categoryVisibility.brandAppearanceRate >= 50 ? 'text-green-600' :
+                data.categoryVisibility.brandAppearanceRate >= 25 ? 'text-yellow-600' : 'text-red-600'
+              }`}>
+                {data.categoryVisibility.brandAppearanceRate}%
+              </p>
+              <p className="text-sm text-gray-500 dark:text-gray-400">Visibility Rate</p>
             </div>
-
-            {/* RIGHT: Rankings Bar Chart */}
-            <div className="bg-white dark:bg-gray-800 rounded-xl p-4">
-              <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">Your Rank by Search Term</p>
-              <ResponsiveContainer width="100%" height={200}>
-                <BarChart
-                  data={data.categoryVisibility.results.map(r => ({
-                    keyword: r.keyword.length > 15 ? r.keyword.substring(0, 15) + '...' : r.keyword,
-                    rank: r.yourBrandRank || 0,
-                    appears: r.yourBrandAppears,
-                  }))}
-                  layout="vertical"
-                  margin={{ left: 0, right: 20 }}
-                >
-                  <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} />
-                  <XAxis type="number" domain={[0, 10]} ticks={[1, 2, 3, 4, 5, 6, 7, 8, 9, 10]} reversed />
-                  <YAxis type="category" dataKey="keyword" width={100} tick={{ fontSize: 11 }} />
-                  <Tooltip
-                    formatter={(value) => typeof value === 'number' ? (value === 0 ? 'Not found' : `Rank #${value}`) : value}
-                    labelStyle={{ color: '#374151' }}
-                  />
-                  <Bar dataKey="rank" radius={[0, 4, 4, 0]}>
-                    {data.categoryVisibility.results.map((entry, index) => (
-                      <Cell
-                        key={`cell-${index}`}
-                        fill={entry.yourBrandAppears
-                          ? (entry.yourBrandRank && entry.yourBrandRank <= 3 ? '#22c55e' : '#3b82f6')
-                          : '#d1d5db'
-                        }
-                      />
-                    ))}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
-              <div className="flex items-center justify-center gap-4 mt-2 text-xs">
-                <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-green-500"></span> Top 3</span>
-                <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-blue-500"></span> Rank 4+</span>
-                <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-gray-300"></span> Not found</span>
-              </div>
+            <div className="p-4 text-center">
+              <p className="text-3xl font-bold text-gray-900 dark:text-white">
+                {data.categoryVisibility.avgRankWhenAppearing ? `#${data.categoryVisibility.avgRankWhenAppearing}` : '—'}
+              </p>
+              <p className="text-sm text-gray-500 dark:text-gray-400">Avg Rank</p>
             </div>
           </div>
 
-          {/* Search Results - Collapsible Cards */}
-          <details className="bg-white dark:bg-gray-800 rounded-xl">
-            <summary className="p-4 cursor-pointer list-none flex items-center justify-between hover:bg-gray-50 dark:hover:bg-gray-700 rounded-xl">
-              <span className="font-medium text-gray-900 dark:text-white flex items-center gap-2">
-                <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 10h16M4 14h16M4 18h16" />
-                </svg>
-                Detailed Search Results ({data.categoryVisibility.results.length} terms analyzed)
-              </span>
-              <svg className="w-5 h-5 text-gray-400 transform transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-              </svg>
-            </summary>
-            <div className="px-4 pb-4 space-y-3">
-              {data.categoryVisibility.results.map((result) => (
-                <div
-                  key={result.keyword}
-                  className={`rounded-lg border overflow-hidden ${
-                    result.yourBrandAppears
-                      ? 'border-green-200 dark:border-green-800'
-                      : 'border-gray-200 dark:border-gray-700'
-                  }`}
-                >
-                  {/* Search term header */}
-                  <div className={`flex items-center justify-between p-3 ${
-                    result.yourBrandAppears
-                      ? 'bg-green-50 dark:bg-green-900/30'
-                      : 'bg-gray-50 dark:bg-gray-800'
-                  }`}>
-                    <div className="flex items-center gap-2">
-                      {result.yourBrandAppears ? (
-                        <span className="w-8 h-8 rounded-full bg-green-500 text-white flex items-center justify-center text-sm font-bold">
-                          #{result.yourBrandRank}
-                        </span>
-                      ) : (
-                        <span className="w-8 h-8 rounded-full bg-gray-300 dark:bg-gray-600 text-gray-600 dark:text-gray-400 flex items-center justify-center text-sm">
-                          —
-                        </span>
-                      )}
-                      <span className="font-medium text-gray-900 dark:text-white">"{result.keyword}"</span>
-                    </div>
-                    <span className={`text-sm px-2 py-1 rounded-full ${
+          {/* Search Results Table */}
+          <div className="divide-y divide-gray-100 dark:divide-gray-700">
+            {data.categoryVisibility.results.map((result) => (
+              <div key={result.keyword} className="p-4 hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                {/* Keyword row */}
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-3">
+                    <span className={`w-10 h-10 rounded-lg flex items-center justify-center text-sm font-bold ${
                       result.yourBrandAppears
-                        ? 'bg-green-100 text-green-700 dark:bg-green-800 dark:text-green-200'
-                        : 'bg-gray-200 text-gray-600 dark:bg-gray-700 dark:text-gray-400'
+                        ? result.yourBrandRank && result.yourBrandRank <= 3
+                          ? 'bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-300'
+                          : 'bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300'
+                        : 'bg-gray-100 text-gray-400 dark:bg-gray-700 dark:text-gray-500'
                     }`}>
-                      {result.yourBrandAppears ? 'Visible' : 'Not visible'}
+                      {result.yourBrandAppears ? `#${result.yourBrandRank}` : '—'}
                     </span>
+                    <span className="font-medium text-gray-900 dark:text-white">{result.keyword}</span>
                   </div>
-
-                  {/* Top 4 results as mini podium */}
-                  {result.topResults && result.topResults.length > 0 && (
-                    <div className="p-3 grid grid-cols-4 gap-2">
-                      {result.topResults.map((topResult, idx) => (
-                        <div
-                          key={idx}
-                          className={`text-center p-2 rounded-lg ${
-                            topResult.isYourBrand
-                              ? 'bg-green-100 dark:bg-green-900/40 ring-2 ring-green-500'
-                              : topResult.isCompetitor
-                                ? 'bg-orange-50 dark:bg-orange-900/20 ring-1 ring-orange-300'
-                                : 'bg-gray-50 dark:bg-gray-700'
-                          }`}
-                        >
-                          <div className={`w-8 h-8 mx-auto rounded-full flex items-center justify-center text-sm font-bold mb-1 ${
-                            idx === 0 ? 'bg-yellow-400 text-yellow-900' :
-                            idx === 1 ? 'bg-gray-300 text-gray-700' :
-                            idx === 2 ? 'bg-amber-600 text-white' :
-                            'bg-gray-200 dark:bg-gray-600 text-gray-600 dark:text-gray-300'
-                          }`}>
-                            {topResult.rank}
-                          </div>
-                          <p className="text-xs font-medium text-gray-900 dark:text-white truncate" title={topResult.title}>
-                            {topResult.title.length > 20 ? topResult.title.substring(0, 20) + '...' : topResult.title}
-                          </p>
-                          {topResult.rating && (
-                            <p className="text-xs text-yellow-600">
-                              {topResult.rating.toFixed(1)}★
-                              <span className="text-gray-400 ml-1">({formatNumber(topResult.ratingCount || 0)})</span>
-                            </p>
-                          )}
-                          {topResult.isYourBrand && (
-                            <span className="inline-block mt-1 text-xs px-1.5 py-0.5 bg-green-500 text-white rounded-full">You</span>
-                          )}
-                          {topResult.isCompetitor && (
-                            <span className="inline-block mt-1 text-xs px-1.5 py-0.5 bg-orange-500 text-white rounded-full truncate max-w-full">
-                              {topResult.isCompetitor}
-                            </span>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  )}
+                  <span className={`text-xs px-2 py-1 rounded-full ${
+                    result.yourBrandAppears
+                      ? 'bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-300'
+                      : 'bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400'
+                  }`}>
+                    {result.yourBrandAppears ? '✓ Found' : 'Not found'}
+                  </span>
                 </div>
-              ))}
-            </div>
-          </details>
+
+                {/* Top 4 results */}
+                {result.topResults && result.topResults.length > 0 && (
+                  <div className="ml-13 space-y-1">
+                    {result.topResults.slice(0, 4).map((topResult, idx) => (
+                      <div
+                        key={idx}
+                        className={`flex items-center gap-2 text-sm p-2 rounded ${
+                          topResult.isYourBrand
+                            ? 'bg-green-50 dark:bg-green-900/30 border-l-4 border-green-500'
+                            : topResult.isCompetitor
+                              ? 'bg-orange-50 dark:bg-orange-900/20 border-l-4 border-orange-400'
+                              : 'bg-gray-50 dark:bg-gray-700/50 border-l-4 border-transparent'
+                        }`}
+                      >
+                        <span className={`w-6 h-6 rounded text-xs font-bold flex items-center justify-center ${
+                          idx === 0 ? 'bg-yellow-400 text-yellow-900' :
+                          idx === 1 ? 'bg-gray-300 text-gray-700' :
+                          idx === 2 ? 'bg-amber-600 text-white' :
+                          'bg-gray-200 text-gray-600 dark:bg-gray-600 dark:text-gray-300'
+                        }`}>
+                          {idx + 1}
+                        </span>
+                        <span className={`flex-1 truncate ${topResult.isYourBrand ? 'font-semibold text-green-700 dark:text-green-300' : 'text-gray-700 dark:text-gray-300'}`}>
+                          {topResult.title}
+                        </span>
+                        {topResult.rating && (
+                          <span className="text-xs text-yellow-600">{topResult.rating.toFixed(1)}★</span>
+                        )}
+                        {topResult.isYourBrand && (
+                          <span className="text-xs px-1.5 py-0.5 bg-green-500 text-white rounded">You</span>
+                        )}
+                        {topResult.isCompetitor && (
+                          <span className="text-xs px-1.5 py-0.5 bg-orange-500 text-white rounded">{topResult.isCompetitor}</span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
 
           {/* Formula */}
           {data.methodology?.categoryVisibilityFormula && (
-            <details className="text-xs mt-4">
-              <summary className="text-blue-600 dark:text-blue-400 cursor-pointer hover:underline">
-                How is this calculated?
-              </summary>
-              <div className="mt-2 bg-white dark:bg-gray-800 rounded p-3 font-mono text-gray-700 dark:text-gray-300">
-                {data.methodology.categoryVisibilityFormula}
-              </div>
-            </details>
+            <div className="px-6 py-3 bg-gray-50 dark:bg-gray-900/50 border-t border-gray-200 dark:border-gray-700">
+              <details className="text-xs">
+                <summary className="text-blue-600 dark:text-blue-400 cursor-pointer hover:underline">
+                  How is this calculated?
+                </summary>
+                <p className="mt-2 text-gray-600 dark:text-gray-400">{data.methodology.categoryVisibilityFormula}</p>
+              </details>
+            </div>
           )}
         </div>
       )}
@@ -1166,360 +1049,212 @@ export function GoogleMapsPanel({ brandName, competitors, locationCode = 2840, l
       {/* ============================================ */}
       {/* SECTION 2: REPUTATION COMPARISON */}
       {/* ============================================ */}
-      {data.reputationComparison && data.reputationComparison.brands.length > 0 && (
-        <div className="bg-gradient-to-r from-yellow-50 to-amber-50 dark:from-yellow-900/20 dark:to-amber-900/20 rounded-xl shadow-sm p-6 border border-yellow-200 dark:border-yellow-800">
-          <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2 flex items-center gap-2">
-            <svg className="w-5 h-5 text-yellow-600" fill="currentColor" viewBox="0 0 20 20">
-              <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-            </svg>
-            Reputation Comparison
-          </h3>
-          <p className="text-sm text-gray-600 dark:text-gray-300 mb-4">
-            <strong>Question:</strong> How do customer ratings and reviews compare across brands?
-          </p>
+      {data.reputationComparison && data.reputationComparison.brands.length > 0 && (() => {
+        const maxReviewsRep = Math.max(...data.reputationComparison.brands.map(b => b.totalReviews), 1);
+        const maxLocations = Math.max(...data.reputationComparison.brands.map(b => b.totalLocations), 1);
 
-          {/* Visual Dashboard Grid */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
-            {/* Radar Chart - Multi-dimensional comparison */}
-            <div className="lg:col-span-2 bg-white dark:bg-gray-800 rounded-xl p-4">
-              <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">Brand Performance Radar</p>
-              <ResponsiveContainer width="100%" height={280}>
-                <RadarChart data={[
-                  {
-                    metric: 'Rating',
-                    ...Object.fromEntries(data.reputationComparison.brands.map(b => [
-                      b.brandName, (b.avgRating / 5) * 100
-                    ]))
-                  },
-                  {
-                    metric: 'Reviews',
-                    ...Object.fromEntries(data.reputationComparison.brands.map(b => [
-                      b.brandName, Math.min((b.totalReviews / Math.max(...data.reputationComparison!.brands.map(x => x.totalReviews))) * 100, 100)
-                    ]))
-                  },
-                  {
-                    metric: 'Locations',
-                    ...Object.fromEntries(data.reputationComparison.brands.map(b => [
-                      b.brandName, Math.min((b.totalLocations / Math.max(...data.reputationComparison!.brands.map(x => x.totalLocations))) * 100, 100)
-                    ]))
-                  },
-                ]}>
-                  <PolarGrid />
-                  <PolarAngleAxis dataKey="metric" tick={{ fontSize: 12 }} />
-                  <PolarRadiusAxis angle={30} domain={[0, 100]} tick={{ fontSize: 10 }} />
-                  {data.reputationComparison.brands.map((brand, idx) => {
-                    const isYourBrand = brand.brandName.toLowerCase() === brandName.toLowerCase();
-                    const colors = ['#22c55e', '#eab308', '#3b82f6', '#ef4444', '#8b5cf6'];
-                    return (
-                      <Radar
-                        key={brand.brandName}
-                        name={brand.brandName}
-                        dataKey={brand.brandName}
-                        stroke={isYourBrand ? '#22c55e' : colors[idx % colors.length]}
-                        fill={isYourBrand ? '#22c55e' : colors[idx % colors.length]}
-                        fillOpacity={isYourBrand ? 0.4 : 0.15}
-                        strokeWidth={isYourBrand ? 3 : 1}
-                      />
-                    );
-                  })}
-                  <Legend />
-                </RadarChart>
-              </ResponsiveContainer>
+        return (
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
+            {/* Header */}
+            <div className="bg-yellow-50 dark:bg-yellow-900/30 px-6 py-4 border-b border-yellow-100 dark:border-yellow-800">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+                ⭐ Reputation Comparison
+              </h3>
+              <p className="text-sm text-gray-600 dark:text-gray-300 mt-1">
+                How do customer ratings and reviews compare across brands?
+              </p>
             </div>
 
-            {/* Quick Stats */}
-            <div className="space-y-3">
-              <div className="bg-white dark:bg-gray-800 rounded-xl p-4 text-center">
-                <div className="w-12 h-12 bg-yellow-100 dark:bg-yellow-900/30 rounded-full flex items-center justify-center mx-auto mb-2">
-                  <svg className="w-6 h-6 text-yellow-600" fill="currentColor" viewBox="0 0 20 20">
-                    <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-                  </svg>
-                </div>
-                <p className="text-xs text-gray-500 dark:text-gray-400">Highest Rated</p>
-                <p className="text-lg font-bold text-gray-900 dark:text-white">{data.reputationComparison.insights.highestRated}</p>
+            {/* Winner Badges */}
+            <div className="grid grid-cols-3 divide-x divide-gray-200 dark:divide-gray-700 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50">
+              <div className="p-3 text-center">
+                <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">🏆 Highest Rated</p>
+                <p className="font-semibold text-gray-900 dark:text-white text-sm">{data.reputationComparison.insights.highestRated}</p>
               </div>
-              <div className="bg-white dark:bg-gray-800 rounded-xl p-4 text-center">
-                <div className="w-12 h-12 bg-purple-100 dark:bg-purple-900/30 rounded-full flex items-center justify-center mx-auto mb-2">
-                  <svg className="w-6 h-6 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-                  </svg>
-                </div>
-                <p className="text-xs text-gray-500 dark:text-gray-400">Most Reviewed</p>
-                <p className="text-lg font-bold text-gray-900 dark:text-white">{data.reputationComparison.insights.mostReviewed}</p>
+              <div className="p-3 text-center">
+                <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">💬 Most Reviewed</p>
+                <p className="font-semibold text-gray-900 dark:text-white text-sm">{data.reputationComparison.insights.mostReviewed}</p>
               </div>
-              <div className={`bg-white dark:bg-gray-800 rounded-xl p-4 text-center ${
-                data.reputationComparison.insights.yourRatingVsAvg >= 0 ? 'ring-2 ring-green-500' : 'ring-2 ring-red-500'
-              }`}>
-                <p className="text-xs text-gray-500 dark:text-gray-400">Your Rating vs Average</p>
-                <p className={`text-3xl font-bold ${
-                  data.reputationComparison.insights.yourRatingVsAvg >= 0 ? 'text-green-600' : 'text-red-600'
-                }`}>
-                  {data.reputationComparison.insights.yourRatingVsAvg >= 0 ? '+' : ''}{data.reputationComparison.insights.yourRatingVsAvg.toFixed(1)}
+              <div className="p-3 text-center">
+                <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">📊 You vs Avg</p>
+                <p className={`font-semibold text-sm ${data.reputationComparison.insights.yourRatingVsAvg >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                  {data.reputationComparison.insights.yourRatingVsAvg >= 0 ? '+' : ''}{data.reputationComparison.insights.yourRatingVsAvg.toFixed(1)} stars
                 </p>
-                <p className="text-xs text-gray-400">stars</p>
               </div>
             </div>
-          </div>
 
-          {/* Bar Charts Side by Side */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            {/* Rating Bar Chart */}
-            <div className="bg-white dark:bg-gray-800 rounded-xl p-4">
-              <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">Average Rating</p>
-              <ResponsiveContainer width="100%" height={200}>
-                <BarChart
-                  data={data.reputationComparison.brands.map(b => ({
-                    name: b.brandName.length > 10 ? b.brandName.substring(0, 10) + '...' : b.brandName,
-                    rating: b.avgRating,
-                    isYou: b.brandName.toLowerCase() === brandName.toLowerCase(),
-                  }))}
-                  layout="vertical"
-                  margin={{ left: 10, right: 30 }}
-                >
-                  <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} />
-                  <XAxis type="number" domain={[0, 5]} ticks={[1, 2, 3, 4, 5]} />
-                  <YAxis type="category" dataKey="name" width={80} tick={{ fontSize: 11 }} />
-                  <Tooltip formatter={(value) => typeof value === 'number' ? [`${value.toFixed(1)}★`, 'Rating'] : value} />
-                  <Bar dataKey="rating" radius={[0, 4, 4, 0]}>
-                    {data.reputationComparison.brands.map((entry, index) => (
-                      <Cell
-                        key={`cell-${index}`}
-                        fill={entry.brandName.toLowerCase() === brandName.toLowerCase() ? '#22c55e' : '#eab308'}
-                      />
-                    ))}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
+            {/* Brand Comparison Table */}
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead className="bg-gray-50 dark:bg-gray-900/50">
+                  <tr>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Brand</th>
+                    <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Rating</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Reviews</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Locations</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
+                  {data.reputationComparison.brands
+                    .sort((a, b) => b.avgRating - a.avgRating)
+                    .map((brand, idx) => {
+                      const isYourBrand = brand.brandName.toLowerCase() === brandName.toLowerCase();
+                      const reviewPercent = (brand.totalReviews / maxReviewsRep) * 100;
+                      const locationPercent = (brand.totalLocations / maxLocations) * 100;
+
+                      return (
+                        <tr key={brand.brandName} className={isYourBrand ? 'bg-green-50 dark:bg-green-900/20' : 'hover:bg-gray-50 dark:hover:bg-gray-700/50'}>
+                          <td className="px-4 py-3">
+                            <div className="flex items-center gap-2">
+                              <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${
+                                idx === 0 ? 'bg-yellow-400 text-yellow-900' :
+                                idx === 1 ? 'bg-gray-300 text-gray-700' :
+                                idx === 2 ? 'bg-amber-600 text-white' :
+                                'bg-gray-200 text-gray-600 dark:bg-gray-600 dark:text-gray-300'
+                              }`}>
+                                {idx + 1}
+                              </span>
+                              <span className={`font-medium ${isYourBrand ? 'text-green-700 dark:text-green-300' : 'text-gray-900 dark:text-white'}`}>
+                                {brand.brandName}
+                              </span>
+                              {isYourBrand && (
+                                <span className="text-xs px-1.5 py-0.5 bg-green-500 text-white rounded">You</span>
+                              )}
+                            </div>
+                          </td>
+                          <td className="px-4 py-3 text-center">
+                            <span className="text-lg font-bold text-yellow-600">{brand.avgRating.toFixed(1)}</span>
+                            <span className="text-yellow-500 ml-0.5">★</span>
+                          </td>
+                          <td className="px-4 py-3">
+                            <div className="flex items-center gap-2">
+                              <div className="flex-1 h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+                                <div
+                                  className={`h-full rounded-full ${isYourBrand ? 'bg-green-500' : 'bg-purple-500'}`}
+                                  style={{ width: `${reviewPercent}%` }}
+                                />
+                              </div>
+                              <span className="text-sm text-gray-600 dark:text-gray-400 w-16 text-right">{formatNumber(brand.totalReviews)}</span>
+                            </div>
+                          </td>
+                          <td className="px-4 py-3">
+                            <div className="flex items-center gap-2">
+                              <div className="flex-1 h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+                                <div
+                                  className={`h-full rounded-full ${isYourBrand ? 'bg-green-500' : 'bg-blue-500'}`}
+                                  style={{ width: `${locationPercent}%` }}
+                                />
+                              </div>
+                              <span className="text-sm text-gray-600 dark:text-gray-400 w-8 text-right">{brand.totalLocations}</span>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                </tbody>
+              </table>
             </div>
 
-            {/* Reviews Bar Chart */}
-            <div className="bg-white dark:bg-gray-800 rounded-xl p-4">
-              <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">Total Reviews</p>
-              <ResponsiveContainer width="100%" height={200}>
-                <BarChart
-                  data={data.reputationComparison.brands.map(b => ({
-                    name: b.brandName.length > 10 ? b.brandName.substring(0, 10) + '...' : b.brandName,
-                    reviews: b.totalReviews,
-                    isYou: b.brandName.toLowerCase() === brandName.toLowerCase(),
-                  }))}
-                  layout="vertical"
-                  margin={{ left: 10, right: 30 }}
-                >
-                  <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} />
-                  <XAxis type="number" tickFormatter={(v) => formatNumber(v)} />
-                  <YAxis type="category" dataKey="name" width={80} tick={{ fontSize: 11 }} />
-                  <Tooltip formatter={(value) => typeof value === 'number' ? [formatNumber(value), 'Reviews'] : value} />
-                  <Bar dataKey="reviews" radius={[0, 4, 4, 0]}>
-                    {data.reputationComparison.brands.map((entry, index) => (
-                      <Cell
-                        key={`cell-${index}`}
-                        fill={entry.brandName.toLowerCase() === brandName.toLowerCase() ? '#22c55e' : '#8b5cf6'}
-                      />
-                    ))}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-
-          {/* Brand Cards - Detailed Stats */}
-          <details className="mt-4 bg-white dark:bg-gray-800 rounded-xl">
-            <summary className="p-4 cursor-pointer list-none flex items-center justify-between hover:bg-gray-50 dark:hover:bg-gray-700 rounded-xl">
-              <span className="font-medium text-gray-900 dark:text-white">Detailed Brand Statistics</span>
-              <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-              </svg>
-            </summary>
-            <div className="px-4 pb-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-              {data.reputationComparison.brands.map((brand) => {
-                const isYourBrand = brand.brandName.toLowerCase() === brandName.toLowerCase();
-                return (
-                  <div
-                    key={brand.brandName}
-                    className={`p-4 rounded-lg border-2 ${
-                      isYourBrand
-                        ? 'border-green-500 bg-green-50 dark:bg-green-900/20'
-                        : 'border-gray-200 dark:border-gray-700'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between mb-2">
-                      <span className={`font-bold ${isYourBrand ? 'text-green-700 dark:text-green-300' : 'text-gray-900 dark:text-white'}`}>
-                        {brand.brandName}
-                      </span>
-                      {isYourBrand && (
-                        <span className="text-xs px-2 py-0.5 bg-green-500 text-white rounded-full">You</span>
-                      )}
-                    </div>
-                    <div className="grid grid-cols-3 gap-2 text-center">
-                      <div>
-                        <p className="text-2xl font-bold text-yellow-600">{brand.avgRating.toFixed(1)}</p>
-                        <p className="text-xs text-gray-500">Rating</p>
-                      </div>
-                      <div>
-                        <p className="text-2xl font-bold text-purple-600">{formatNumber(brand.totalReviews)}</p>
-                        <p className="text-xs text-gray-500">Reviews</p>
-                      </div>
-                      <div>
-                        <p className="text-2xl font-bold text-blue-600">{brand.totalLocations}</p>
-                        <p className="text-xs text-gray-500">Locations</p>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </details>
-
-          {/* Methodology */}
-          {data.methodology?.reputationFormula && (
-            <details className="text-xs mt-4">
-              <summary className="text-yellow-600 dark:text-yellow-400 cursor-pointer hover:underline">
-                How is this calculated?
-              </summary>
-              <div className="mt-2 bg-white dark:bg-gray-800 rounded p-3 text-gray-700 dark:text-gray-300">
-                {data.methodology.reputationFormula}
+            {/* Methodology */}
+            {data.methodology?.reputationFormula && (
+              <div className="px-6 py-3 bg-gray-50 dark:bg-gray-900/50 border-t border-gray-200 dark:border-gray-700">
+                <details className="text-xs">
+                  <summary className="text-yellow-600 dark:text-yellow-400 cursor-pointer hover:underline">
+                    How is this calculated?
+                  </summary>
+                  <p className="mt-2 text-gray-600 dark:text-gray-400">{data.methodology.reputationFormula}</p>
+                </details>
               </div>
-            </details>
-          )}
-        </div>
-      )}
+            )}
+          </div>
+        );
+      })()}
 
       {/* ============================================ */}
       {/* SECTION 3: LOCAL FOOTPRINT */}
       {/* ============================================ */}
-      <div className="bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20 rounded-xl shadow-sm p-6 border border-green-200 dark:border-green-800">
-        <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2 flex items-center gap-2">
-          <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-          </svg>
-          Local Footprint
-        </h3>
-        <p className="text-sm text-gray-600 dark:text-gray-300 mb-4">
-          <strong>Question:</strong> How many locations do you have vs competitors, and how much customer engagement (reviews)?
-        </p>
+      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
+        {/* Header */}
+        <div className="bg-green-50 dark:bg-green-900/30 px-6 py-4 border-b border-green-100 dark:border-green-800">
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+            📍 Local Footprint
+          </h3>
+          <p className="text-sm text-gray-600 dark:text-gray-300 mt-1">
+            How many locations do you have vs competitors?
+          </p>
+        </div>
 
-        {/* Two metrics side by side */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-          {/* Local Presence */}
-          <div className="bg-white dark:bg-gray-800 rounded-lg p-4">
-            <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">Local Presence</p>
-            <p className="text-3xl font-bold text-green-600 dark:text-green-400">{data.sov.byListings}%</p>
-            <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
-              Your locations / Total market locations
-            </p>
-            <p className="text-xs text-green-600 dark:text-green-400 mt-1">
+        {/* Market Share Summary */}
+        <div className="grid grid-cols-2 divide-x divide-gray-200 dark:divide-gray-700 border-b border-gray-200 dark:border-gray-700">
+          <div className="p-4 text-center">
+            <p className="text-3xl font-bold text-green-600">{data.sov.byListings}%</p>
+            <p className="text-sm text-gray-500 dark:text-gray-400">Location Share</p>
+            <p className="text-xs text-gray-400 mt-1">
               {data.yourBrand?.totalListings || 0} of {(data.yourBrand?.totalListings || 0) + data.competitors.reduce((sum, c) => sum + c.totalListings, 0)} locations
             </p>
           </div>
-
-          {/* Review Share */}
-          <div className="bg-white dark:bg-gray-800 rounded-lg p-4">
-            <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">Review Share</p>
-            <p className="text-3xl font-bold text-purple-600 dark:text-purple-400">{data.sov.byReviews}%</p>
-            <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
-              Your reviews / Total market reviews
-            </p>
-            <p className="text-xs text-purple-600 dark:text-purple-400 mt-1">
+          <div className="p-4 text-center">
+            <p className="text-3xl font-bold text-purple-600">{data.sov.byReviews}%</p>
+            <p className="text-sm text-gray-500 dark:text-gray-400">Review Share</p>
+            <p className="text-xs text-gray-400 mt-1">
               {formatNumber(data.yourBrand?.totalReviews || 0)} of {formatNumber((data.yourBrand?.totalReviews || 0) + data.competitors.reduce((sum, c) => sum + c.totalReviews, 0))} reviews
             </p>
           </div>
         </div>
 
-        {/* Formulas */}
-        <details className="text-xs mb-4">
-          <summary className="text-green-600 dark:text-green-400 cursor-pointer hover:underline">
-            How is this calculated?
-          </summary>
-          <div className="mt-2 space-y-2">
-            {data.methodology?.presenceFormula && (
-              <div className="bg-white dark:bg-gray-800 rounded p-3 font-mono text-gray-700 dark:text-gray-300">
-                <strong>Local Presence:</strong> {data.methodology.presenceFormula}
-              </div>
-            )}
-            {data.methodology?.reviewShareFormula && (
-              <div className="bg-white dark:bg-gray-800 rounded p-3 font-mono text-gray-700 dark:text-gray-300">
-                <strong>Review Share:</strong> {data.methodology.reviewShareFormula}
-              </div>
-            )}
-            {data.methodology?.brandMatchingMethod && (
-              <div className="bg-white dark:bg-gray-800 rounded p-3 text-gray-700 dark:text-gray-300">
-                <strong>Method:</strong> {data.methodology.brandMatchingMethod}
-              </div>
-            )}
-          </div>
-        </details>
+        {/* Brand Comparison List */}
+        <div className="divide-y divide-gray-100 dark:divide-gray-700">
+          {allBrands.map((brand) => {
+            const isYourBrand = data.yourBrand && brand.name === data.yourBrand.name;
+            const maxListings = Math.max(...allBrands.map(b => b.totalListings), 1);
+            const listingsPercentage = (brand.totalListings / maxListings) * 100;
 
-        {/* Your Brand Stats */}
-        {data.yourBrand && (
-          <div className="bg-white dark:bg-gray-800 rounded-lg p-4">
-            <h4 className="text-sm font-semibold text-gray-900 dark:text-white mb-3 flex items-center gap-2">
-              Your Brand: {data.yourBrand.name}
-            </h4>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-              <div className="text-center">
-                <p className="text-2xl font-bold text-gray-900 dark:text-white">{data.yourBrand.totalListings}</p>
-                <p className="text-xs text-gray-500 dark:text-gray-400">Locations</p>
-              </div>
-              <div className="text-center">
-                <p className="text-2xl font-bold text-gray-900 dark:text-white">{data.yourBrand.avgRating.toFixed(1)}★</p>
-                <p className="text-xs text-gray-500 dark:text-gray-400">Avg Rating</p>
-              </div>
-              <div className="text-center">
-                <p className="text-2xl font-bold text-gray-900 dark:text-white">{formatNumber(data.yourBrand.totalReviews)}</p>
-                <p className="text-xs text-gray-500 dark:text-gray-400">Total Reviews</p>
-              </div>
-              <div className="text-center">
-                <p className="text-2xl font-bold text-gray-900 dark:text-white">#{data.yourBrand.topRank || 'N/A'}</p>
-                <p className="text-xs text-gray-500 dark:text-gray-400">Best Rank</p>
-              </div>
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* Brand Comparison */}
-      {allBrands.length > 0 && (
-        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6">
-          <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-            Brand Comparison
-          </h3>
-          <div className="space-y-4">
-            {allBrands.map((brand) => {
-              const isYourBrand = data.yourBrand && brand.name === data.yourBrand.name;
-              const reviewsPercentage = maxReviews > 0 ? (brand.totalReviews / maxReviews) * 100 : 0;
-
-              return (
-                <div key={brand.name} className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <span className={`font-medium ${isYourBrand ? 'text-green-600 dark:text-green-400' : 'text-gray-700 dark:text-gray-300'}`}>
-                        {brand.name}
-                      </span>
-                      {isYourBrand && (
-                        <span className="px-2 py-0.5 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 text-xs rounded-full">
-                          Your Brand
-                        </span>
-                      )}
-                      <StarRating rating={brand.avgRating} count={brand.totalReviews} />
-                    </div>
-                    <div className="text-right">
-                      <span className="font-semibold text-gray-900 dark:text-white">
-                        {brand.totalListings} locations
-                      </span>
-                    </div>
+            return (
+              <div key={brand.name} className={`p-4 ${isYourBrand ? 'bg-green-50 dark:bg-green-900/20' : 'hover:bg-gray-50 dark:hover:bg-gray-700/50'}`}>
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2">
+                    <span className={`font-medium ${isYourBrand ? 'text-green-700 dark:text-green-300' : 'text-gray-900 dark:text-white'}`}>
+                      {brand.name}
+                    </span>
+                    {isYourBrand && (
+                      <span className="text-xs px-1.5 py-0.5 bg-green-500 text-white rounded">You</span>
+                    )}
                   </div>
-                  <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
-                    <div
-                      className={`h-2 rounded-full transition-all ${isYourBrand ? 'bg-green-500' : 'bg-gray-400 dark:bg-gray-500'}`}
-                      style={{ width: `${reviewsPercentage}%` }}
-                    />
+                  <div className="flex items-center gap-3 text-sm">
+                    <span className="text-yellow-600 font-medium">{brand.avgRating.toFixed(1)}★</span>
+                    <span className="text-gray-500">|</span>
+                    <span className="text-gray-600 dark:text-gray-400">{formatNumber(brand.totalReviews)} reviews</span>
                   </div>
                 </div>
-              );
-            })}
-          </div>
+                <div className="flex items-center gap-2">
+                  <div className="flex-1 h-3 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+                    <div
+                      className={`h-full rounded-full ${isYourBrand ? 'bg-green-500' : 'bg-gray-400'}`}
+                      style={{ width: `${listingsPercentage}%` }}
+                    />
+                  </div>
+                  <span className="text-sm font-medium text-gray-700 dark:text-gray-300 w-24 text-right">
+                    {brand.totalListings} locations
+                  </span>
+                </div>
+              </div>
+            );
+          })}
         </div>
-      )}
+
+        {/* Methodology */}
+        <div className="px-6 py-3 bg-gray-50 dark:bg-gray-900/50 border-t border-gray-200 dark:border-gray-700">
+          <details className="text-xs">
+            <summary className="text-green-600 dark:text-green-400 cursor-pointer hover:underline">
+              How is this calculated?
+            </summary>
+            <div className="mt-2 space-y-1 text-gray-600 dark:text-gray-400">
+              {data.methodology?.presenceFormula && <p>{data.methodology.presenceFormula}</p>}
+              {data.methodology?.brandMatchingMethod && <p><strong>Method:</strong> {data.methodology.brandMatchingMethod}</p>}
+            </div>
+          </details>
+        </div>
+      </div>
 
       {/* Conclusion & Recommendation */}
       {(isLoadingInsights || insights || insightsError) && (

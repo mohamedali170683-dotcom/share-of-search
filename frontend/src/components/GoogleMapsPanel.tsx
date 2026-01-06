@@ -747,16 +747,30 @@ export function GoogleMapsPanel({ brandName, competitors, locationCode = 2840, l
     LOCATIONS.filter(l => l.type === 'region' && l.parent === selectedCountry),
     [selectedCountry]
   );
+
+  // Get all region codes for the selected country
+  const countryRegionCodes = useMemo(() =>
+    LOCATIONS.filter(l => l.type === 'region' && l.parent === selectedCountry).map(r => r.code),
+    [selectedCountry]
+  );
+
   const cities = useMemo(() => {
     if (selectedRegion) {
+      // If a region is selected, show only cities in that region
       return LOCATIONS.filter(l => l.type === 'city' && l.parent === selectedRegion);
     }
-    // If no region selected, show cities directly under the country
-    return LOCATIONS.filter(l => l.type === 'city' && {
-      2840: [21137, 21167, 21142, 21174, 21148, 21159, 21176, 21139, 21145, 21133], // US states
-      2826: [20339, 20362, 20379], // UK regions
-    }[selectedCountry]?.includes(l.parent as number));
-  }, [selectedCountry, selectedRegion]);
+
+    // If no region selected, show all cities for this country
+    // Cities can be parented to either the country directly OR to a region within the country
+    return LOCATIONS.filter(l => {
+      if (l.type !== 'city') return false;
+      // City directly under the country
+      if (l.parent === selectedCountry) return true;
+      // City under a region that belongs to this country
+      if (countryRegionCodes.includes(l.parent as number)) return true;
+      return false;
+    });
+  }, [selectedCountry, selectedRegion, countryRegionCodes]);
 
   // Get the effective location code for API calls
   const effectiveLocationCode = selectedCity || selectedRegion || selectedCountry;

@@ -1,4 +1,83 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
+
+// Location data structure for hierarchical selection
+interface LocationOption {
+  code: number;
+  name: string;
+  type: 'country' | 'region' | 'city';
+  parent?: number; // parent location code
+  coordinates?: { lat: number; lng: number };
+}
+
+// Common locations database (DataForSEO location codes)
+const LOCATIONS: LocationOption[] = [
+  // Countries
+  { code: 2840, name: 'United States', type: 'country', coordinates: { lat: 39.8, lng: -98.5 } },
+  { code: 2826, name: 'United Kingdom', type: 'country', coordinates: { lat: 54.0, lng: -2.0 } },
+  { code: 2124, name: 'Canada', type: 'country', coordinates: { lat: 56.1, lng: -106.3 } },
+  { code: 2036, name: 'Australia', type: 'country', coordinates: { lat: -25.3, lng: 133.8 } },
+  { code: 2276, name: 'Germany', type: 'country', coordinates: { lat: 51.2, lng: 10.5 } },
+  { code: 2250, name: 'France', type: 'country', coordinates: { lat: 46.2, lng: 2.2 } },
+  { code: 2724, name: 'Spain', type: 'country', coordinates: { lat: 40.5, lng: -3.7 } },
+  { code: 2380, name: 'Italy', type: 'country', coordinates: { lat: 41.9, lng: 12.6 } },
+  { code: 2528, name: 'Netherlands', type: 'country', coordinates: { lat: 52.1, lng: 5.3 } },
+  { code: 2756, name: 'Switzerland', type: 'country', coordinates: { lat: 46.8, lng: 8.2 } },
+
+  // US States/Regions
+  { code: 21137, name: 'California', type: 'region', parent: 2840, coordinates: { lat: 36.8, lng: -119.4 } },
+  { code: 21167, name: 'Texas', type: 'region', parent: 2840, coordinates: { lat: 31.0, lng: -100.0 } },
+  { code: 21142, name: 'Florida', type: 'region', parent: 2840, coordinates: { lat: 27.7, lng: -81.7 } },
+  { code: 21174, name: 'New York', type: 'region', parent: 2840, coordinates: { lat: 43.0, lng: -75.5 } },
+  { code: 21148, name: 'Illinois', type: 'region', parent: 2840, coordinates: { lat: 40.6, lng: -89.2 } },
+  { code: 21159, name: 'Massachusetts', type: 'region', parent: 2840, coordinates: { lat: 42.4, lng: -71.4 } },
+  { code: 21176, name: 'Washington', type: 'region', parent: 2840, coordinates: { lat: 47.8, lng: -120.7 } },
+  { code: 21139, name: 'Colorado', type: 'region', parent: 2840, coordinates: { lat: 39.0, lng: -105.8 } },
+  { code: 21145, name: 'Georgia', type: 'region', parent: 2840, coordinates: { lat: 32.2, lng: -83.4 } },
+  { code: 21133, name: 'Arizona', type: 'region', parent: 2840, coordinates: { lat: 34.0, lng: -111.1 } },
+
+  // UK Regions
+  { code: 20339, name: 'England', type: 'region', parent: 2826, coordinates: { lat: 52.4, lng: -1.2 } },
+  { code: 20362, name: 'Scotland', type: 'region', parent: 2826, coordinates: { lat: 56.5, lng: -4.2 } },
+  { code: 20379, name: 'Wales', type: 'region', parent: 2826, coordinates: { lat: 52.1, lng: -3.8 } },
+
+  // US Cities
+  { code: 1014221, name: 'New York City', type: 'city', parent: 21174, coordinates: { lat: 40.7, lng: -74.0 } },
+  { code: 1014218, name: 'Los Angeles', type: 'city', parent: 21137, coordinates: { lat: 34.1, lng: -118.2 } },
+  { code: 1014211, name: 'Chicago', type: 'city', parent: 21148, coordinates: { lat: 41.9, lng: -87.6 } },
+  { code: 1014231, name: 'Houston', type: 'city', parent: 21167, coordinates: { lat: 29.8, lng: -95.4 } },
+  { code: 1014226, name: 'Phoenix', type: 'city', parent: 21133, coordinates: { lat: 33.4, lng: -112.1 } },
+  { code: 1014227, name: 'San Francisco', type: 'city', parent: 21137, coordinates: { lat: 37.8, lng: -122.4 } },
+  { code: 1014217, name: 'Miami', type: 'city', parent: 21142, coordinates: { lat: 25.8, lng: -80.2 } },
+  { code: 1014204, name: 'Boston', type: 'city', parent: 21159, coordinates: { lat: 42.4, lng: -71.1 } },
+  { code: 1014238, name: 'Seattle', type: 'city', parent: 21176, coordinates: { lat: 47.6, lng: -122.3 } },
+  { code: 1014210, name: 'Denver', type: 'city', parent: 21139, coordinates: { lat: 39.7, lng: -105.0 } },
+  { code: 1014200, name: 'Atlanta', type: 'city', parent: 21145, coordinates: { lat: 33.7, lng: -84.4 } },
+  { code: 1014207, name: 'Dallas', type: 'city', parent: 21167, coordinates: { lat: 32.8, lng: -96.8 } },
+  { code: 1014237, name: 'San Diego', type: 'city', parent: 21137, coordinates: { lat: 32.7, lng: -117.2 } },
+
+  // UK Cities
+  { code: 1006886, name: 'London', type: 'city', parent: 20339, coordinates: { lat: 51.5, lng: -0.1 } },
+  { code: 1006912, name: 'Manchester', type: 'city', parent: 20339, coordinates: { lat: 53.5, lng: -2.2 } },
+  { code: 1006893, name: 'Birmingham', type: 'city', parent: 20339, coordinates: { lat: 52.5, lng: -1.9 } },
+  { code: 1006883, name: 'Edinburgh', type: 'city', parent: 20362, coordinates: { lat: 55.95, lng: -3.2 } },
+  { code: 1006884, name: 'Glasgow', type: 'city', parent: 20362, coordinates: { lat: 55.9, lng: -4.3 } },
+
+  // Canadian Cities
+  { code: 1002293, name: 'Toronto', type: 'city', parent: 2124, coordinates: { lat: 43.7, lng: -79.4 } },
+  { code: 1002287, name: 'Vancouver', type: 'city', parent: 2124, coordinates: { lat: 49.3, lng: -123.1 } },
+  { code: 1002286, name: 'Montreal', type: 'city', parent: 2124, coordinates: { lat: 45.5, lng: -73.6 } },
+
+  // Australian Cities
+  { code: 1000286, name: 'Sydney', type: 'city', parent: 2036, coordinates: { lat: -33.9, lng: 151.2 } },
+  { code: 1000282, name: 'Melbourne', type: 'city', parent: 2036, coordinates: { lat: -37.8, lng: 145.0 } },
+  { code: 1000275, name: 'Brisbane', type: 'city', parent: 2036, coordinates: { lat: -27.5, lng: 153.0 } },
+
+  // German Cities
+  { code: 1003854, name: 'Berlin', type: 'city', parent: 2276, coordinates: { lat: 52.5, lng: 13.4 } },
+  { code: 1003883, name: 'Munich', type: 'city', parent: 2276, coordinates: { lat: 48.1, lng: 11.6 } },
+  { code: 1003863, name: 'Frankfurt', type: 'city', parent: 2276, coordinates: { lat: 50.1, lng: 8.7 } },
+  { code: 1003873, name: 'Hamburg', type: 'city', parent: 2276, coordinates: { lat: 53.6, lng: 10.0 } },
+];
 
 // Mock Google Maps Search Result Card Component
 function MockSearchResultCard({
@@ -72,7 +151,8 @@ function MockSearchResultCard({
 // Search Simulation Component - Shows what users see on Google Maps
 function SearchSimulation({
   results,
-  brandName
+  brandName,
+  locationName
 }: {
   results: Array<{
     keyword: string;
@@ -89,6 +169,7 @@ function SearchSimulation({
     }>;
   }>;
   brandName: string;
+  locationName?: string;
 }) {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -138,6 +219,16 @@ function SearchSimulation({
           </div>
         </div>
       </div>
+
+      {/* Location Banner */}
+      {locationName && (
+        <div className="px-4 py-1.5 bg-blue-50 dark:bg-blue-900/30 border-b border-blue-100 dark:border-blue-800 flex items-center gap-2">
+          <svg className="w-4 h-4 text-blue-500" fill="currentColor" viewBox="0 0 20 20">
+            <path fillRule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clipRule="evenodd" />
+          </svg>
+          <span className="text-xs font-medium text-blue-700 dark:text-blue-300">{locationName}</span>
+        </div>
+      )}
 
       {/* Results Status Banner */}
       <div className={`px-4 py-2 text-sm font-medium ${
@@ -645,6 +736,47 @@ export function GoogleMapsPanel({ brandName, competitors, locationCode = 2840, l
   const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(false);
   const [industryKeyword, setIndustryKeyword] = useState(detectedIndustry || '');
 
+  // Location selection state
+  const [selectedCountry, setSelectedCountry] = useState<number>(locationCode);
+  const [selectedRegion, setSelectedRegion] = useState<number | null>(null);
+  const [selectedCity, setSelectedCity] = useState<number | null>(null);
+
+  // Computed location values
+  const countries = useMemo(() => LOCATIONS.filter(l => l.type === 'country'), []);
+  const regions = useMemo(() =>
+    LOCATIONS.filter(l => l.type === 'region' && l.parent === selectedCountry),
+    [selectedCountry]
+  );
+  const cities = useMemo(() => {
+    if (selectedRegion) {
+      return LOCATIONS.filter(l => l.type === 'city' && l.parent === selectedRegion);
+    }
+    // If no region selected, show cities directly under the country
+    return LOCATIONS.filter(l => l.type === 'city' && {
+      2840: [21137, 21167, 21142, 21174, 21148, 21159, 21176, 21139, 21145, 21133], // US states
+      2826: [20339, 20362, 20379], // UK regions
+    }[selectedCountry]?.includes(l.parent as number));
+  }, [selectedCountry, selectedRegion]);
+
+  // Get the effective location code for API calls
+  const effectiveLocationCode = selectedCity || selectedRegion || selectedCountry;
+
+  // Get the full location name for display
+  const selectedLocationName = useMemo(() => {
+    const parts: string[] = [];
+    if (selectedCity) {
+      const city = LOCATIONS.find(l => l.code === selectedCity);
+      if (city) parts.push(city.name);
+    }
+    if (selectedRegion) {
+      const region = LOCATIONS.find(l => l.code === selectedRegion);
+      if (region) parts.push(region.name);
+    }
+    const country = LOCATIONS.find(l => l.code === selectedCountry);
+    if (country) parts.push(country.name);
+    return parts.join(', ');
+  }, [selectedCountry, selectedRegion, selectedCity]);
+
   // Initialize search terms when detected industry changes (only once)
   useEffect(() => {
     if (detectedIndustry && !hasInitializedTerms && searchTerms.length === 0) {
@@ -768,7 +900,7 @@ export function GoogleMapsPanel({ brandName, competitors, locationCode = 2840, l
         body: JSON.stringify({
           brandName,
           competitors: competitors.slice(0, 4),
-          locationCode,
+          locationCode: effectiveLocationCode,
           languageCode,
           searchTerms,
         }),
@@ -816,7 +948,7 @@ export function GoogleMapsPanel({ brandName, competitors, locationCode = 2840, l
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           seedKeyword: seedKeyword.trim(),
-          locationCode,
+          locationCode: effectiveLocationCode,
           languageCode,
           includeLocalModifiers: true,
         }),
@@ -891,6 +1023,98 @@ export function GoogleMapsPanel({ brandName, competitors, locationCode = 2840, l
       </div>
     );
   };
+
+  // Location selector JSX
+  const locationSelectorJSX = (
+    <div className="bg-gradient-to-r from-emerald-50 to-teal-50 dark:from-emerald-900/20 dark:to-teal-900/20 rounded-xl shadow-sm p-6 border border-emerald-200 dark:border-emerald-800 mb-6">
+      <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2 flex items-center gap-2">
+        <svg className="w-5 h-5 text-emerald-600" fill="currentColor" viewBox="0 0 20 20">
+          <path fillRule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clipRule="evenodd" />
+        </svg>
+        Search Location
+      </h3>
+      <p className="text-sm text-gray-600 dark:text-gray-300 mb-4">
+        Select where to search. More specific locations give more relevant local results.
+      </p>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        {/* Country selector */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+            Country
+          </label>
+          <select
+            value={selectedCountry}
+            onChange={(e) => {
+              setSelectedCountry(Number(e.target.value));
+              setSelectedRegion(null);
+              setSelectedCity(null);
+            }}
+            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+          >
+            {countries.map((country) => (
+              <option key={country.code} value={country.code}>
+                {country.name}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {/* Region selector */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+            Region / State
+          </label>
+          <select
+            value={selectedRegion || ''}
+            onChange={(e) => {
+              setSelectedRegion(e.target.value ? Number(e.target.value) : null);
+              setSelectedCity(null);
+            }}
+            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+          >
+            <option value="">All regions</option>
+            {regions.map((region) => (
+              <option key={region.code} value={region.code}>
+                {region.name}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {/* City selector */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+            City
+          </label>
+          <select
+            value={selectedCity || ''}
+            onChange={(e) => {
+              setSelectedCity(e.target.value ? Number(e.target.value) : null);
+            }}
+            disabled={cities.length === 0}
+            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-none disabled:opacity-50"
+          >
+            <option value="">All cities</option>
+            {cities.map((city) => (
+              <option key={city.code} value={city.code}>
+                {city.name}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      {/* Selected location display */}
+      <div className="mt-4 flex items-center gap-2 text-sm">
+        <svg className="w-4 h-4 text-emerald-600" fill="currentColor" viewBox="0 0 20 20">
+          <path fillRule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clipRule="evenodd" />
+        </svg>
+        <span className="text-gray-600 dark:text-gray-300">Searching in:</span>
+        <span className="font-medium text-emerald-700 dark:text-emerald-300">{selectedLocationName}</span>
+      </div>
+    </div>
+  );
 
   // Category search terms setup JSX - rendered inline to avoid re-mount issues
   const categorySearchSetupJSX = (
@@ -1111,6 +1335,9 @@ export function GoogleMapsPanel({ brandName, competitors, locationCode = 2840, l
           </div>
         </div>
 
+        {/* Location Selection */}
+        {locationSelectorJSX}
+
         {/* Category Search Setup */}
         {categorySearchSetupJSX}
 
@@ -1227,6 +1454,7 @@ export function GoogleMapsPanel({ brandName, competitors, locationCode = 2840, l
             <SearchSimulation
               results={data.categoryVisibility.results}
               brandName={brandName}
+              locationName={selectedLocationName}
             />
           </div>
 

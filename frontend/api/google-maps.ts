@@ -54,6 +54,31 @@ interface CategorySearchResult {
   yourBrandAppears: boolean;
   yourBrandRank: number | null;
   competitorAppearances: { name: string; rank: number }[];
+  // NEW: Top results for transparency
+  topResults: {
+    rank: number;
+    title: string;
+    rating?: number;
+    ratingCount?: number;
+    address?: string;
+    isYourBrand: boolean;
+    isCompetitor: string | null; // competitor name if matches
+  }[];
+}
+
+// NEW: Reputation comparison data
+interface ReputationData {
+  brandName: string;
+  avgRating: number;
+  totalReviews: number;
+  totalLocations: number;
+  ratingDistribution: {
+    star5Percent: number;
+    star4Percent: number;
+    star3Percent: number;
+    star2Percent: number;
+    star1Percent: number;
+  };
 }
 
 interface GoogleMapsResponse {
@@ -71,6 +96,15 @@ interface GoogleMapsResponse {
     brandAppearanceRate: number; // % of category searches where brand appears
     avgRankWhenAppearing: number | null;
   };
+  // NEW: Reputation comparison across brands
+  reputationComparison?: {
+    brands: ReputationData[];
+    insights: {
+      highestRated: string;
+      mostReviewed: string;
+      yourRatingVsAvg: number; // difference from average
+    };
+  };
   searchedKeywords: string[];
   location: string;
   timestamp: string;
@@ -78,6 +112,7 @@ interface GoogleMapsResponse {
     presenceFormula: string;
     reviewShareFormula: string;
     categoryVisibilityFormula?: string;
+    reputationFormula?: string;
     brandMatchingMethod: string;
     dataSource: string;
   };
@@ -370,12 +405,32 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           })
           .filter((c): c is { name: string; rank: number } => c !== null);
 
+        // NEW: Get top 4 results for transparency
+        const topResults = listings
+          .sort((a, b) => a.rank - b.rank)
+          .slice(0, 4)
+          .map(listing => {
+            const isYourBrand = listingMatchesBrand(listing, brandName);
+            const matchedCompetitor = validCompetitors.find(comp => listingMatchesBrand(listing, comp));
+
+            return {
+              rank: listing.rank,
+              title: listing.title,
+              rating: listing.rating,
+              ratingCount: listing.ratingCount,
+              address: listing.address,
+              isYourBrand,
+              isCompetitor: matchedCompetitor || null,
+            };
+          });
+
         return {
           keyword: term,
           totalResults: listings.length,
           yourBrandAppears: !!yourBrandListing,
           yourBrandRank: yourBrandListing?.rank ?? null,
           competitorAppearances,
+          topResults,
         };
       });
 
@@ -412,6 +467,87 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     ).sort((a, b) => a.rank - b.rank);
 
     // ============================================
+    // PART 3.5: Reputation Comparison
+    // ============================================
+    const buildReputationData = (brandData: BrandLocalData): ReputationData => {
+      // Calculate rating distribution percentages from all listings
+      let totalDistribution = { star1: 0, star2: 0, star3: 0, star4: 0, star5: 0 };
+      let hasDistribution = false;
+
+      for (const listing of brandData.listings) {
+        if (listing.ratingDistribution) {
+          hasDistribution = true;
+          totalDistribution.star1 += listing.ratingDistribution.star1;
+          totalDistribution.star2 += listing.ratingDistribution.star2;
+          totalDistribution.star3 += listing.ratingDistribution.star3;
+          totalDistribution.star4 += listing.ratingDistribution.star4;
+          totalDistribution.star5 += listing.ratingDistribution.star5;
+        }
+      }
+
+      const totalRatings = totalDistribution.star1 + totalDistribution.star2 +
+                          totalDistribution.star3 + totalDistribution.star4 + totalDistribution.star5;
+
+      return {
+        brandName: brandData.name,
+        avgRating: brandData.avgRating,
+        totalReviews: brandData.totalReviews,
+        totalLocations: brandData.totalListings,
+        ratingDistribution: hasDistribution && totalRatings > 0 ? {
+          star5Percent: Math.round((totalDistribution.star5 / totalRatings) * 100),
+          star4Percent: Math.round((totalDistribution.star4 / totalRatings) * 100),
+          star3Percent: Math.round((totalDistribution.star3 / totalRatings) * 100),
+          star2Percent: Math.round((totalDistribution.star2 / totalRatings) * 100),
+          star1Percent: Math.round((totalDistribution.star1 / totalRatings) * 100),
+        } : {
+          star5Percent: 0,
+          star4Percent: 0,
+          star3Percent: 0,
+          star2Percent: 0,
+          star1Percent: 0,
+        },
+      };
+    };
+
+    // Build reputation data for all brands
+    const allBrandsReputation: ReputationData[] = [];
+
+    if (yourBrandData.totalListings > 0) {
+      allBrandsReputation.push(buildReputationData(yourBrandData));
+    }
+
+    for (const comp of competitorData) {
+      if (comp.totalListings > 0) {
+        allBrandsReputation.push(buildReputationData(comp));
+      }
+    }
+
+    // Calculate insights
+    let reputationComparison: GoogleMapsResponse['reputationComparison'] = undefined;
+
+    if (allBrandsReputation.length > 0) {
+      const highestRated = allBrandsReputation.reduce((best, curr) =>
+        curr.avgRating > best.avgRating ? curr : best
+      );
+      const mostReviewed = allBrandsReputation.reduce((best, curr) =>
+        curr.totalReviews > best.totalReviews ? curr : best
+      );
+
+      const avgRatingAllBrands = allBrandsReputation.reduce((sum, b) => sum + b.avgRating, 0) / allBrandsReputation.length;
+      const yourRating = yourBrandData.avgRating || 0;
+      const yourRatingVsAvg = Math.round((yourRating - avgRatingAllBrands) * 10) / 10;
+
+      reputationComparison = {
+        brands: allBrandsReputation,
+        insights: {
+          highestRated: highestRated.brandName,
+          mostReviewed: mostReviewed.brandName,
+          yourRatingVsAvg,
+        },
+      };
+    }
+
+    // ============================================
     // PART 4: Build Methodology Explanations
     // ============================================
     const totalListings = yourBrandData.totalListings + competitorData.reduce((s, c) => s + c.totalListings, 0);
@@ -428,6 +564,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       methodology.categoryVisibilityFormula = `Category Visibility = (Searches Where You Appear / Total Category Searches) × 100 = (${categoryVisibility.results.filter(r => r.yourBrandAppears).length} / ${validSearchTerms.length}) × 100 = ${categoryVisibility.brandAppearanceRate}%`;
     }
 
+    if (reputationComparison) {
+      methodology.reputationFormula = `Reputation is measured by weighted average rating across all locations, with review volume as a secondary metric.`;
+    }
+
     // ============================================
     // PART 5: Build Response
     // ============================================
@@ -439,6 +579,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       allListings: uniqueAllListings.slice(0, 50),
       sov,
       categoryVisibility,
+      reputationComparison,
       searchedKeywords: searchKeywords,
       location: `Location code: ${locationCode}`,
       timestamp: new Date().toISOString(),

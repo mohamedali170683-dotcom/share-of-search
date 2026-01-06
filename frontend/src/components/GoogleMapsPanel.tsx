@@ -1,4 +1,280 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
+
+// Mock Google Maps Search Result Card Component
+function MockSearchResultCard({
+  result,
+  isYourBrand,
+  isCompetitor
+}: {
+  result: { title: string; rating?: number; ratingCount?: number; address?: string };
+  isYourBrand: boolean;
+  isCompetitor: string | null;
+}) {
+  return (
+    <div className={`flex gap-3 p-3 rounded-lg border ${
+      isYourBrand
+        ? 'border-green-400 bg-green-50 dark:bg-green-900/30 ring-2 ring-green-400'
+        : isCompetitor
+          ? 'border-orange-300 bg-orange-50 dark:bg-orange-900/20'
+          : 'border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700'
+    }`}>
+      {/* Placeholder image */}
+      <div className="w-20 h-20 bg-gray-300 dark:bg-gray-600 rounded-lg flex-shrink-0 flex items-center justify-center">
+        <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+        </svg>
+      </div>
+      {/* Content */}
+      <div className="flex-1 min-w-0">
+        <div className="flex items-start justify-between gap-2">
+          <h4 className={`font-medium text-sm truncate ${isYourBrand ? 'text-green-700 dark:text-green-300' : 'text-gray-900 dark:text-white'}`}>
+            {result.title}
+          </h4>
+          {isYourBrand && (
+            <span className="text-xs px-1.5 py-0.5 bg-green-500 text-white rounded flex-shrink-0">You</span>
+          )}
+          {isCompetitor && (
+            <span className="text-xs px-1.5 py-0.5 bg-orange-500 text-white rounded flex-shrink-0">{isCompetitor}</span>
+          )}
+        </div>
+        {result.rating && (
+          <div className="flex items-center gap-1 mt-1">
+            <span className="text-sm font-medium text-gray-900 dark:text-white">{result.rating.toFixed(1)}</span>
+            <div className="flex">
+              {[1, 2, 3, 4, 5].map((star) => (
+                <svg
+                  key={star}
+                  className={`w-3 h-3 ${star <= Math.round(result.rating!) ? 'text-yellow-400' : 'text-gray-300'}`}
+                  fill="currentColor"
+                  viewBox="0 0 20 20"
+                >
+                  <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                </svg>
+              ))}
+            </div>
+            {result.ratingCount && (
+              <span className="text-xs text-gray-500">({result.ratingCount.toLocaleString()})</span>
+            )}
+          </div>
+        )}
+        {result.address && (
+          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 truncate">{result.address}</p>
+        )}
+        <div className="flex gap-2 mt-2">
+          <span className="text-xs text-blue-600 dark:text-blue-400">Directions</span>
+          <span className="text-xs text-blue-600 dark:text-blue-400">Website</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Search Simulation Component - Shows what users see on Google Maps
+function SearchSimulation({
+  results,
+  brandName
+}: {
+  results: Array<{
+    keyword: string;
+    yourBrandAppears: boolean;
+    yourBrandRank: number | null;
+    topResults: Array<{
+      rank: number;
+      title: string;
+      rating?: number;
+      ratingCount?: number;
+      address?: string;
+      isYourBrand: boolean;
+      isCompetitor: string | null;
+    }>;
+  }>;
+  brandName: string;
+}) {
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const [isPlaying, setIsPlaying] = useState(false);
+
+  const goNext = useCallback(() => {
+    setCurrentIndex((prev) => (prev + 1) % results.length);
+  }, [results.length]);
+
+  const goPrev = useCallback(() => {
+    setCurrentIndex((prev) => (prev - 1 + results.length) % results.length);
+  }, [results.length]);
+
+  // Auto-play functionality
+  useEffect(() => {
+    if (!isPlaying) return;
+    const interval = setInterval(goNext, 3000);
+    return () => clearInterval(interval);
+  }, [isPlaying, goNext]);
+
+  if (results.length === 0) return null;
+
+  const currentResult = results[currentIndex];
+
+  return (
+    <div className="bg-gray-100 dark:bg-gray-900 rounded-xl overflow-hidden border border-gray-300 dark:border-gray-600">
+      {/* Mock Browser/App Header */}
+      <div className="bg-white dark:bg-gray-800 px-4 py-2 border-b border-gray-200 dark:border-gray-700">
+        <div className="flex items-center gap-2">
+          <div className="flex gap-1.5">
+            <div className="w-3 h-3 rounded-full bg-red-400"></div>
+            <div className="w-3 h-3 rounded-full bg-yellow-400"></div>
+            <div className="w-3 h-3 rounded-full bg-green-400"></div>
+          </div>
+          <div className="flex-1 mx-4">
+            <div className="bg-gray-100 dark:bg-gray-700 rounded-full px-4 py-1.5 flex items-center gap-2">
+              <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+              <span className="text-sm text-gray-600 dark:text-gray-300">{currentResult.keyword}</span>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <svg className="w-5 h-5 text-blue-500" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/>
+            </svg>
+            <span className="text-xs text-gray-500">Google Maps</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Results Status Banner */}
+      <div className={`px-4 py-2 text-sm font-medium ${
+        currentResult.yourBrandAppears
+          ? 'bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300'
+          : 'bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300'
+      }`}>
+        {currentResult.yourBrandAppears
+          ? `✓ ${brandName} appears at position #${currentResult.yourBrandRank}`
+          : `✗ ${brandName} not found in top results`}
+      </div>
+
+      {/* Mock Map + Results Layout */}
+      <div className="flex">
+        {/* Results Panel */}
+        <div className="w-full md:w-1/2 p-4 space-y-2 bg-white dark:bg-gray-800 max-h-80 overflow-y-auto">
+          <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
+            Top {currentResult.topResults.length} results for "{currentResult.keyword}"
+          </p>
+          {currentResult.topResults.map((result, idx) => (
+            <MockSearchResultCard
+              key={idx}
+              result={result}
+              isYourBrand={result.isYourBrand}
+              isCompetitor={result.isCompetitor}
+            />
+          ))}
+        </div>
+
+        {/* Mock Map */}
+        <div className="hidden md:block w-1/2 bg-green-100 dark:bg-green-900/30 relative min-h-80">
+          <div className="absolute inset-0 flex items-center justify-center">
+            <div className="text-center">
+              <svg className="w-16 h-16 text-green-600 dark:text-green-400 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
+              </svg>
+              <p className="text-sm text-green-700 dark:text-green-300">Map View</p>
+              <p className="text-xs text-green-600 dark:text-green-400 mt-1">
+                {currentResult.topResults.length} locations shown
+              </p>
+            </div>
+          </div>
+          {/* Map pins */}
+          {currentResult.topResults.slice(0, 4).map((result, idx) => (
+            <div
+              key={idx}
+              className={`absolute transform -translate-x-1/2 -translate-y-1/2 ${
+                result.isYourBrand ? 'z-10' : ''
+              }`}
+              style={{
+                left: `${25 + (idx % 2) * 50}%`,
+                top: `${25 + Math.floor(idx / 2) * 50}%`
+              }}
+            >
+              <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold shadow-lg ${
+                result.isYourBrand
+                  ? 'bg-green-500 text-white ring-2 ring-green-300'
+                  : result.isCompetitor
+                    ? 'bg-orange-500 text-white'
+                    : 'bg-red-500 text-white'
+              }`}>
+                {idx + 1}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Navigation Controls */}
+      <div className="bg-white dark:bg-gray-800 px-4 py-3 border-t border-gray-200 dark:border-gray-700 flex items-center justify-between">
+        <button
+          onClick={goPrev}
+          className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-400"
+        >
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+          </svg>
+        </button>
+
+        <div className="flex items-center gap-4">
+          {/* Progress dots */}
+          <div className="flex gap-1.5">
+            {results.map((_, idx) => (
+              <button
+                key={idx}
+                onClick={() => setCurrentIndex(idx)}
+                className={`w-2 h-2 rounded-full transition-all ${
+                  idx === currentIndex
+                    ? 'bg-blue-500 w-4'
+                    : 'bg-gray-300 dark:bg-gray-600 hover:bg-gray-400'
+                }`}
+              />
+            ))}
+          </div>
+
+          {/* Play/Pause */}
+          <button
+            onClick={() => setIsPlaying(!isPlaying)}
+            className={`p-2 rounded-lg ${isPlaying ? 'bg-blue-100 text-blue-600 dark:bg-blue-900/50 dark:text-blue-400' : 'hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-400'}`}
+          >
+            {isPlaying ? (
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            ) : (
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            )}
+          </button>
+        </div>
+
+        <button
+          onClick={goNext}
+          className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-400"
+        >
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+          </svg>
+        </button>
+      </div>
+
+      {/* Search counter */}
+      <div className="bg-gray-50 dark:bg-gray-900 px-4 py-2 text-center text-xs text-gray-500 dark:text-gray-400">
+        Search {currentIndex + 1} of {results.length} •
+        <span className="text-green-600 dark:text-green-400 ml-1">
+          {results.filter(r => r.yourBrandAppears).length} found
+        </span>
+        <span className="mx-1">•</span>
+        <span className="text-red-600 dark:text-red-400">
+          {results.filter(r => !r.yourBrandAppears).length} not found
+        </span>
+      </div>
+    </div>
+  );
+}
 
 interface BusinessListing {
   placeId: string;
@@ -946,73 +1222,49 @@ export function GoogleMapsPanel({ brandName, competitors, locationCode = 2840, l
             </div>
           </div>
 
-          {/* Search Results Table */}
-          <div className="divide-y divide-gray-100 dark:divide-gray-700">
-            {data.categoryVisibility.results.map((result) => (
-              <div key={result.keyword} className="p-4 hover:bg-gray-50 dark:hover:bg-gray-700/50">
-                {/* Keyword row */}
-                <div className="flex items-center justify-between mb-3">
-                  <div className="flex items-center gap-3">
-                    <span className={`w-10 h-10 rounded-lg flex items-center justify-center text-sm font-bold ${
-                      result.yourBrandAppears
-                        ? result.yourBrandRank && result.yourBrandRank <= 3
-                          ? 'bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-300'
-                          : 'bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300'
-                        : 'bg-gray-100 text-gray-400 dark:bg-gray-700 dark:text-gray-500'
-                    }`}>
-                      {result.yourBrandAppears ? `#${result.yourBrandRank}` : '—'}
-                    </span>
-                    <span className="font-medium text-gray-900 dark:text-white">{result.keyword}</span>
-                  </div>
-                  <span className={`text-xs px-2 py-1 rounded-full ${
-                    result.yourBrandAppears
-                      ? 'bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-300'
-                      : 'bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400'
-                  }`}>
-                    {result.yourBrandAppears ? '✓ Found' : 'Not found'}
-                  </span>
-                </div>
+          {/* Visual Search Simulation */}
+          <div className="p-4">
+            <SearchSimulation
+              results={data.categoryVisibility.results}
+              brandName={brandName}
+            />
+          </div>
 
-                {/* Top 4 results */}
-                {result.topResults && result.topResults.length > 0 && (
-                  <div className="ml-13 space-y-1">
-                    {result.topResults.slice(0, 4).map((topResult, idx) => (
-                      <div
-                        key={idx}
-                        className={`flex items-center gap-2 text-sm p-2 rounded ${
-                          topResult.isYourBrand
-                            ? 'bg-green-50 dark:bg-green-900/30 border-l-4 border-green-500'
-                            : topResult.isCompetitor
-                              ? 'bg-orange-50 dark:bg-orange-900/20 border-l-4 border-orange-400'
-                              : 'bg-gray-50 dark:bg-gray-700/50 border-l-4 border-transparent'
-                        }`}
-                      >
-                        <span className={`w-6 h-6 rounded text-xs font-bold flex items-center justify-center ${
-                          idx === 0 ? 'bg-yellow-400 text-yellow-900' :
-                          idx === 1 ? 'bg-gray-300 text-gray-700' :
-                          idx === 2 ? 'bg-amber-600 text-white' :
-                          'bg-gray-200 text-gray-600 dark:bg-gray-600 dark:text-gray-300'
-                        }`}>
-                          {idx + 1}
-                        </span>
-                        <span className={`flex-1 truncate ${topResult.isYourBrand ? 'font-semibold text-green-700 dark:text-green-300' : 'text-gray-700 dark:text-gray-300'}`}>
-                          {topResult.title}
-                        </span>
-                        {topResult.rating && (
-                          <span className="text-xs text-yellow-600">{topResult.rating.toFixed(1)}★</span>
-                        )}
-                        {topResult.isYourBrand && (
-                          <span className="text-xs px-1.5 py-0.5 bg-green-500 text-white rounded">You</span>
-                        )}
-                        {topResult.isCompetitor && (
-                          <span className="text-xs px-1.5 py-0.5 bg-orange-500 text-white rounded">{topResult.isCompetitor}</span>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                )}
+          {/* Quick Summary Table */}
+          <div className="border-t border-gray-200 dark:border-gray-700">
+            <details className="group">
+              <summary className="px-4 py-3 cursor-pointer list-none flex items-center justify-between hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                  View all {data.categoryVisibility.results.length} search results
+                </span>
+                <svg className="w-5 h-5 text-gray-400 group-open:rotate-180 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
+              </summary>
+              <div className="px-4 pb-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {data.categoryVisibility.results.map((result) => (
+                    <div
+                      key={result.keyword}
+                      className={`flex items-center justify-between p-2 rounded-lg ${
+                        result.yourBrandAppears
+                          ? 'bg-green-50 dark:bg-green-900/30'
+                          : 'bg-gray-50 dark:bg-gray-700/50'
+                      }`}
+                    >
+                      <span className="text-sm text-gray-700 dark:text-gray-300 truncate flex-1">{result.keyword}</span>
+                      <span className={`text-sm font-medium ml-2 ${
+                        result.yourBrandAppears
+                          ? 'text-green-600 dark:text-green-400'
+                          : 'text-gray-400'
+                      }`}>
+                        {result.yourBrandAppears ? `#${result.yourBrandRank}` : '—'}
+                      </span>
+                    </div>
+                  ))}
+                </div>
               </div>
-            ))}
+            </details>
           </div>
 
           {/* Formula */}
